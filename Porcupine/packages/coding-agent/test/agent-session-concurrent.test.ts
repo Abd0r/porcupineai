@@ -89,8 +89,6 @@ describe("AgentSession concurrent prompt guard", () => {
 
 	async function createSession() {
 		const model = getModel("anthropic", "claude-sonnet-4-5")!;
-		let abortSignal: AbortSignal | undefined;
-
 		// Use a stream function that responds to abort
 		const agent = new Agent({
 			getApiKey: () => "test-key",
