@@ -210,36 +210,65 @@ type OverlayFocusRestorePolicy = "clear" | "preserve";
  */
 export class Container implements Component {
 	children: Component[] = [];
+	// Instance-stable render cache: children whose renders return cached arrays
+	// (Text/Markdown/Box) make the composite stable too, so the main screen can
+	// detect a no-op render by identity and skip diffing entirely.
+	private cachedLines: string[] | undefined = undefined;
+	private lastWidth = -1;
+	private lastChildRefs: Array<string[] | undefined> = [];
 
 	addChild(component: Component): void {
 		this.children.push(component);
+		this.cachedLines = undefined;
 	}
 
 	removeChild(component: Component): void {
 		const index = this.children.indexOf(component);
 		if (index !== -1) {
 			this.children.splice(index, 1);
+			this.cachedLines = undefined;
 		}
 	}
 
 	clear(): void {
 		this.children = [];
+		this.cachedLines = undefined;
 	}
 
 	invalidate(): void {
+		this.cachedLines = undefined;
 		for (const child of this.children) {
 			child.invalidate?.();
 		}
 	}
 
 	render(width: number): string[] {
+		// Fast path: same width and every child returned the same cached array
+		// instance as last render — the composite is unchanged, return it.
+		if (width === this.lastWidth && this.lastChildRefs.length === this.children.length) {
+			let stable = true;
+			for (let i = 0; i < this.children.length; i++) {
+				const lines = this.children[i]!.render(width);
+				if (lines !== this.lastChildRefs[i]) {
+					stable = false;
+					break;
+				}
+			}
+			if (stable && this.cachedLines !== undefined) {
+				return this.cachedLines;
+			}
+		}
+		this.lastWidth = width;
 		const lines: string[] = [];
-		for (const child of this.children) {
-			const childLines = child.render(width);
+		this.lastChildRefs = new Array<string[] | undefined>(this.children.length);
+		for (let i = 0; i < this.children.length; i++) {
+			const childLines = this.children[i]!.render(width);
+			this.lastChildRefs[i] = childLines;
 			for (const line of childLines) {
 				lines.push(line);
 			}
 		}
+		this.cachedLines = lines;
 		return lines;
 	}
 }

@@ -19,6 +19,12 @@ export class Box implements Component {
 
 	// Cache for rendered output
 	private cache?: RenderCache;
+	// Fast-path bookkeeping: last render width + the array instance each child
+	// returned, so an unchanged render (all children returned their cached
+	// arrays) skips the childLines rebuild + element-wise cache comparison.
+	private lastRenderWidth = -1;
+	private lastBgSample: string | undefined = undefined;
+	private lastChildRefs: Array<string[] | undefined> = [];
 
 	constructor(paddingX = 1, paddingY = 1, bgFn?: (text: string) => string) {
 		this.paddingX = paddingX;
@@ -77,12 +83,41 @@ export class Box implements Component {
 		}
 
 		const contentWidth = Math.max(1, width - this.paddingX * 2);
+		const bgSample = this.bgFn ? this.bgFn("test") : undefined;
+
+		// Fast path: same width, same bg sample, and every child returned the
+		// SAME cached array instance as the previous render — the child lines
+		// are identical, so the cached result is valid without rebuilding the
+		// padded line list or comparing it element-wise. Children whose renders
+		// are instance-stable (Text/Markdown/Box caches) make this the common
+		// case; any child that returns a fresh array falls through to the slow
+		// path, so behavior never changes.
+		if (width === this.lastRenderWidth && bgSample === this.lastBgSample && this.cache) {
+			let stable = this.lastChildRefs.length === this.children.length;
+			if (stable) {
+				for (let i = 0; i < this.children.length; i++) {
+					const lines = this.children[i]!.render(contentWidth);
+					if (lines !== this.lastChildRefs[i]) {
+						stable = false;
+						break;
+					}
+				}
+			}
+			if (stable) {
+				return this.cache.lines;
+			}
+		}
+		this.lastRenderWidth = width;
+		this.lastBgSample = bgSample;
+
 		const leftPad = " ".repeat(this.paddingX);
 
 		// Render all children
 		const childLines: string[] = [];
-		for (const child of this.children) {
-			const lines = child.render(contentWidth);
+		this.lastChildRefs = new Array<string[] | undefined>(this.children.length);
+		for (let i = 0; i < this.children.length; i++) {
+			const lines = this.children[i]!.render(contentWidth);
+			this.lastChildRefs[i] = lines;
 			for (const line of lines) {
 				childLines.push(leftPad + line);
 			}
@@ -91,9 +126,6 @@ export class Box implements Component {
 		if (childLines.length === 0) {
 			return [];
 		}
-
-		// Check if bgFn output changed by sampling
-		const bgSample = this.bgFn ? this.bgFn("test") : undefined;
 
 		// Check cache validity
 		if (this.matchCache(width, childLines, bgSample)) {

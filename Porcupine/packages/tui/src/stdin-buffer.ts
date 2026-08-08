@@ -265,6 +265,8 @@ export type StdinBufferOptions = {
 export type StdinBufferEventMap = {
 	data: [string];
 	paste: [string];
+	/** An incomplete escape prefix is buffered (awaiting its tail). */
+	partial: [string];
 };
 
 /**
@@ -376,6 +378,10 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
 		}
 
 		if (this.buffer.length > 0) {
+			// Notify listeners (e.g. the Kitty negotiation check) that an
+			// incomplete escape prefix is buffered; the sequence itself stays
+			// buffered so its tail can reassemble it.
+			this.emit("partial", this.buffer);
 			this.timeout = setTimeout(() => {
 				const flushed = this.flush();
 
@@ -407,8 +413,26 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
 			return [];
 		}
 
-		const sequences = [this.buffer];
-		this.buffer = "";
+		// Re-split on flush: the buffer may hold a PARTIAL escape sequence whose
+		// tail arrived after the timeout (e.g. a CSI split across the boundary).
+		// Emitting the raw partial would produce a broken sequence, and the tail
+		// would leak as a separate garbage event. Extract only complete
+		// sequences; keep an incomplete escape tail buffered so the next chunk
+		// reassembles it.
+		const { sequences, remainder } = extractCompleteSequences(this.buffer);
+		this.buffer = remainder;
+		// A lone ESC is almost certainly a real Esc keypress (the timeout exists
+		// precisely to disambiguate ESC-from-a-split-sequence): emit it. Other
+		// incomplete prefixes (CSI/OSC/SS3) stay buffered so a sequence split
+		// across the timeout boundary reassembles when its tail arrives.
+		if (this.buffer === ESC) {
+			this.buffer = "";
+			sequences.push(ESC);
+		}
+		// No re-arm here: process() arms a fresh timeout whenever it leaves an
+		// incomplete remainder — re-arming from flush() would create an endless
+		// timer chain for a partial that may never complete.
+
 		this.pendingKittyPrintableCodepoint = undefined;
 		return sequences;
 	}

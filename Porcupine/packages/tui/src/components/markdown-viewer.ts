@@ -110,7 +110,7 @@ export class MarkdownViewer implements Component {
 			}
 		}
 
-		while (lines.length <= availableRows - 3) {
+		while (lines.length < availableRows - 3) {
 			lines.push(edge ? edge("│ ") + " ".repeat(contentWidth) + edge(" │") : "  ");
 		}
 

@@ -124,14 +124,14 @@ describe("StdinBuffer", () => {
 			assert.deepStrictEqual(emittedSequences, ["\x1b[<35;20;5m"]);
 		});
 
-		it("should flush incomplete sequence after timeout", async () => {
+		it("keeps an incomplete sequence buffered after timeout (reassembly)", async () => {
 			processInput("\x1b[<35");
 			assert.deepStrictEqual(emittedSequences, []);
 
-			// Wait for timeout
+			// Wait for timeout — nothing is emitted for an incomplete prefix.
 			await wait(15);
 
-			assert.deepStrictEqual(emittedSequences, ["\x1b[<35"]);
+			assert.deepStrictEqual(emittedSequences, []);
 		});
 	});
 
@@ -335,10 +335,17 @@ describe("StdinBuffer", () => {
 	});
 
 	describe("Flush", () => {
-		it("should flush incomplete sequences", () => {
+		it("keeps incomplete CSI prefixes buffered for reassembly", () => {
 			processInput("\x1b[<35");
 			const flushed = buffer.flush();
-			assert.deepStrictEqual(flushed, ["\x1b[<35"]);
+			assert.deepStrictEqual(flushed, []);
+			assert.strictEqual(buffer.getBuffer(), "\x1b[<35");
+		});
+
+		it("flushes a lone ESC (real Esc keypress)", () => {
+			processInput("\x1b");
+			const flushed = buffer.flush();
+			assert.deepStrictEqual(flushed, ["\x1b"]);
 			assert.strictEqual(buffer.getBuffer(), "");
 		});
 
@@ -347,14 +354,17 @@ describe("StdinBuffer", () => {
 			assert.deepStrictEqual(flushed, []);
 		});
 
-		it("should emit flushed data via timeout", async () => {
+		it("reassembles a sequence split across the timeout boundary", async () => {
 			processInput("\x1b[<35");
 			assert.deepStrictEqual(emittedSequences, []);
 
-			// Wait for timeout to flush
+			// Wait for timeout to flush — the incomplete prefix is NOT emitted.
 			await wait(15);
+			assert.deepStrictEqual(emittedSequences, []);
 
-			assert.deepStrictEqual(emittedSequences, ["\x1b[<35"]);
+			// The tail completes it into one clean event.
+			processInput(";20;5m");
+			assert.deepStrictEqual(emittedSequences, ["\x1b[<35;20;5m"]);
 		});
 	});
 

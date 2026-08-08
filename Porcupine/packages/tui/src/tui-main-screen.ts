@@ -46,6 +46,10 @@ function isTermuxSession(): boolean {
 /** TUI implementation that renders into the terminal's main screen and scrollback. */
 export class TuiMainScreen extends TuiBase implements TUI {
 	private previousLines: string[] = [];
+	/** The pre-composite/pre-reset line array from the last render (identity-compared to detect no-op renders). */
+	private previousRawLines: string[] | undefined = undefined;
+	/** Last extracted cursor position (reused on the no-op fast path). */
+	private lastCursorPos: { row: number; col: number } | null = null;
 	private previousKittyImageIds = new Set<number>();
 	private previousWidth = 0;
 	private previousHeight = 0;
@@ -174,6 +178,20 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		// Render all components to get new lines
 		let newLines = this.render(width);
 
+		// No-op fast path: viewport unchanged, no overlays, and the root render
+		// returned the SAME array instance as last time (Container/Box/Text
+		// caches are instance-stable) — nothing changed, so skip compositing,
+		// cursor extraction, line resets, diffing and writes entirely.
+		if (!widthChanged && !heightChanged && !this.hasOverlayEntries && newLines === this.previousRawLines) {
+			this.previousWidth = width;
+			this.previousHeight = height;
+			if (this.lastCursorPos) {
+				this.positionHardwareCursor(this.lastCursorPos, newLines.length);
+			}
+			return;
+		}
+		this.previousRawLines = newLines;
+
 		// Composite overlays into the rendered lines (before differential compare)
 		if (this.hasOverlayEntries) {
 			newLines = this.compositeOverlays(newLines, width, height);
@@ -181,6 +199,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
 
 		// Extract cursor position before applying line resets (marker must be found first)
 		const cursorPos = this.extractCursorPosition(newLines, height);
+		this.lastCursorPos = cursorPos;
 
 		newLines = this.applyLineResets(newLines);
 

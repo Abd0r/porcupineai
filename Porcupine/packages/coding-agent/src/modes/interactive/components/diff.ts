@@ -76,7 +76,15 @@ export interface RenderDiffOptions {
  * - Removed lines: red, with inverse on changed tokens
  * - Added lines: green, with inverse on changed tokens
  */
+/** Last-input memo: renderDiff is called per render/frame with unchanged input. */
+let cachedDiffInput: string | undefined;
+let cachedDiffOutput: string | undefined;
+
 export function renderDiff(diffText: string, _options: RenderDiffOptions = {}): string {
+	if (cachedDiffInput === diffText && cachedDiffOutput !== undefined) {
+		return cachedDiffOutput;
+	}
+	cachedDiffInput = diffText;
 	const lines = diffText.split("\n");
 	const result: string[] = [];
 
@@ -143,5 +151,7 @@ export function renderDiff(diffText: string, _options: RenderDiffOptions = {}): 
 		}
 	}
 
-	return result.join("\n");
+	const output = result.join("\n");
+	cachedDiffOutput = output;
+	return output;
 }

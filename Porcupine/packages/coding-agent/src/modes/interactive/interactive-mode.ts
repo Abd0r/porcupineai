@@ -3292,6 +3292,12 @@ export class InteractiveMode {
 	): Promise<T> {
 		const savedText = this.editor.getText();
 		const isOverlay = options?.overlay ?? false;
+		// Same guard as showMarkdownViewer: never stack a second overlay on top
+		// of an open one (focus stealing + z-order corruption).
+		if (isOverlay && this.ui.hasOverlay()) {
+			this.showWarning("Another dialog is already open.");
+			return undefined as T;
+		}
 
 		const restoreEditor = () => {
 			this.editorContainer.clear();

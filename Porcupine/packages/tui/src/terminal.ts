@@ -192,6 +192,15 @@ export class ProcessTerminal implements Terminal {
 			this.forwardInputSequence(sequence);
 		});
 
+		// Incomplete escape prefixes are held by the buffer for reassembly; the
+		// Kitty negotiation check still needs to SEE them (a split response or a
+		// keypress during the negotiation window).
+		this.stdinBuffer.on("partial", (sequence) => {
+			if (this.readKeyboardProtocolNegotiationSequence(sequence) === "pending") {
+				this.scheduleKeyboardProtocolNegotiationBufferFlush();
+			}
+		});
+
 		// Re-wrap paste content with bracketed paste markers for existing editor handling
 		this.stdinBuffer.on("paste", (content) => {
 			if (this.inputHandler) {
