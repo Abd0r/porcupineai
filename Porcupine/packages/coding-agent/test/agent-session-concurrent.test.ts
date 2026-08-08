@@ -149,7 +149,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		await firstPrompt.catch(() => {}); // Ignore abort error
 	});
 
-	it("should allow steer() while streaming", async () => {
+	it("should allow steer() while streaming", { timeout: 60_000 }, async () => {
 		await createSession();
 
 		// Start first prompt

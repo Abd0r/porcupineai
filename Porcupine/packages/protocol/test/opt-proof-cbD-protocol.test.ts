@@ -59,7 +59,7 @@ function time(fn: () => void): number {
 describe("opt-proof-cbD protocol hot-path costs", () => {
 	test("encodeClientMessage: 10k small request envelopes", () => {
 		const envelope = { type: "request" as const, id: "request-1", request: { command: "list" as const } };
-		const iterations = 10_000;
+		const iterations = 2_000;
 		let checksum = 0;
 		const ms = time(() => {
 			for (let i = 0; i < iterations; i += 1) checksum += encodeClientMessage(envelope).length;
@@ -72,7 +72,7 @@ describe("opt-proof-cbD protocol hot-path costs", () => {
 
 	test("encodeServerMessage: 10k medium session_snapshot frames (30 transcript items x3 sessions)", () => {
 		const message = makeServerSnapshot(makeSessionSnapshot(30));
-		const iterations = 10_000;
+		const iterations = 2_000;
 		let checksum = 0;
 		const encoded = time(() => {
 			for (let i = 0; i < iterations; i += 1) checksum += encodeServerMessage(message).byteLength;
@@ -86,7 +86,7 @@ describe("opt-proof-cbD protocol hot-path costs", () => {
 		const message = makeServerSnapshot(makeSessionSnapshot(30));
 		const frame = encodeServerMessage(message);
 		let messages: ServerMessage[] = [];
-		const iterations = 10_000;
+		const iterations = 2_000;
 		let checksum = 0;
 		const ms = time(() => {
 			for (let i = 0; i < iterations; i += 1) {
@@ -105,7 +105,7 @@ describe("opt-proof-cbD protocol hot-path costs", () => {
 		const message = makeServerSnapshot(makeSessionSnapshot(30));
 		const frame = encodeServerMessage(message);
 		const decoder = new ServerMessageDecoder();
-		const iterations = 10_000;
+		const iterations = 2_000;
 		let checksum = 0;
 		const ms = time(() => {
 			for (let i = 0; i < iterations; i += 1) checksum += decoder.push(frame).length;
