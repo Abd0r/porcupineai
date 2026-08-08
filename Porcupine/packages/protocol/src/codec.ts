@@ -45,8 +45,11 @@ export function parseClientMessage(value: unknown): ClientMessage {
 	return value;
 }
 
-/** Encode path: in-process messages are trusted (validated on decode, where bytes are untrusted). */
+/** Encode path: shape-checked with TypeBox only (the extra isProtocolValue walk is dropped). */
 function validateClientMessageShape(value: unknown): ClientMessage {
+	if (!Check(ClientMessageSchema, value)) {
+		throw new ProtocolValidationError("Invalid client protocol message");
+	}
 	return value as ClientMessage;
 }
 
@@ -57,8 +60,11 @@ export function parseServerMessage(value: unknown): ServerMessage {
 	return value;
 }
 
-/** Encode path: in-process messages are trusted (validated on decode, where bytes are untrusted). */
+/** Encode path: shape-checked with TypeBox only (the extra isProtocolValue walk is dropped). */
 function validateServerMessageShape(value: unknown): ServerMessage {
+	if (!Check(ServerMessageSchema, value)) {
+		throw new ProtocolValidationError("Invalid server protocol message");
+	}
 	return value as ServerMessage;
 }
 
