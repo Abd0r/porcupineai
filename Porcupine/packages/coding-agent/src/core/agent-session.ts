@@ -340,7 +340,7 @@ export interface SubagentRunInfo {
 	/** Args of the last tool call, so the UI can render "Reading skill: X" etc. */
 	lastToolArgs?: unknown;
 	/** What the sub-agent is doing right now: a tool call, or thinking between turns. */
-	phase?: "tool" | "thinking";
+	phase?: "tool" | "thinking" | "compacting";
 }
 
 export class AgentSession {
@@ -480,6 +480,12 @@ export class AgentSession {
 			if (run) {
 				run.steps = event.step;
 				run.phase = "thinking";
+			}
+		} else if (event.type === "compacting" && event.subagentId) {
+			const run = this._subagentRuns.get(event.subagentId);
+			if (run) {
+				run.steps = event.step;
+				run.phase = "compacting";
 			}
 		} else if (event.type === "done") {
 			this._activeSubagentRuns = Math.max(0, this._activeSubagentRuns - 1);

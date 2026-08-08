@@ -1,6 +1,7 @@
 import type { Model } from "@porcupineai/ai";
 import { Agent } from "../agent.ts";
 import { estimateTokens } from "../harness/compaction/compaction.ts";
+import { convertToLlm } from "../harness/messages.ts";
 import type { AgentMessage, AgentTool, AgentToolResult, StreamFn, ThinkingLevel } from "../types.ts";
 
 /**
@@ -15,6 +16,19 @@ import type { AgentMessage, AgentTool, AgentToolResult, StreamFn, ThinkingLevel 
 
 export const DEFAULT_SUBAGENT_MAX_STEPS = 120;
 export const DEFAULT_SUBAGENT_CONTEXT_TOKENS = 256_000;
+/** Max compaction passes per sub-agent run before the context budget hard-stops. */
+export const MAX_SUBAGENT_COMPACTIONS = 3;
+/** Compaction triggers when the estimated context crosses this share of the window. */
+const SUBAGENT_COMPACT_RATIO = 0.8;
+/** Recent-history retention for the compacted context (share of the window). */
+const SUBAGENT_KEEP_RATIO = 0.2;
+
+/** Browser-safe UUID (no node:crypto import: the agent package bundles for browsers). */
+function newUuid(): string {
+	const cryptoObj = globalThis.crypto;
+	if (cryptoObj && typeof cryptoObj.randomUUID === "function") return cryptoObj.randomUUID();
+	return `subagent-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 /** Lower bound for the recommended 128K–256K sub-agent context window. */
 export const SUBAGENT_CONTEXT_WINDOW_MIN = 128_000;
 export const SUBAGENT_CONTEXT_WINDOW_MAX = 256_000;
@@ -78,6 +92,7 @@ export type SubagentProgressEvent =
 	| { type: "start"; subagentId?: string; task: string; maxSteps: number; maxContextTokens: number }
 	| { type: "step"; subagentId?: string; step: number; toolName: string; args?: unknown }
 	| { type: "turn"; subagentId?: string; step: number; contextTokens: number }
+	| { type: "compacting"; subagentId?: string; step: number; contextTokens: number }
 	| { type: "done"; subagentId?: string; result: SubagentResult };
 
 /**
@@ -147,6 +162,15 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 	let outputTokens = 0;
 	let budgetHit = false;
 	let stopRun: (() => void) | undefined;
+	// Sub-agent compaction state: like the main agent, but self-contained — when
+	// the estimated context crosses the threshold, summarize the conversation
+	// with the sub-agent's own model and continue with [summary + recent tail]
+	// instead of hard-stopping at the context wall. Steps, usage, abort, and
+	// steering span the whole run across segments.
+	let compactionCount = 0;
+	let compactionRequested = false;
+	let compactedContext: AgentMessage[] = [];
+	const fullMessages: AgentMessage[] = [];
 
 	options.onProgress?.({
 		type: "start",
@@ -201,8 +225,15 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 			outputTokens += content
 				.filter((part): part is { type: "text"; text: string } => part.type === "text")
 				.reduce((total, part) => total + part.text.length, 0);
-			if (contextTokens > maxContextTokens) {
-				budgetHit = true;
+			if (contextTokens > maxContextTokens * SUBAGENT_COMPACT_RATIO) {
+				if (compactionCount < MAX_SUBAGENT_COMPACTIONS) {
+					compactionCount += 1;
+					compactionRequested = true;
+					options.onProgress?.({ type: "compacting", step: steps, contextTokens });
+				} else {
+					// Compaction could not keep up: hard stop at the context wall.
+					budgetHit = true;
+				}
 				stopRun?.();
 			}
 			options.onProgress?.({ type: "turn", step: steps, contextTokens });
@@ -224,15 +255,48 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 
 	let promptError: unknown;
 	try {
-		if (!aborted) {
-			await agent.prompt(options.notes ? `${options.notes}\n\n${options.task}` : options.task);
+		while (!aborted) {
+			compactionRequested = false;
+			if (fullMessages.length === 0) {
+				await agent.prompt(options.notes ? `${options.notes}\n\n${options.task}` : options.task);
+			} else {
+				await agent.prompt(compactedContext);
+			}
+			if (!compactionRequested) break;
+			// This segment ended because the context threshold was crossed:
+			// summarize it, retain the recent tail, and resume the same task.
+			const segment = agent.state.messages;
+			fullMessages.push(...segment);
+			try {
+				const summary = await summarizeSubagentConversation(
+					segment,
+					options.model,
+					options.streamFn,
+					maxContextTokens,
+					options.signal,
+				);
+				compactedContext = [
+					{
+						role: "user",
+						content: [{ type: "text", text: `[Compacted summary of earlier work]\n${summary}` }],
+						timestamp: Date.now(),
+					},
+					...keepRecentTail(segment, maxContextTokens),
+				];
+				agent.reset();
+			} catch (error) {
+				// Summarization failed: fall back to the hard context stop.
+				budgetHit = true;
+				promptError = error;
+				break;
+			}
 		}
 	} catch (error) {
 		promptError = error;
 	}
 	options.signal?.removeEventListener("abort", onAbort);
-
-	const messages = agent.state.messages;
+	fullMessages.push(...agent.state.messages);
+	const messages = fullMessages;
 	// The StreamFn contract encodes model/API failures as an assistant message
 	// with stopReason "error" (it does not throw), so promptError alone misses
 	// them: without this, a sub-agent whose LLM call failed was reported
@@ -272,4 +336,65 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 export function normalizeContextWindow(value: number | undefined): number {
 	if (value === undefined || Number.isNaN(value)) return DEFAULT_SUBAGENT_CONTEXT_TOKENS;
 	return Math.min(SUBAGENT_CONTEXT_WINDOW_MAX, Math.max(SUBAGENT_CONTEXT_WINDOW_MIN, Math.round(value)));
+}
+
+/**
+ * Summarize a sub-agent conversation with its own model (a standalone,
+ * cache-isolated call) so the compacted context stays self-contained.
+ */
+async function summarizeSubagentConversation(
+	messages: AgentMessage[],
+	model: Model<any>,
+	streamFn: StreamFn | undefined,
+	maxContextTokens: number,
+	signal?: AbortSignal,
+): Promise<string> {
+	if (!streamFn) throw new Error("sub-agent compaction requires a stream function");
+	const prompt = [
+		"You are summarizing a sub-agent's conversation for context compaction.",
+		"Produce a dense, factual summary: the task, everything decided and done so far, exact file paths and findings, and unresolved items.",
+		"Keep it under 500 words. Do not add anything not present in the conversation.",
+	].join("\n");
+	const stream = await streamFn(
+		model,
+		{ systemPrompt: prompt, messages: convertToLlm(messages), tools: [] },
+		{
+			maxTokens: Math.min(Math.floor(0.8 * Math.floor(maxContextTokens * SUBAGENT_KEEP_RATIO)), 2000),
+			signal,
+			cacheRetention: "none",
+			sessionId: newUuid(),
+		},
+	);
+	const message = await stream.result();
+	if (message.errorMessage || message.stopReason === "error") {
+		throw new Error(message.errorMessage ?? "summarization failed");
+	}
+	const text = (message.content ?? [])
+		.filter((part): part is { type: "text"; text: string } => part.type === "text")
+		.map((part) => part.text)
+		.join("\n")
+		.trim();
+	if (!text) throw new Error("summarization returned no text");
+	return text;
+}
+
+/** Retain the recent tail of a conversation within the keep-recent token budget. */
+function keepRecentTail(messages: AgentMessage[], maxContextTokens: number): AgentMessage[] {
+	// The tail must fit inside the headroom below the compaction threshold, so
+	// a compacted context can never re-trigger compaction immediately.
+	const headroom = Math.floor(maxContextTokens * (1 - SUBAGENT_COMPACT_RATIO));
+	const budget = Math.min(
+		Math.max(8000, Math.min(80000, Math.floor(maxContextTokens * SUBAGENT_KEEP_RATIO))),
+		headroom,
+	);
+	let used = 0;
+	const tail: AgentMessage[] = [];
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i]!;
+		const tokens = estimateTokens(message);
+		if (used + tokens > budget && tail.length > 0) break;
+		tail.unshift(message);
+		used += tokens;
+	}
+	return tail;
 }

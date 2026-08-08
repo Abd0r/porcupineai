@@ -2546,7 +2546,7 @@ export class InteractiveMode {
 		runs: Array<{
 			lastTool?: string;
 			lastToolArgs?: unknown;
-			phase?: "tool" | "thinking";
+			phase?: "tool" | "thinking" | "compacting";
 		}>,
 	): AnimationLoaderOptions | undefined {
 		if (runs.length === 0) return undefined;
@@ -2558,6 +2558,8 @@ export class InteractiveMode {
 				parts.push(`${anim.emoji} ${chip.name ? `${anim.label}: ${chip.name}` : anim.label}`);
 			} else if (run.phase === "thinking") {
 				parts.push("🧠 Thinking");
+			} else if (run.phase === "compacting") {
+				parts.push("🧹 Compacting");
 			} else {
 				parts.push("🤖");
 			}
