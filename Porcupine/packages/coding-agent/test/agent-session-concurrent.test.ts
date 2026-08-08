@@ -78,6 +78,15 @@ describe("AgentSession concurrent prompt guard", () => {
 		}
 	});
 
+	async function waitForStreaming(timeoutMs = 5000): Promise<void> {
+		const deadline = Date.now() + timeoutMs;
+		while (Date.now() < deadline) {
+			if (session.isStreaming) return;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		throw new Error("session never started streaming");
+	}
+
 	async function createSession() {
 		const model = getModel("anthropic", "claude-sonnet-4-5")!;
 		let abortSignal: AbortSignal | undefined;
@@ -95,14 +104,22 @@ describe("AgentSession concurrent prompt guard", () => {
 				const stream = new MockAssistantStream();
 				queueMicrotask(() => {
 					stream.push({ type: "start", partial: createAssistantMessage("") });
-					const checkAbort = () => {
-						if (abortSignal?.aborted) {
-							stream.push({ type: "error", reason: "aborted", error: createAssistantMessage("Aborted") });
-						} else {
-							setTimeout(checkAbort, 5);
-						}
-					};
-					checkAbort();
+					// Deterministic abort: check the already-aborted state, then listen
+					// for the transition (fires once, settles the stream immediately).
+					// The old 5ms polling loop starved under CI load (a preempted
+					// worker could delay the timeout chain past the deadline).
+					const signal = options?.signal;
+					if (signal?.aborted) {
+						stream.push({ type: "error", reason: "aborted", error: createAssistantMessage("Aborted") });
+					} else {
+						signal?.addEventListener(
+							"abort",
+							() => {
+								stream.push({ type: "error", reason: "aborted", error: createAssistantMessage("Aborted") });
+							},
+							{ once: true },
+						);
+					}
 				});
 				return stream;
 			},
@@ -133,10 +150,8 @@ describe("AgentSession concurrent prompt guard", () => {
 		// Start first prompt (don't await, it will block until abort)
 		const firstPrompt = session.prompt("First message");
 
-		// Wait a tick for isStreaming to be set
-		await new Promise((resolve) => setTimeout(resolve, 10));
-
-		// Verify we're streaming
+		// Wait for streaming to be active (deterministic under load)
+		await waitForStreaming();
 		expect(session.isStreaming).toBe(true);
 
 		// Second prompt should reject
@@ -154,7 +169,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		// Start first prompt
 		const firstPrompt = session.prompt("First message");
-		await new Promise((resolve) => setTimeout(resolve, 10));
+		await waitForStreaming();
 
 		// steer should work while streaming
 		expect(() => session.steer("Steering message")).not.toThrow();
@@ -170,7 +185,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		// Start first prompt
 		const firstPrompt = session.prompt("First message");
-		await new Promise((resolve) => setTimeout(resolve, 10));
+		await waitForStreaming();
 
 		// followUp should work while streaming
 		expect(() => session.followUp("Follow-up message")).not.toThrow();

@@ -2070,7 +2070,10 @@ export class AgentSession {
 		if (this.isIdle) {
 			return;
 		}
-		await this._getIdleWaitPromise();
+		// Race the session idle signal against the agent's own run promise: the
+		// session signal resolves only after the extension `agent_settled` emit
+		// completes, which can stall under load and deadlock abort() forever.
+		await Promise.race([this._getIdleWaitPromise(), this.agent.waitForIdle()]);
 	}
 
 	// =========================================================================
