@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.1.57] - 2026-08-08
+
+### Rebrand
+
+- The Pi foundation is now **Porcupine**: every internal identifier, file, package, env var and doc is renamed (Pi appears only in the README credit line: "Built on top of Pi (MIT)").
+- 12 files renamed (pi-messages/pi-manifest/pi-user-agent/pi-harness/pi-test.* -> porcupine-*), ~1520 identifier tokens (PiClient -> PorcupineClient, PiManifest -> PorcupineManifest, ...), pi-monorepo -> porcupine-monorepo, extension packages pi-extension-* -> porcupine-extension-*.
+- Env vars now prefer PORCUPINE_* with PI_* fallback (no configuration breaks). External contracts kept: the package.json "pi" manifest field, upstream URLs.
+
+### Performance (all benchmarked, zero behavior change)
+
+- EventStream burst drain O(n^2) -> O(1) cursor (200k events: 3016ms -> 22ms).
+- Tool-arg streaming JSON re-parse throttled per delta (~4,300x less parse work; authoritative parse at done).
+- Agent loop: incremental message conversion (no full-history convertToLlm per turn).
+- Sub-agent: incremental context estimation (no full re-scan per turn).
+- emitContext deep-clone guarded (no-op when no context handlers).
+- getProtectedPaths + extension command lookups memoized.
+- TUI kitty-image scans short-circuited on image-less renders.
+- Evals share one ModelRuntime per process.
+- Client request timers unref'd; send-throw no longer orphans pending requests.
+- Startup: playwright truly lazy, highlight.js full bundle -> core + 44 grammars, imapflow/nodemailer lazy (cold start ~570ms -> ~450ms, ~40MB less memory).
+
+
 ## [0.1.56] - 2026-08-08
 
 ### Fixed

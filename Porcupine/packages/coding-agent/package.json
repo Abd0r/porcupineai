@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/coding-agent",
-	"version": "0.1.56",
+	"version": "0.1.57",
 	"description": "Porcupine autonomous coding agent",
 	"type": "module",
 	"piConfig": {
