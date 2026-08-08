@@ -53,6 +53,7 @@ const HIGHLIGHT_LANGUAGES = [
 	"graphql",
 	"protobuf",
 	"hcl",
+	"diff",
 ] as const;
 
 let languagesRegistered = false;

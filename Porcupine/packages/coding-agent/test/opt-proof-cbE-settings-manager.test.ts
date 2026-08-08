@@ -51,13 +51,13 @@ describe("opt-proof-cbE: settings-manager getter hot path", () => {
 		console.log(`[opt] settings getter chain x${N} (60k calls): ${elapsed.toFixed(2)}ms`);
 	});
 
-	it("getProtectedPaths allocates a fresh array+Set on EVERY call (measured via identity)", () => {
+	it("getProtectedPaths is memoized (same array identity across calls)", () => {
 		const sm = makeManager();
 		const a = sm.getProtectedPaths();
 		const b = sm.getProtectedPaths();
-		// Every call must allocate a brand-new array (and an intermediate Set).
-		expect(a).not.toBe(b);
-		expect(a).toEqual(b);
+		// FIXED: the getter is memoized (bash guard calls it per command) — the
+		// same array instance is returned until settings/home change.
+		expect(a).toBe(b);
 	});
 
 	it("getProtectedPaths 10k calls complete quickly (but allocate 10k arrays)", () => {
