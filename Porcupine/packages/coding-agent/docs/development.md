@@ -15,7 +15,7 @@ npm run build
 Run from source:
 
 ```bash
-/path/to/porcupine/pi-test.sh
+/path/to/porcupine/porcupine-test.sh
 ```
 
 The script can be run from any directory. Porcupine keeps the caller's current working directory.

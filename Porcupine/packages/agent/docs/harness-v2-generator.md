@@ -25,7 +25,7 @@ The harness executes runs against one session. The session holds four kinds of s
 ## 1. Goals
 
 - **Durable runs.** An accepted prompt is a durable operation. After a crash, a new process restores the session. It resumes the run from the last safe boundary. Every state that a crash can produce is recoverable.
-- **Lanes.** A session hosts one or more lanes. A lane is a named position in the conversation tree. Each lane runs at most one operation at a time. Lanes run in parallel. A run and its queued messages belong to the lane that accepted them. Example: a Slack channel is a session; each thread is a lane. Interactive pi uses one lane and does not show the concept in its UI. Extensions get the full harness API, including lanes. Example: a subagent tool runs on a second lane of its parent's session.
+- **Lanes.** A session hosts one or more lanes. A lane is a named position in the conversation tree. Each lane runs at most one operation at a time. Lanes run in parallel. A run and its queued messages belong to the lane that accepted them. Example: a Slack channel is a session; each thread is a lane. Interactive porcupine uses one lane and does not show the concept in its UI. Extensions get the full harness API, including lanes. Example: a subagent tool runs on a second lane of its parent's session.
 - **No partial outcomes.** A crash inside any operation — run, compaction, navigation — leaves one of two states: the operation has not happened, or recovery can complete it. Nothing in between is observable.
 - **Harness API.** Events observe execution and cannot change it. Hooks intercept execution and can change it: context, requests, tools, run boundaries. Extensions build on events and hooks.
 - **Deterministic stepping.** Each operation runs as a synchronous state machine that yields one action per effect — durable write, provider request, tool execution, hook, timer. In `drive: "manual"` the machine halts before every action and a test drives it action by action: stop at any boundary, inject input, or close and reopen to simulate a crash. Production and tests drive the same machine (section 15).
@@ -37,7 +37,7 @@ The harness executes runs against one session. The session holds four kinds of s
 ## Non-goals
 
 - **Exactly-once hook side effects.** State a hook hands to the harness is durable when the call resolves: queued messages, appended entries. Side effects a hook makes on its own are invisible to the harness: HTTP calls, file writes. Interrupted handlers are not re-run on resume. A hook that needs crash-safe external effects must be idempotent, for example keyed by operation id.
-- **Provider stream resumption.** Partial streams are never persisted. An interrupted streaming request is retried or abandoned. Deferred requests are different and in scope: the provider returns a handle at once and serves the result later (e.g. `background: true` on a Responses API, batch APIs). pi-ai returns an assistant message with stop reason `deferred` that carries the handle; it is persisted like any assistant message. Redeeming the handle appends a normal assistant message. Recovery sees the unredeemed handle and fetches instead of paying for a new request.
+- **Provider stream resumption.** Partial streams are never persisted. An interrupted streaming request is retried or abandoned. Deferred requests are different and in scope: the provider returns a handle at once and serves the result later (e.g. `background: true` on a Responses API, batch APIs). porcupine-ai returns an assistant message with stop reason `deferred` that carries the handle; it is persisted like any assistant message. Redeeming the handle appends a normal assistant message. Recovery sees the unredeemed handle and fetches instead of paying for a new request.
 - **Multiple writers.** Two processes on one session are out of scope. The serving layer routes all traffic for a session to the process that holds its harness. Lanes cover the workloads that look like multi-writer: parallel threads over shared history.
 - **Replication.** A session lives in one place. Coordination-free sync of diverging copies is a different design. Parked; see open questions.
 
@@ -832,7 +832,7 @@ interface SuspendedOperation {
 ### Examples
 
 ```ts
-// Interactive pi. suspended has 0 or 1 entries, always "main".
+// Interactive porcupine. suspended has 0 or 1 entries, always "main".
 const { harness, suspended } = await AgentHarness.create({ session, models, model });
 for (const s of suspended) await (await harness.lane(s.lane))!.resume();
 await harness.prompt("fix the bug");
@@ -2313,7 +2313,7 @@ Notes:
 - A crash between the navigation move and its summary entry loses the in-memory summary text; recovery regenerates it under the same attempt cap. A hook-supplied summary lost in that window is regenerated rather than re-asked: the hook's decline authority ended at the move.
 - One policy knob deferred to implementation: whether `resume()` waits inside `fetch_deferred` when the provider is not ready (`wait` option) or re-parks immediately.
 
-## 16. pi-ai: deferred requests
+## 16. porcupine-ai: deferred requests
 
 The provider-level interface the harness builds on. Everything is per-request; batch APIs can implement the same shape through a custom provider.
 
@@ -2388,7 +2388,7 @@ repo.create({ id?, parentSessionId? }): Promise<Session>;
 - Entries only. No records, no queues: a fork starts idle, every lane question answers "no open operation".
 - Lanes: `scope: "branch"` → the fork has only `main`, at the fork point. `scope: "tree"` → every lane name and leaf pointer is copied. No operation logs or queues are copied either way, so every forked lane is idle.
 - Facts: `scope: "tree"` copies all; `scope: "branch"` copies the name always, labels only when their target entry was copied.
-- The fork point may be any message entry. A copy whose tip sits mid-tool-batch is still promptable: pi-ai's transformMessages inserts synthetic empty results for orphaned tool calls at request build time.
+- The fork point may be any message entry. A copy whose tip sits mid-tool-batch is still promptable: porcupine-ai's transformMessages inserts synthetic empty results for orphaned tool calls at request build time.
 - The source is untouched; copying while it runs reads the committed prefix.
 - Linkage is `parentSessionId`, set by `fork()` and settable on `create()` — the basis for subagent parent/child tracking and export bundles.
 - A subagent tool derives its child session id deterministically from its invocation (`f(parentSessionId, toolCallId)`): a safe replay reattaches to the same child instead of spawning a twin, and the child stays discoverable from the parent even when a crash swallowed the tool result.
@@ -2396,25 +2396,25 @@ repo.create({ id?, parentSessionId? }): Promise<Session>;
 
 ## 18. Telemetry
 
-In-process diagnostics, separate from events (public observation) and hooks (control). Vendor-neutral: pi emits structured span events; subscribers convert to OTel, logs, or metrics. Core packages never import OTel or Node-only APIs. Mechanism and adapters: `packages/agent/docs/observability.md`; its event names are superseded by this document's vocabulary.
+In-process diagnostics, separate from events (public observation) and hooks (control). Vendor-neutral: porcupine emits structured span events; subscribers convert to OTel, logs, or metrics. Core packages never import OTel or Node-only APIs. Mechanism and adapters: `packages/agent/docs/observability.md`; its event names are superseded by this document's vocabulary.
 
 Context propagation is explicit: the telemetry context flows as an ordinary argument — harness to procedure, procedure to `Effects` implementation, effect to the work it performs. No `AsyncLocalStorage`, no global current-span state. A context object is process-local capability data and is never persisted in a record, entry, snapshot, event, or deferred handle.
 
 Span tree, aligned to the execution model; every span carries `lane` plus the ids public events carry (`runId`, `stepId`, `toolCallId`), so traces, events, and records correlate without translation:
 
 ```text
-pi.harness.run           runId, lane, recovery
-├─ pi.harness.step        stepId
-│  ├─ pi.harness.task      task, attempt
-│  │  └─ pi.ai.request      physical provider request(s)
-│  └─ pi.harness.tool      toolName, toolCallId, replay
-├─ pi.harness.checkpoint
-└─ pi.harness.hook         hook type
+porcupine.harness.run           runId, lane, recovery
+├─ porcupine.harness.step        stepId
+│  ├─ porcupine.harness.task      task, attempt
+│  │  └─ porcupine.ai.request      physical provider request(s)
+│  └─ porcupine.harness.tool      toolName, toolCallId, replay
+├─ porcupine.harness.checkpoint
+└─ porcupine.harness.hook         hook type
 
-pi.harness.compaction    manual operation; auto nests under its run
-pi.harness.navigation
-pi.harness.resume
-pi.session.append        entry/record type, seq
+porcupine.harness.compaction    manual operation; auto nests under its run
+porcupine.harness.navigation
+porcupine.harness.resume
+porcupine.session.append        entry/record type, seq
 ```
 
 Safety: default payloads carry identifiers, counts, durations, stop reasons, status codes — never prompts, completions, tool arguments, tool output, or headers. Content capture is opt-in via redaction hooks at subscriber configuration. Subscribers are passive: their errors are swallowed; exporting, sampling, and scrubbing are their job.

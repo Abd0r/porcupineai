@@ -20,13 +20,13 @@
 			"@porcupineai/protocol/*": ["./packages/protocol/src/*"],
 			"@porcupineai/client": ["./packages/client/src/index.ts"],
 			"@porcupineai/client/*": ["./packages/client/src/*"],
-			"@earendil-works/pi-server": ["./packages/server/src/index.ts"],
-			"@earendil-works/pi-server/*": ["./packages/server/src/*"],
+			"@earendil-works/porcupine-server": ["./packages/server/src/index.ts"],
+			"@earendil-works/porcupine-server/*": ["./packages/server/src/*"],
 			"typebox": ["./node_modules/typebox"],
 			"@porcupineai/tui": ["./packages/tui/src/index.ts"],
 			"@porcupineai/tui/*": ["./packages/tui/src/*"],
-			"@earendil-works/pi-agent-old": ["./packages/agent-old/src/index.ts"],
-			"@earendil-works/pi-agent-old/*": ["./packages/agent-old/src/*"]
+			"@earendil-works/porcupine-agent-old": ["./packages/agent-old/src/index.ts"],
+			"@earendil-works/porcupine-agent-old/*": ["./packages/agent-old/src/*"]
 		}
 	},
 	"include": ["packages/*/src/**/*", "packages/*/test/**/*", "packages/storage/*/src/**/*", "packages/storage/*/test/**/*", "packages/coding-agent/examples/**/*"],

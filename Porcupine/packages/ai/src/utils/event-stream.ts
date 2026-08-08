@@ -3,6 +3,8 @@ import type { AssistantMessage, AssistantMessageEvent } from "../types.ts";
 // Generic event stream class for async iteration
 export class EventStream<T, R = T> implements AsyncIterable<T> {
 	private queue: T[] = [];
+	/** Read cursor into the queue: drains are O(1) amortized instead of O(n) per shift. */
+	private queueIndex = 0;
 	private waiting: ((value: IteratorResult<T>) => void)[] = [];
 	private done = false;
 	private finalResultPromise: Promise<R>;
@@ -49,8 +51,14 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 
 	async *[Symbol.asyncIterator](): AsyncIterator<T> {
 		while (true) {
-			if (this.queue.length > 0) {
-				yield this.queue.shift()!;
+			if (this.queueIndex < this.queue.length) {
+				yield this.queue[this.queueIndex++];
+				// Compact the consumed prefix occasionally so a large burst does not
+				// pin the whole array (and its references) in memory.
+				if (this.queueIndex > 64 && this.queueIndex * 2 >= this.queue.length) {
+					this.queue = this.queue.slice(this.queueIndex);
+					this.queueIndex = 0;
+				}
 			} else if (this.done) {
 				return;
 			} else {

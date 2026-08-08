@@ -12,10 +12,10 @@ import type { HarnessRun } from "vitest-evals/harness";
 
 export const PI_SESSION_SNAPSHOT_ARTIFACT = "piSessionJsonl";
 
-const evalSessionArtifactKey = Symbol("pi-evals-session-artifact");
-const evalSourceArtifactKey = Symbol("pi-evals-source-artifact");
+const evalSessionArtifactKey = Symbol("porcupine-evals-session-artifact");
+const evalSourceArtifactKey = Symbol("porcupine-evals-source-artifact");
 
-interface PiSessionAttachment extends TestAttachment {
+interface PorcupineSessionAttachment extends TestAttachment {
 	name: "session.jsonl";
 	contentType: "application/jsonl";
 	body: string;
@@ -29,10 +29,10 @@ export interface SourceAttachment extends TestAttachment {
 	bodyEncoding: "utf-8";
 }
 
-interface PiSessionArtifact extends TestArtifactBase {
+interface PorcupineSessionArtifact extends TestArtifactBase {
 	type: "@porcupineai/evals:session";
 	runId: string;
-	attachments: [PiSessionAttachment] | [];
+	attachments: [PorcupineSessionAttachment] | [];
 }
 
 interface SourceArtifact extends TestArtifactBase {
@@ -43,7 +43,7 @@ interface SourceArtifact extends TestArtifactBase {
 
 declare module "vitest" {
 	interface TestArtifactRegistry {
-		[evalSessionArtifactKey]: PiSessionArtifact;
+		[evalSessionArtifactKey]: PorcupineSessionArtifact;
 		[evalSourceArtifactKey]: SourceArtifact;
 	}
 }
@@ -56,7 +56,7 @@ export async function recordEvalSessionArtifact(
 	const session = run.artifacts?.[PI_SESSION_SNAPSHOT_ARTIFACT];
 	if (session === undefined) return;
 	if (typeof runId !== "string" || typeof session !== "string") {
-		throw new TypeError("Pi eval session artifact metadata is invalid.");
+		throw new TypeError("Porcupine eval session artifact metadata is invalid.");
 	}
 	await recordArtifact(task, {
 		type: "@porcupineai/evals:session",

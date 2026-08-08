@@ -209,12 +209,12 @@ When closing issues via commit:
 Run the TUI in a controlled terminal (from the repo root):
 
 ```bash
-tmux new-session -d -s pi-test -x 80 -y 24
-tmux send-keys -t pi-test "./pi-test.sh" Enter
-sleep 3 && tmux capture-pane -t pi-test -p     # capture after startup
-tmux send-keys -t pi-test "your prompt here" Enter
-tmux send-keys -t pi-test Escape               # special keys (also C-o for ctrl+o, etc.)
-tmux kill-session -t pi-test
+tmux new-session -d -s porcupine-test -x 80 -y 24
+tmux send-keys -t porcupine-test "./porcupine-test.sh" Enter
+sleep 3 && tmux capture-pane -t porcupine-test -p     # capture after startup
+tmux send-keys -t porcupine-test "your prompt here" Enter
+tmux send-keys -t porcupine-test Escape               # special keys (also C-o for ctrl+o, etc.)
+tmux kill-session -t porcupine-test
 ```
 
 ## Changelog
@@ -230,8 +230,8 @@ Rules:
 
 Attribution:
 
-- Internal (from issues): `Fixed foo bar ([#123](https://github.com/earendil-works/pi-mono/issues/123))`
-- External contributions: `Added feature X ([#456](https://github.com/earendil-works/pi-mono/pull/456) by [@username](https://github.com/username))`
+- Internal (from issues): `Fixed foo bar ([#123](https://github.com/earendil-works/porcupine-mono/issues/123))`
+- External contributions: `Added feature X ([#456](https://github.com/earendil-works/porcupine-mono/pull/456) by [@username](https://github.com/username))`
 
 ## Releasing
 
@@ -242,25 +242,25 @@ Attribution:
 2. **Local smoke test**: build an unpublished release and smoke test from outside the repo (so it can't resolve workspace files):
 
    ```bash
-   npm run release:local -- --out /tmp/pi-local-release --force
+   npm run release:local -- --out /tmp/porcupine-local-release --force
    cd /tmp
 
    # Node package install smoke tests
-   /tmp/pi-local-release/node/pi --help
-   /tmp/pi-local-release/node/pi --version
-   /tmp/pi-local-release/node/porcupine --list-models
-   /tmp/pi-local-release/node/pi -p "Say exactly: ok"
-   /tmp/pi-local-release/node/pi
+   /tmp/porcupine-local-release/node/pi --help
+   /tmp/porcupine-local-release/node/pi --version
+   /tmp/porcupine-local-release/node/porcupine --list-models
+   /tmp/porcupine-local-release/node/pi -p "Say exactly: ok"
+   /tmp/porcupine-local-release/node/pi
 
    # Bun binary smoke tests
-   /tmp/pi-local-release/bun/pi --help
-   /tmp/pi-local-release/bun/pi --version
-   /tmp/pi-local-release/bun/porcupine --list-models
-   /tmp/pi-local-release/bun/pi -p "Say exactly: ok"
-   /tmp/pi-local-release/bun/pi
+   /tmp/porcupine-local-release/bun/pi --help
+   /tmp/porcupine-local-release/bun/pi --version
+   /tmp/porcupine-local-release/bun/porcupine --list-models
+   /tmp/porcupine-local-release/bun/pi -p "Say exactly: ok"
+   /tmp/porcupine-local-release/bun/pi
    ```
 
-   Verify both Node and Bun startup, model/account listing, interactive startup, and at least one real prompt with the intended default provider. The bare commands `/tmp/pi-local-release/node/pi` and `/tmp/pi-local-release/bun/pi` start interactive mode; run each in tmux, submit a prompt, and wait for the model reply before considering the interactive smoke test passed. Failures are release blockers unless the user explicitly accepts the risk.
+   Verify both Node and Bun startup, model/account listing, interactive startup, and at least one real prompt with the intended default provider. The bare commands `/tmp/porcupine-local-release/node/pi` and `/tmp/porcupine-local-release/bun/pi` start interactive mode; run each in tmux, submit a prompt, and wait for the model reply before considering the interactive smoke test passed. Failures are release blockers unless the user explicitly accepts the risk.
 
 3. **Run the release script**:
 

@@ -1,4 +1,4 @@
-import { type ByteTransport, type ByteTransportHandlers, PiClient } from "@porcupineai/client";
+import { type ByteTransport, type ByteTransportHandlers, PorcupineClient } from "@porcupineai/client";
 import {
 	type ClientMessage,
 	ClientMessageDecoder,
@@ -73,8 +73,8 @@ export function sessionSnapshot(id: string, overrides: Partial<SessionSnapshot> 
 	};
 }
 
-export async function connectClient(server: MemoryServer): Promise<PiClient> {
-	const client = new PiClient({ token: "secret", transportFactory: (handlers) => server.connect(handlers) });
+export async function connectClient(server: MemoryServer): Promise<PorcupineClient> {
+	const client = new PorcupineClient({ token: "secret", transportFactory: (handlers) => server.connect(handlers) });
 	server.onMessage((message) => {
 		if (message.type !== "hello") return;
 		server.send({
@@ -97,7 +97,7 @@ export function collectRequests(server: MemoryServer): RequestEnvelope[] {
 }
 
 export async function openRemoteSession(
-	client: PiClient,
+	client: PorcupineClient,
 	server: MemoryServer,
 	snapshot: SessionSnapshot,
 	options?: RemoteSessionOptions,

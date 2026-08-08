@@ -1,7 +1,7 @@
 # Porcupine
 
 A terminal coding agent that carries multi-step work end-to-end — with explicit
-permission modes and a fail-closed safety gate. Built on [Pi](https://github.com/earendil-works/pi) (MIT).
+permission modes and a fail-closed safety gate. Built on [Porcupine](https://github.com/earendil-works/pi) (MIT).
 
 ```bash
 porcupine "fix the failing tests and explain what was wrong"

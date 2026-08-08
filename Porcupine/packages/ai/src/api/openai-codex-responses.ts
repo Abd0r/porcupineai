@@ -406,7 +406,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 						response = await (options?.fetch ?? globalThis.fetch)(resolveCodexUrl(model.baseUrl), {
 							method: "POST",
 							headers: sseHeaders,
-							body: sseBody,
+							body: typeof sseBody === "string" ? sseBody : new Uint8Array(sseBody),
 							signal: combinedSignal.signal,
 						});
 					} catch (error) {
@@ -1631,8 +1631,8 @@ function buildBaseCodexHeaders(
 	}
 	headers.set("Authorization", `Bearer ${token}`);
 	headers.set("chatgpt-account-id", accountId);
-	headers.set("originator", "pi");
-	const userAgent = _os ? `pi (${_os.platform()} ${_os.release()}; ${_os.arch()})` : "pi (browser)";
+	headers.set("originator", "porcupine");
+	const userAgent = _os ? `porcupine (${_os.platform()} ${_os.release()}; ${_os.arch()})` : "porcupine (browser)";
 	headers.set("User-Agent", userAgent);
 	return headers;
 }

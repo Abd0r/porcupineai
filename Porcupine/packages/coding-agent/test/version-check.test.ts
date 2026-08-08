@@ -3,9 +3,9 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-	checkForNewPiVersion,
+	checkForNewPorcupineVersion,
 	comparePackageVersions,
-	getLatestPiRelease,
+	getLatestPorcupineRelease,
 	isNewerPackageVersion,
 } from "../src/utils/version-check.ts";
 import { allowNetwork } from "./test-network-env.ts";
@@ -77,15 +77,15 @@ describe("version checks", () => {
 		const fetchMock = vi.fn(async () => Response.json({ version: "1.2.3" }));
 		vi.stubGlobal("fetch", fetchMock);
 
-		await expect(checkForNewPiVersion("1.2.3")).resolves.toBeUndefined();
-		await expect(checkForNewPiVersion("1.2.2")).resolves.toEqual({ version: "1.2.3" });
+		await expect(checkForNewPorcupineVersion("1.2.3")).resolves.toBeUndefined();
+		await expect(checkForNewPorcupineVersion("1.2.2")).resolves.toEqual({ version: "1.2.3" });
 	});
 
 	it("uses the configured version check api with a Porcupine user agent", async () => {
 		const fetchMock = vi.fn(async () => Response.json({ version: "1.2.4" }));
 		vi.stubGlobal("fetch", fetchMock);
 
-		await expect(getLatestPiRelease("1.2.3")).resolves.toMatchObject({ version: "1.2.4" });
+		await expect(getLatestPorcupineRelease("1.2.3")).resolves.toMatchObject({ version: "1.2.4" });
 		expect(fetchMock).toHaveBeenCalledWith(
 			"https://releases.example.test/api/latest-version",
 			expect.objectContaining({
@@ -102,7 +102,7 @@ describe("version checks", () => {
 		const fetchMock = vi.fn(async () => Response.json({ version: "1.2.4" }));
 		vi.stubGlobal("fetch", fetchMock);
 
-		await expect(getLatestPiRelease("1.2.3")).resolves.toMatchObject({ version: "1.2.4" });
+		await expect(getLatestPorcupineRelease("1.2.3")).resolves.toMatchObject({ version: "1.2.4" });
 		// Without a URL, the installed package name is looked up on the npm registry.
 		expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("registry.npmjs.org"), expect.anything());
 	});
@@ -116,7 +116,7 @@ describe("version checks", () => {
 		);
 		vi.stubGlobal("fetch", fetchMock);
 
-		await expect(getLatestPiRelease("1.2.3")).resolves.toEqual({
+		await expect(getLatestPorcupineRelease("1.2.3")).resolves.toEqual({
 			packageName: "@new-scope/porcupine",
 			version: "1.2.4",
 		});
@@ -126,7 +126,7 @@ describe("version checks", () => {
 		const fetchMock = vi.fn(async () => Response.json({ note: " **Read this** ", version: "1.2.4" }));
 		vi.stubGlobal("fetch", fetchMock);
 
-		await expect(getLatestPiRelease("1.2.3")).resolves.toEqual({ note: "**Read this**", version: "1.2.4" });
+		await expect(getLatestPorcupineRelease("1.2.3")).resolves.toEqual({ note: "**Read this**", version: "1.2.4" });
 	});
 
 	it("skips automatic api calls when version checks are disabled", async () => {
@@ -134,7 +134,7 @@ describe("version checks", () => {
 		const fetchMock = vi.fn();
 		vi.stubGlobal("fetch", fetchMock);
 
-		await expect(checkForNewPiVersion("1.2.3")).resolves.toBeUndefined();
+		await expect(checkForNewPorcupineVersion("1.2.3")).resolves.toBeUndefined();
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
@@ -143,7 +143,7 @@ describe("version checks", () => {
 		const fetchMock = vi.fn(async () => Response.json({ version: "1.2.4" }));
 		vi.stubGlobal("fetch", fetchMock);
 
-		await expect(getLatestPiRelease("1.2.3")).resolves.toMatchObject({ version: "1.2.4" });
+		await expect(getLatestPorcupineRelease("1.2.3")).resolves.toMatchObject({ version: "1.2.4" });
 		expect(fetchMock).toHaveBeenCalledOnce();
 	});
 });

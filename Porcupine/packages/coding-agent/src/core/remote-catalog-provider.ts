@@ -1,7 +1,7 @@
 import type { Api, Model, ModelsStoreEntry, Provider } from "@porcupineai/ai";
 import { VERSION } from "../config.ts";
 import { getProductEnvironment } from "../product-environment.ts";
-import { getPorcupineUserAgent } from "../utils/pi-user-agent.ts";
+import { getPorcupineUserAgent } from "../utils/porcupine-user-agent.ts";
 
 export const REMOTE_CATALOG_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000;
 

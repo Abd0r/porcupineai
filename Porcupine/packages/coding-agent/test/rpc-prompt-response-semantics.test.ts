@@ -99,7 +99,7 @@ async function createRuntimeHost(options: { withAuth: boolean; responseDelayMs: 
 	runtimeHost: AgentSessionRuntime;
 	cleanup: () => Promise<void>;
 }> {
-	const tempDir = join(tmpdir(), `pi-rpc-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+	const tempDir = join(tmpdir(), `porcupine-rpc-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	mkdirSync(tempDir, { recursive: true });
 
 	const model = options.model ?? getModel("anthropic", "claude-sonnet-4-5");

@@ -12,18 +12,18 @@ import {
 } from "@porcupineai/protocol";
 import { Connection } from "./connection.ts";
 import {
-	PiClientDisposedError,
-	PiDisconnectedError,
-	PiRequestTimeoutError,
-	PiServerError,
-	PiSessionDetachedError,
-	PiSessionOwnershipError,
+	PorcupineClientDisposedError,
+	PorcupineDisconnectedError,
+	PorcupineRequestTimeoutError,
+	PorcupineServerError,
+	PorcupineSessionDetachedError,
+	PorcupineSessionOwnershipError,
 	toError,
 } from "./errors.ts";
 import { createPromiseResolvers } from "./promise.ts";
 import {
 	type AcquireSessionOptions,
-	type PiSessionHandle,
+	type PorcupineSessionHandle,
 	SessionHandle,
 	type SessionHandleCallbacks,
 	type SessionLeaseMode,
@@ -33,7 +33,7 @@ import type {
 	ConnectionState,
 	ConnectionStateChange,
 	CreateSessionOptions,
-	PiClientOptions,
+	PorcupineClientOptions,
 	Unsubscribe,
 } from "./types.ts";
 
@@ -50,8 +50,8 @@ interface PendingRequest {
 	timeoutId?: NodeJS.Timeout;
 }
 
-export class PiClient {
-	readonly #options: PiClientOptions;
+export class PorcupineClient {
+	readonly #options: PorcupineClientOptions;
 	readonly #connection: Connection;
 	readonly #state: ClientState;
 	readonly #pendingRequests = new Map<string, PendingRequest>();
@@ -71,7 +71,7 @@ export class PiClient {
 	#disposed = false;
 	#disposePromise: Promise<void> | undefined;
 
-	constructor(options: PiClientOptions) {
+	constructor(options: PorcupineClientOptions) {
 		this.#options = options;
 		this.#state = new ClientState(options.onListenerError);
 		this.#connection = new Connection({
@@ -100,8 +100,8 @@ export class PiClient {
 		return this.#state.snapshot;
 	}
 
-	static async connect(options: PiClientOptions): Promise<PiClient> {
-		const client = new PiClient(options);
+	static async connect(options: PorcupineClientOptions): Promise<PorcupineClient> {
+		const client = new PorcupineClient(options);
 		try {
 			await client.connect();
 			return client;
@@ -112,7 +112,7 @@ export class PiClient {
 	}
 
 	connect(): Promise<ServerSnapshot> {
-		if (this.#disposed) return Promise.reject(new PiClientDisposedError());
+		if (this.#disposed) return Promise.reject(new PorcupineClientDisposedError());
 		if (this.#connection.state === "disconnected") this.#state.reset();
 		return this.#connection.connect();
 	}
@@ -145,17 +145,17 @@ export class PiClient {
 		return (await this.#request({ command: "list" })).sessions;
 	}
 
-	async createSession(options: CreateSessionOptions = {}): Promise<PiSessionHandle> {
+	async createSession(options: CreateSessionOptions = {}): Promise<PorcupineSessionHandle> {
 		const result = await this.#request({ command: "create", ...options });
 		const token = this.#reserveSessionLease(result.session.id, "exclusive");
 		return this.#createSessionLease(result.session.id, token);
 	}
 
-	async attachSession(sessionId: string): Promise<PiSessionHandle> {
+	async attachSession(sessionId: string): Promise<PorcupineSessionHandle> {
 		return this.acquireSession(sessionId, { mode: "shared" });
 	}
 
-	async acquireSession(sessionId: string, options: AcquireSessionOptions): Promise<PiSessionHandle> {
+	async acquireSession(sessionId: string, options: AcquireSessionOptions): Promise<PorcupineSessionHandle> {
 		this.#assertNotDisposed();
 		const token = this.#reserveSessionLease(sessionId, options.mode);
 		try {
@@ -194,13 +194,18 @@ export class PiClient {
 	}
 
 	#request<const TCommand extends Command>(command: TCommand): Promise<ResultForCommand<TCommand>> {
-		if (this.#disposed) return Promise.reject(new PiClientDisposedError());
-		if (!this.connected) return Promise.reject(new PiDisconnectedError());
+		if (this.#disposed) return Promise.reject(new PorcupineClientDisposedError());
+		if (!this.connected) return Promise.reject(new PorcupineDisconnectedError());
 		const id = `request-${++this.#requestSequence}`;
 		const { promise, resolve, reject } = createPromiseResolvers<CommandResult>();
 		const timeoutId = setTimeout(() => {
-			this.#takePendingRequest(id)?.reject(new PiRequestTimeoutError(command.command, this.#requestTimeoutMs()));
+			this.#takePendingRequest(id)?.reject(
+				new PorcupineRequestTimeoutError(command.command, this.#requestTimeoutMs()),
+			);
 		}, this.#requestTimeoutMs());
+		// Never pin the event loop: the harness shares this process with the TUI,
+		// and an unref'd timer is cleared on response/disconnect anyway.
+		timeoutId.unref?.();
 		this.#pendingRequests.set(id, { command, resolve, reject, timeoutId });
 		let frame: Uint8Array;
 		try {
@@ -212,11 +217,17 @@ export class PiClient {
 			this.#takePendingRequest(id)?.reject(toError(error));
 			return promise as Promise<ResultForCommand<TCommand>>;
 		}
-		this.#connection.send(frame);
+		try {
+			this.#connection.send(frame);
+		} catch (error) {
+			// A disconnect can land between the `connected` check and send: reject
+			// the pending entry (and its timer) instead of leaking it for a timeout.
+			this.#takePendingRequest(id)?.reject(toError(error));
+		}
 		return promise as Promise<ResultForCommand<TCommand>>;
 	}
 
-	#createSessionLease(sessionId: string, token: SessionLeaseToken): PiSessionHandle {
+	#createSessionLease(sessionId: string, token: SessionLeaseToken): PorcupineSessionHandle {
 		const generation = this.#sessionLeaseGenerations.get(sessionId) ?? 0;
 		this.#sessionLeaseGenerations.set(sessionId, generation);
 		let state: SessionLeaseState = "active";
@@ -235,8 +246,8 @@ export class PiClient {
 		};
 		const assertActive = () => {
 			this.#assertNotDisposed();
-			if (!this.connected) throw new PiDisconnectedError();
-			if (!isActive()) throw new PiSessionDetachedError(sessionId);
+			if (!this.connected) throw new PorcupineDisconnectedError();
+			if (!isActive()) throw new PorcupineSessionDetachedError(sessionId);
 		};
 		const release = (relinquishOnFailure: boolean): Promise<void> => {
 			refreshState();
@@ -313,7 +324,7 @@ export class PiClient {
 			return;
 		}
 		if (!message.ok) {
-			pending.reject(new PiServerError(message.error));
+			pending.reject(new PorcupineServerError(message.error));
 			return;
 		}
 		if (message.result.command !== pending.command.command) {
@@ -332,7 +343,7 @@ export class PiClient {
 		if (change.state === "disconnected") {
 			this.#state.clearAttachments();
 			this.#invalidateAllSessionLeases();
-			this.#rejectPendingRequests(change.error ?? new PiDisconnectedError());
+			this.#rejectPendingRequests(change.error ?? new PorcupineDisconnectedError());
 		}
 		this.#notifyConnectionStateListeners(change);
 	}
@@ -359,7 +370,7 @@ export class PiClient {
 		if (this.#disposePromise) return this.#disposePromise;
 		this.#disposed = true;
 		this.#disposePromise = Promise.resolve();
-		const error = new PiClientDisposedError();
+		const error = new PorcupineClientDisposedError();
 		this.#rejectPendingRequests(error);
 		this.#connection.disconnect(error);
 		this.#state.dispose();
@@ -373,7 +384,7 @@ export class PiClient {
 	}
 
 	#assertNotDisposed(): void {
-		if (this.#disposed) throw new PiClientDisposedError();
+		if (this.#disposed) throw new PorcupineClientDisposedError();
 	}
 
 	async #reconcileSessionCleanup(sessionId: string): Promise<boolean> {
@@ -397,10 +408,10 @@ export class PiClient {
 	#reserveSessionLease(sessionId: string, mode: SessionLeaseMode): SessionLeaseToken {
 		const count = this.#sessionLeaseCounts.get(sessionId) ?? 0;
 		if (mode === "exclusive" && count > 0) {
-			throw new PiSessionOwnershipError(sessionId, `Session ${sessionId} already has an active lease`);
+			throw new PorcupineSessionOwnershipError(sessionId, `Session ${sessionId} already has an active lease`);
 		}
 		if (mode === "shared" && this.#exclusiveSessionLeases.has(sessionId)) {
-			throw new PiSessionOwnershipError(sessionId, `Session ${sessionId} has an exclusive lease`);
+			throw new PorcupineSessionOwnershipError(sessionId, `Session ${sessionId} has an exclusive lease`);
 		}
 		const token: SessionLeaseToken = { mode };
 		this.#sessionLeaseCounts.set(sessionId, count + 1);

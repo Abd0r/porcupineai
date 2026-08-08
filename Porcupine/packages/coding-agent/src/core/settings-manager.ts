@@ -1261,12 +1261,25 @@ export class SettingsManager {
 
 	/** Paths the agent may never destructively target, even inside the workspace. */
 	getProtectedPaths(): string[] {
-		const defaults = ["/", "/etc", "/usr", "/bin", "/sbin", "/var", "/Library", "/System", "/Applications"];
+		// Memoized: the bash guard calls this on every command; rebuilding the
+		// defaults+home+user array+Set each time was pure allocation churn.
+		const current = this.settings.safety?.protectedPaths ?? [];
 		const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+		if (
+			this._protectedPathsCache &&
+			this._protectedPathsCache.home === home &&
+			this._protectedPathsCache.user === current
+		) {
+			return this._protectedPathsCache.paths;
+		}
+		const defaults = ["/", "/etc", "/usr", "/bin", "/sbin", "/var", "/Library", "/System", "/Applications"];
 		if (home) defaults.push(join(home, "Library"));
-		const user = this.settings.safety?.protectedPaths ?? [];
-		return [...new Set([...defaults, ...user])];
+		const paths = [...new Set([...defaults, ...current])];
+		this._protectedPathsCache = { home, user: current, paths };
+		return paths;
 	}
+
+	private _protectedPathsCache: { home: string; user: string[]; paths: string[] } | undefined;
 
 	setNotifyOnTaskCompletion(enabled: boolean): void {
 		this.globalSettings.notifyOnTaskCompletion = enabled;

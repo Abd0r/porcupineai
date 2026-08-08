@@ -1,4 +1,4 @@
-import { PiClient } from "@porcupineai/client";
+import { PorcupineClient } from "@porcupineai/client";
 import { createAssistantMessageEventStream, Type } from "@porcupineai/ai";
 import { complete, getModel, getProviders, streamSimple } from "@porcupineai/ai/compat";
 import {
@@ -60,7 +60,7 @@ console.log(
 	new FileError("not_found", "missing").code,
 	toError("boom").message,
 	typeof streamProxy,
-	typeof PiClient,
+	typeof PorcupineClient,
 	PROTOCOL_VERSION,
 	decodeCbor(encodeCbor({ browser: true })),
 );

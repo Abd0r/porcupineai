@@ -12,7 +12,7 @@ function readFiniteNumber(value: unknown): number | undefined {
 }
 
 async function appendHarnessRunReport(test: TestCase): Promise<void> {
-	const artifactDirectory = process.env.PI_EVAL_ARTIFACT_DIR?.trim();
+	const artifactDirectory = (process.env.PORCUPINE_EVAL_ARTIFACT_DIR ?? process.env.PI_EVAL_ARTIFACT_DIR)?.trim();
 	if (!artifactDirectory) return;
 	const harness = test.meta().harness;
 	if (!harness || !isHarnessRun(harness.run)) return;

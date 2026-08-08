@@ -7,7 +7,7 @@ import chalk from "chalk";
 import { APP_NAME, VERSION } from "../config.ts";
 import { execCommand } from "../core/exec.ts";
 import { syncStockAgentFiles } from "../porcupine/stock-sync.ts";
-import { checkForNewPiVersion, getInstalledPackageName } from "../utils/version-check.ts";
+import { checkForNewPorcupineVersion, getInstalledPackageName } from "../utils/version-check.ts";
 
 /** `porcupine update [--yes]` — check npm/GitHub for a newer release and optionally install it. */
 export async function runUpdateCommand(args: string[]): Promise<boolean> {
@@ -15,7 +15,7 @@ export async function runUpdateCommand(args: string[]): Promise<boolean> {
 	const yes = args.includes("--yes");
 
 	console.log(`${APP_NAME} v${VERSION} — checking for updates…`);
-	const latest = await checkForNewPiVersion(VERSION, { cacheTtlMs: 0 });
+	const latest = await checkForNewPorcupineVersion(VERSION, { cacheTtlMs: 0 });
 	if (!latest) {
 		console.log(chalk.green(`Up to date — ${APP_NAME} v${VERSION}.`));
 		return true;

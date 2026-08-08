@@ -26,7 +26,7 @@ describe("max thinking level", () => {
 	});
 
 	it("falls back to thinkingXhigh for legacy themes", () => {
-		const testDir = mkdtempSync(join(tmpdir(), "pi-max-theme-"));
+		const testDir = mkdtempSync(join(tmpdir(), "porcupine-max-theme-"));
 		tempDirs.push(testDir);
 		const currentDir = dirname(fileURLToPath(import.meta.url));
 		const darkTheme = JSON.parse(
@@ -44,7 +44,7 @@ describe("max thinking level", () => {
 	});
 
 	it("uses a distinct adaptive border while preserving legacy-theme fallback", () => {
-		const testDir = mkdtempSync(join(tmpdir(), "pi-adaptive-theme-"));
+		const testDir = mkdtempSync(join(tmpdir(), "porcupine-adaptive-theme-"));
 		tempDirs.push(testDir);
 		const currentDir = dirname(fileURLToPath(import.meta.url));
 		const darkThemePath = join(currentDir, "../src/modes/interactive/theme/dark.json");

@@ -14,15 +14,15 @@ export const workspaceSourcePaths = {
 export default defineConfig({
 	resolve: {
 		alias: [
-			{ find: /^@earendil-works\/pi-ai$/, replacement: workspaceSourcePaths.aiIndex },
-			{ find: /^@earendil-works\/pi-ai\/compat$/, replacement: workspaceSourcePaths.aiCompat },
-			{ find: /^@earendil-works\/pi-ai\/oauth$/, replacement: workspaceSourcePaths.aiOAuth },
+			{ find: /^@earendil-works\/porcupine-ai$/, replacement: workspaceSourcePaths.aiIndex },
+			{ find: /^@earendil-works\/porcupine-ai\/compat$/, replacement: workspaceSourcePaths.aiCompat },
+			{ find: /^@earendil-works\/porcupine-ai\/oauth$/, replacement: workspaceSourcePaths.aiOAuth },
 			{
-				find: /^@earendil-works\/pi-ai\/providers\/(.+)$/,
+				find: /^@earendil-works\/porcupine-ai\/providers\/(.+)$/,
 				replacement: `${workspaceSourcePaths.aiProviders}/$1.ts`,
 			},
-			{ find: /^@earendil-works\/pi-agent-core$/, replacement: workspaceSourcePaths.agentIndex },
-			{ find: /^@earendil-works\/pi-tui$/, replacement: workspaceSourcePaths.tuiIndex },
+			{ find: /^@earendil-works\/porcupine-agent-core$/, replacement: workspaceSourcePaths.agentIndex },
+			{ find: /^@earendil-works\/porcupine-tui$/, replacement: workspaceSourcePaths.tuiIndex },
 		],
 	},
 });

@@ -1,5 +1,5 @@
 /**
- * Temporary compatibility entrypoint preserving the old global pi-ai API
+ * Temporary compatibility entrypoint preserving the old global porcupine-ai API
  * surface: api-dispatch `stream()`/`complete()` with env API key injection,
  * the api-registry, generated catalog reads (`getModel`/`getModels`/
  * `getProviders`), per-API lazy stream wrappers, and image generation.
@@ -19,7 +19,7 @@ export * from "./api/mistral-conversations.lazy.ts";
 export * from "./api/openai-codex-responses.lazy.ts";
 export * from "./api/openai-completions.lazy.ts";
 export * from "./api/openai-responses.lazy.ts";
-export * from "./api/pi-messages.lazy.ts";
+export * from "./api/porcupine-messages.lazy.ts";
 export * from "./env-api-keys.ts";
 export * from "./image-models.ts";
 export * from "./images.ts";
@@ -37,7 +37,7 @@ import { mistralConversationsApi } from "./api/mistral-conversations.lazy.ts";
 import { openAICodexResponsesApi } from "./api/openai-codex-responses.lazy.ts";
 import { openAICompletionsApi } from "./api/openai-completions.lazy.ts";
 import { openAIResponsesApi } from "./api/openai-responses.lazy.ts";
-import { piMessagesApi } from "./api/pi-messages.lazy.ts";
+import { piMessagesApi } from "./api/porcupine-messages.lazy.ts";
 import { getEnvApiKey } from "./env-api-keys.ts";
 import type { ModelsApiStreamOptions } from "./models.ts";
 import { builtinModels, getBuiltinModel, getBuiltinModels, getBuiltinProviders } from "./providers/all.ts";
@@ -185,7 +185,7 @@ const BUILTIN_APIS: [Api, ProviderStreams][] = [
 	["google-vertex", googleVertexApi()],
 	["mistral-conversations", mistralConversationsApi()],
 	["bedrock-converse-stream", bedrockConverseStreamApi()],
-	["pi-messages", piMessagesApi()],
+	["porcupine-messages", piMessagesApi()],
 ];
 
 const builtinApiProviderInstances = new Map<Api, ReturnType<typeof getApiProvider>>();

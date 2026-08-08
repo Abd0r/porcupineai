@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { PiSessionDetachedError, PiSessionOwnershipError } from "../src/index.ts";
+import { PorcupineSessionDetachedError, PorcupineSessionOwnershipError } from "../src/index.ts";
 import { connectClient, MemoryByteServer, sessionSnapshot } from "./support.ts";
 
-describe("PiClient", () => {
+describe("PorcupineClient", () => {
 	test("keeps multiple session handles independent and enforces detach", async () => {
 		const server = new MemoryByteServer();
 		const client = await connectClient(server);
@@ -34,7 +34,7 @@ describe("PiClient", () => {
 		await first.detach();
 		expect(first.attached).toBe(false);
 		expect(second.attached).toBe(true);
-		await expect(first.abort()).rejects.toBeInstanceOf(PiSessionDetachedError);
+		await expect(first.abort()).rejects.toBeInstanceOf(PorcupineSessionDetachedError);
 	});
 
 	test("detaches a shared session only after its final lease is released", async () => {
@@ -102,13 +102,13 @@ describe("PiClient", () => {
 
 		const shared = await client.acquireSession("session-1", { mode: "shared" });
 		await expect(client.acquireSession("session-1", { mode: "exclusive" })).rejects.toBeInstanceOf(
-			PiSessionOwnershipError,
+			PorcupineSessionOwnershipError,
 		);
 		await shared.dispose();
 
 		const exclusive = await client.acquireSession("session-1", { mode: "exclusive" });
 		await expect(client.acquireSession("session-1", { mode: "shared" })).rejects.toBeInstanceOf(
-			PiSessionOwnershipError,
+			PorcupineSessionOwnershipError,
 		);
 		await exclusive[Symbol.asyncDispose]();
 	});
@@ -154,7 +154,7 @@ describe("PiClient", () => {
 
 		const firstDetach = lease.detach();
 		const failedDetachRequest = requests.at(-1);
-		await expect(lease.abort()).rejects.toBeInstanceOf(PiSessionDetachedError);
+		await expect(lease.abort()).rejects.toBeInstanceOf(PorcupineSessionDetachedError);
 		if (!failedDetachRequest) throw new Error("Missing detach request");
 		server.send({
 			type: "response",

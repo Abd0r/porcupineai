@@ -11,11 +11,11 @@ export interface ConnectionStateChange {
 export type Unsubscribe = () => void;
 export type ListenerErrorHandler = (error: Error) => void;
 
-export interface PiClientOptions {
+export interface PorcupineClientOptions {
 	token: string;
 	transportFactory: ByteTransportFactory;
 	maxFrameLength?: number;
-	/** Timeout in ms before an unanswered request rejects with {@link PiRequestTimeoutError}. Defaults to 60000. */
+	/** Timeout in ms before an unanswered request rejects with {@link PorcupineRequestTimeoutError}. Defaults to 60000. */
 	requestTimeoutMs?: number;
 	/** Reports subscriber failures without allowing them to corrupt client state. */
 	onListenerError?: ListenerErrorHandler;

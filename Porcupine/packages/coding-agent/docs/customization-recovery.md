@@ -102,7 +102,7 @@ Project-local configuration can affect only a specific repository. Launch from t
 - `.porcupine/settings.json`
 - `.porcupine/extensions/`
 - `.porcupine/skills/`
-- `.pi/` resources
+- `.porcupine/` resources
 - `AGENTS.md` and `CLAUDE.md`
 
 Treat repository files and tool output as untrusted instructions. Project trust prevents some resource loading, but it is not a sandbox.

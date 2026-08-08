@@ -19,7 +19,7 @@ import { createWriteToolDefinition } from "../src/core/tools/write.ts";
 import { guardBashCommand } from "../src/porcupine/auto-mode.ts";
 import { clearWrittenPaths, isWrittenPath, recordWrittenPath } from "../src/porcupine/written-files.ts";
 
-const tmp = mkdtempSync(join(tmpdir(), "pi-safety-write-"));
+const tmp = mkdtempSync(join(tmpdir(), "porcupine-safety-write-"));
 
 afterEach(() => {
 	clearWrittenPaths();

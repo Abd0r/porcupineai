@@ -7,11 +7,11 @@ Extensions are TypeScript modules that extend porcupine's behavior. They can sub
 > **Placement for /reload:** Put extensions in `~/.porcupine/agent/extensions/` (global) or `.porcupine/extensions/` (project-local) for auto-discovery. Use `porcupine -e ./path.ts` only for quick tests. Extensions in auto-discovered locations can be hot-reloaded with `/reload`.
 
 **Key capabilities:**
-- **Custom tools** - Register tools the LLM can call via `pi.registerTool()`
+- **Custom tools** - Register tools the LLM can call via `porcupine.registerTool()`
 - **Event interception** - Block or modify tool calls, inject context, customize compaction
 - **User interaction** - Prompt users via `ctx.ui` (select, confirm, input, notify)
 - **Custom UI components** - Full TUI components with keyboard input via `ctx.ui.custom()` for complex interactions
-- **Custom commands** - Register commands like `/mycommand` via `pi.registerCommand()`
+- **Custom commands** - Register commands like `/mycommand` via `porcupine.registerCommand()`
 - **Session persistence** - Store state that survives restarts via `api.appendEntry()`
 - **Custom rendering** - Control how tool calls/results and messages appear in TUI
 
@@ -61,13 +61,13 @@ Create `~/.porcupine/agent/extensions/my-extension.ts`:
 import type { ExtensionAPI } from "@porcupineai/coding-agent";
 import { Type } from "typebox";
 
-export default function (pi: ExtensionAPI) {
+export default function (porcupine: ExtensionAPI) {
   // React to events
-  pi.on("session_start", async (_event, ctx) => {
+  porcupine.on("session_start", async (_event, ctx) => {
     ctx.ui.notify("Extension loaded!", "info");
   });
 
-  pi.on("tool_call", async (event, ctx) => {
+  porcupine.on("tool_call", async (event, ctx) => {
     if (event.toolName === "bash" && event.input.command?.includes("rm -rf")) {
       const ok = await ctx.ui.confirm("Dangerous!", "Allow rm -rf?");
       if (!ok) return { block: true, reason: "Blocked by user" };
@@ -75,7 +75,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   // Register a custom tool
-  pi.registerTool({
+  porcupine.registerTool({
     name: "greet",
     label: "Greet",
     description: "Greet someone by name",
@@ -91,7 +91,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   // Register a command
-  pi.registerCommand("hello", {
+  porcupine.registerCommand("hello", {
     description: "Say hello",
     handler: async (args, ctx) => {
       ctx.ui.notify(`Hello ${args || "world"}!`, "info");
@@ -158,9 +158,9 @@ An extension exports a default factory function that receives `ExtensionAPI`. Th
 ```typescript
 import type { ExtensionAPI } from "@porcupineai/coding-agent";
 
-export default function (pi: ExtensionAPI) {
+export default function (porcupine: ExtensionAPI) {
   // Subscribe to events
-  pi.on("event_name", async (event, ctx) => {
+  porcupine.on("event_name", async (event, ctx) => {
     // ctx.ui for user interaction
     const ok = await ctx.ui.confirm("Title", "Are you sure?");
     ctx.ui.notify("Done!", "info");
@@ -169,16 +169,16 @@ export default function (pi: ExtensionAPI) {
   });
 
   // Register tools, commands, shortcuts, flags
-  pi.registerTool({ ... });
-  pi.registerCommand("name", { ... });
-  pi.registerShortcut("ctrl+x", { ... });
-  pi.registerFlag("my-flag", { ... });
+  porcupine.registerTool({ ... });
+  porcupine.registerCommand("name", { ... });
+  porcupine.registerShortcut("ctrl+x", { ... });
+  porcupine.registerFlag("my-flag", { ... });
 }
 ```
 
 Extensions are loaded via [jiti](https://github.com/unjs/jiti), so TypeScript works without compilation.
 
-If the factory returns a `Promise`, porcupine awaits it before continuing startup. That means async initialization completes before `session_start`, before `resources_discover`, and before provider registrations queued via `pi.registerProvider()` are flushed.
+If the factory returns a `Promise`, porcupine awaits it before continuing startup. That means async initialization completes before `session_start`, before `resources_discover`, and before provider registrations queued via `porcupine.registerProvider()` are flushed.
 
 ### Async factory functions
 
@@ -187,7 +187,7 @@ Use an async factory for one-time startup work such as fetching remote configura
 ```typescript
 import type { ExtensionAPI } from "@porcupineai/coding-agent";
 
-export default async function (pi: ExtensionAPI) {
+export default async function (porcupine: ExtensionAPI) {
   const response = await fetch("http://localhost:1234/v1/models");
   const payload = (await response.json()) as {
     data: Array<{
@@ -198,7 +198,7 @@ export default async function (pi: ExtensionAPI) {
     }>;
   };
 
-  pi.registerProvider("local-openai", {
+  porcupine.registerProvider("local-openai", {
     baseUrl: "http://localhost:1234/v1",
     apiKey: "$LOCAL_OPENAI_API_KEY",
     api: "openai-completions",
@@ -262,7 +262,7 @@ Defer background resource startup until `session_start` or the command/tool/even
     "zod": "^3.0.0",
     "chalk": "^5.0.0"
   },
-  "pi": {
+  "porcupine": {
     "extensions": ["./src/index.ts"]
   }
 }
@@ -351,10 +351,10 @@ exit (Ctrl+C, Ctrl+D, SIGHUP, SIGTERM)
 
 #### project_trust
 
-Fired before porcupine decides whether to trust a project with dynamic configs (`.pi` or `.agents/skills`). It runs during startup and when session replacement (for example `/resume`) enters a cwd whose trust has not been resolved in the current process. Only user/global extensions and CLI `-e` extensions participate; project-local extensions are not loaded until after trust is resolved.
+Fired before porcupine decides whether to trust a project with dynamic configs (`.porcupine` or `.agents/skills`). It runs during startup and when session replacement (for example `/resume`) enters a cwd whose trust has not been resolved in the current process. Only user/global extensions and CLI `-e` extensions participate; project-local extensions are not loaded until after trust is resolved.
 
 ```typescript
-pi.on("project_trust", async (event, ctx) => {
+porcupine.on("project_trust", async (event, ctx) => {
   // event.cwd - current working directory
   // ctx has a limited trust context: cwd, mode, hasUI, and select/confirm/input/notify UI helpers
   if (await ctx.ui.confirm("Trust project?", event.cwd)) {
@@ -374,7 +374,7 @@ Fired after `session_start` so extensions can contribute additional skill, promp
 The startup path uses `reason: "startup"`. Reload uses `reason: "reload"`.
 
 ```typescript
-pi.on("resources_discover", async (event, _ctx) => {
+porcupine.on("resources_discover", async (event, _ctx) => {
   // event.cwd - current working directory
   // event.reason - "startup" | "reload"
   return {
@@ -394,7 +394,7 @@ See [Session Format](session-format.md) for session storage internals and the Se
 Fired when a session is started, loaded, or reloaded.
 
 ```typescript
-pi.on("session_start", async (event, ctx) => {
+porcupine.on("session_start", async (event, ctx) => {
   // event.reason - "startup" | "reload" | "new" | "resume" | "fork"
   // event.previousSessionFile - present for "new", "resume", and "fork"
   ctx.ui.notify(`Session: ${ctx.sessionManager.getSessionFile() ?? "ephemeral"}`, "info");
@@ -406,7 +406,7 @@ pi.on("session_start", async (event, ctx) => {
 Fired when the current session display name is set via `/name`, RPC, or `porcupine.setSessionName()`.
 
 ```typescript
-pi.on("session_info_changed", async (event, ctx) => {
+porcupine.on("session_info_changed", async (event, ctx) => {
   // event.name - current normalized name, or undefined if cleared
   ctx.ui.notify(`Session renamed: ${event.name ?? "(none)"}`, "info");
 });
@@ -417,7 +417,7 @@ pi.on("session_info_changed", async (event, ctx) => {
 Fired before starting a new session (`/new`) or switching sessions (`/resume`).
 
 ```typescript
-pi.on("session_before_switch", async (event, ctx) => {
+porcupine.on("session_before_switch", async (event, ctx) => {
   // event.reason - "new" or "resume"
   // event.targetSessionFile - session we're switching to (only for "resume")
 
@@ -436,7 +436,7 @@ Do cleanup work in `session_shutdown`, then reestablish any in-memory state in `
 Fired when forking via `/fork` or cloning via `/clone`.
 
 ```typescript
-pi.on("session_before_fork", async (event, ctx) => {
+porcupine.on("session_before_fork", async (event, ctx) => {
   // event.entryId - ID of the selected entry
   // event.position - "before" for /fork, "at" for /clone
   return { cancel: true }; // Cancel fork/clone
@@ -453,7 +453,7 @@ Do cleanup work in `session_shutdown`, then reestablish any in-memory state in `
 Fired on compaction. See [compaction.md](compaction.md) for details.
 
 ```typescript
-pi.on("session_before_compact", async (event, ctx) => {
+porcupine.on("session_before_compact", async (event, ctx) => {
   const { preparation, branchEntries, customInstructions, reason, willRetry, signal } = event;
 
   // reason - "manual" (/compact), "threshold", or "overflow"
@@ -473,7 +473,7 @@ pi.on("session_before_compact", async (event, ctx) => {
   };
 });
 
-pi.on("session_compact", async (event, ctx) => {
+porcupine.on("session_compact", async (event, ctx) => {
   // event.compactionEntry - the saved compaction
   // event.fromExtension - whether extension provided it
   // event.reason - "manual" (/compact), "threshold", or "overflow"
@@ -486,7 +486,7 @@ pi.on("session_compact", async (event, ctx) => {
 Fired on `/tree` navigation. See [Sessions](sessions.md) for tree navigation concepts.
 
 ```typescript
-pi.on("session_before_tree", async (event, ctx) => {
+porcupine.on("session_before_tree", async (event, ctx) => {
   const { preparation, signal } = event;
   return { cancel: true };
   // OR provide custom summary:
@@ -499,7 +499,7 @@ pi.on("session_before_tree", async (event, ctx) => {
   };
 });
 
-pi.on("session_tree", async (event, ctx) => {
+porcupine.on("session_tree", async (event, ctx) => {
   // event.newLeafId, oldLeafId, summaryEntry, fromExtension
 });
 ```
@@ -509,7 +509,7 @@ pi.on("session_tree", async (event, ctx) => {
 Fired before a started session runtime is torn down. Use this to clean up resources opened from `session_start` or other session-scoped hooks.
 
 ```typescript
-pi.on("session_shutdown", async (event, ctx) => {
+porcupine.on("session_shutdown", async (event, ctx) => {
   // event.reason - "quit" | "reload" | "new" | "resume" | "fork"
   // event.targetSessionFile - destination session for session replacement flows
   // Cleanup, save state, etc.
@@ -523,7 +523,7 @@ pi.on("session_shutdown", async (event, ctx) => {
 Fired after user submits prompt, before agent loop. Can inject a message, modify the system prompt, or replace the user prompt text entirely.
 
 ```typescript
-pi.on("before_agent_start", async (event, ctx) => {
+porcupine.on("before_agent_start", async (event, ctx) => {
   // event.prompt - user's prompt text
   // event.images - attached images (if any)
   // event.systemPrompt - current chained system prompt for this handler
@@ -563,13 +563,13 @@ Inside `before_agent_start`, `event.systemPrompt` and `ctx.getSystemPrompt()` bo
 `agent_start` fires when a low-level agent run begins. `agent_end` fires when that run ends, but Porcupine may still auto-retry, auto-compact and retry, or continue with queued follow-up messages. Use `agent_settled` for status integrations that need to know Porcupine will not continue running automatically.
 
 ```typescript
-pi.on("agent_start", async (_event, ctx) => {});
+porcupine.on("agent_start", async (_event, ctx) => {});
 
-pi.on("agent_end", async (event, ctx) => {
+porcupine.on("agent_end", async (event, ctx) => {
   // event.messages - messages from this low-level run
 });
 
-pi.on("agent_settled", async (_event, ctx) => {
+porcupine.on("agent_settled", async (_event, ctx) => {
   // ctx.isIdle() is true here unless another extension started a new run.
 });
 ```
@@ -579,11 +579,11 @@ pi.on("agent_settled", async (_event, ctx) => {
 Fired for each turn (one LLM response + tool calls).
 
 ```typescript
-pi.on("turn_start", async (event, ctx) => {
+porcupine.on("turn_start", async (event, ctx) => {
   // event.turnIndex, event.timestamp
 });
 
-pi.on("turn_end", async (event, ctx) => {
+porcupine.on("turn_end", async (event, ctx) => {
   // event.turnIndex, event.message, event.toolResults
 });
 ```
@@ -597,16 +597,16 @@ Fired for message lifecycle updates.
 - `message_end` handlers can return `{ message }` to replace the finalized message. The replacement must keep the same `role`.
 
 ```typescript
-pi.on("message_start", async (event, ctx) => {
+porcupine.on("message_start", async (event, ctx) => {
   // event.message
 });
 
-pi.on("message_update", async (event, ctx) => {
+porcupine.on("message_update", async (event, ctx) => {
   // event.message
   // event.assistantMessageEvent (token-by-token stream event)
 });
 
-pi.on("message_end", async (event, ctx) => {
+porcupine.on("message_end", async (event, ctx) => {
   if (event.message.role !== "assistant") return;
 
   return {
@@ -635,15 +635,15 @@ In parallel tool mode:
 - final `toolResult` message events are still emitted later in assistant source order
 
 ```typescript
-pi.on("tool_execution_start", async (event, ctx) => {
+porcupine.on("tool_execution_start", async (event, ctx) => {
   // event.toolCallId, event.toolName, event.args
 });
 
-pi.on("tool_execution_update", async (event, ctx) => {
+porcupine.on("tool_execution_update", async (event, ctx) => {
   // event.toolCallId, event.toolName, event.args, event.partialResult
 });
 
-pi.on("tool_execution_end", async (event, ctx) => {
+porcupine.on("tool_execution_end", async (event, ctx) => {
   // event.toolCallId, event.toolName, event.result, event.isError
 });
 ```
@@ -653,7 +653,7 @@ pi.on("tool_execution_end", async (event, ctx) => {
 Fired before each LLM call. Modify messages non-destructively. See [Session Format](session-format.md) for message types.
 
 ```typescript
-pi.on("context", async (event, ctx) => {
+porcupine.on("context", async (event, ctx) => {
   // event.messages - deep copy, safe to modify
   const filtered = event.messages.filter(m => !shouldPrune(m));
   return { messages: filtered };
@@ -667,7 +667,7 @@ Fired after the outgoing HTTP headers are assembled. Use it to add, override, or
 Handlers mutate `event.headers` in place. Set a key to a string to add or override it, or to `null` to delete it.
 
 ```typescript
-pi.on("before_provider_headers", (event, ctx) => {
+porcupine.on("before_provider_headers", (event, ctx) => {
   // Add or override — e.g. a session id for gateway tracing/attribution
   event.headers["x-session-id"] = ctx.sessionManager.getSessionId();
 
@@ -685,7 +685,7 @@ Fired after the provider-specific payload is built, right before the request is 
 This hook can rewrite provider-level system instructions or remove them entirely. Those payload-level changes are not reflected by `ctx.getSystemPrompt()`, which reports Porcupine's system prompt string rather than the final serialized provider payload.
 
 ```typescript
-pi.on("before_provider_request", (event, ctx) => {
+porcupine.on("before_provider_request", (event, ctx) => {
   console.log(JSON.stringify(event.payload, null, 2));
 
   // Optional: replace payload
@@ -700,7 +700,7 @@ This is mainly useful for debugging provider serialization and cache behavior.
 Fired after an HTTP response is received and before its stream body is consumed. Handlers run in extension load order.
 
 ```typescript
-pi.on("after_provider_response", (event, ctx) => {
+porcupine.on("after_provider_response", (event, ctx) => {
   // event.status - HTTP status code
   // event.headers - normalized response headers
   if (event.status === 429) {
@@ -718,7 +718,7 @@ Header availability depends on provider and transport. Providers that abstract H
 Fired when the model changes via `/model` command, model cycling (`Ctrl+P`), or session restore.
 
 ```typescript
-pi.on("model_select", async (event, ctx) => {
+porcupine.on("model_select", async (event, ctx) => {
   // event.model - newly selected model
   // event.previousModel - previous model (undefined if first selection)
   // event.source - "set" | "cycle" | "restore"
@@ -739,7 +739,7 @@ Use this to update UI elements (status bars, footers) or perform model-specific 
 Fired when the thinking level changes. This is notification-only; handler return values are ignored.
 
 ```typescript
-pi.on("thinking_level_select", async (event, ctx) => {
+porcupine.on("thinking_level_select", async (event, ctx) => {
   // event.level - newly selected thinking level
   // event.previousLevel - previous thinking level
 
@@ -770,7 +770,7 @@ Behavior guarantees:
 ```typescript
 import { isToolCallEventType } from "@porcupineai/coding-agent";
 
-pi.on("tool_call", async (event, ctx) => {
+porcupine.on("tool_call", async (event, ctx) => {
   // event.toolName - "bash", "read", "write", "edit", etc.
   // event.toolCallId
   // event.input - tool parameters (mutable)
@@ -807,7 +807,7 @@ Use `isToolCallEventType` with explicit type parameters:
 import { isToolCallEventType } from "@porcupineai/coding-agent";
 import type { MyToolInput } from "my-extension";
 
-pi.on("tool_call", (event) => {
+porcupine.on("tool_call", (event) => {
   if (isToolCallEventType<"my_tool", MyToolInput>("my_tool", event)) {
     event.input.action;  // typed
   }
@@ -830,7 +830,7 @@ Use `ctx.signal` for nested async work inside the handler. This lets Esc cancel 
 ```typescript
 import { isBashToolResult } from "@porcupineai/coding-agent";
 
-pi.on("tool_result", async (event, ctx) => {
+porcupine.on("tool_result", async (event, ctx) => {
   // event.toolName, event.toolCallId, event.input
   // event.content, event.details, event.isError, event.usage
 
@@ -858,7 +858,7 @@ Fired when user executes `!` or `!!` commands. **Can intercept.**
 ```typescript
 import { createLocalBashOperations } from "@porcupineai/coding-agent";
 
-pi.on("user_bash", (event, ctx) => {
+porcupine.on("user_bash", (event, ctx) => {
   // event.command - the bash command
   // event.excludeFromContext - true if !! prefix
   // event.cwd - working directory
@@ -895,7 +895,7 @@ Fired when user input is received, after extension commands are checked but befo
 5. Agent processing begins (`before_agent_start`, etc.)
 
 ```typescript
-pi.on("input", async (event, ctx) => {
+porcupine.on("input", async (event, ctx) => {
   // event.text - raw input (before skill/template expansion)
   // event.images - attached images, if any
   // event.source - "interactive" (typed), "rpc" (API), or "extension" (via sendUserMessage)
@@ -952,14 +952,14 @@ Current run mode: `"tui"`, `"rpc"`, `"json"`, or `"print"`. Use `ctx.mode === "t
 
 Current working directory.
 
-Use `CONFIG_DIR_NAME` instead of hardcoding `.pi` when constructing project-local config paths. Rebranded distributions can use a different config directory name.
+Use `CONFIG_DIR_NAME` instead of hardcoding `.porcupine` when constructing project-local config paths. Rebranded distributions can use a different config directory name.
 
 ```typescript
 import { CONFIG_DIR_NAME, type ExtensionAPI } from "@porcupineai/coding-agent";
 import { join } from "node:path";
 
-export default function (pi: ExtensionAPI) {
-  pi.on("session_start", (_event, ctx) => {
+export default function (porcupine: ExtensionAPI) {
+  porcupine.on("session_start", (_event, ctx) => {
     const projectConfigPath = join(ctx.cwd, CONFIG_DIR_NAME, "my-extension.json");
     // ...
   });
@@ -1004,7 +1004,7 @@ Use this for abort-aware nested work started by extension handlers, for example:
 It is usually `undefined` in idle or non-turn contexts such as session events, extension commands, and shortcuts fired while porcupine is idle.
 
 ```typescript
-pi.on("tool_result", async (event, ctx) => {
+porcupine.on("tool_result", async (event, ctx) => {
   const response = await fetch("https://example.com/api", {
     method: "POST",
     body: JSON.stringify(event),
@@ -1031,7 +1031,7 @@ Request a graceful shutdown of porcupine.
 Emits `session_shutdown` event to all extensions before exiting. Available in all contexts (event handlers, tools, commands, shortcuts).
 
 ```typescript
-pi.on("tool_call", (event, ctx) => {
+porcupine.on("tool_call", (event, ctx) => {
   if (isFatal(event.input)) {
     ctx.shutdown();
   }
@@ -1075,7 +1075,7 @@ Returns Porcupine's current system prompt string.
 - If later-loaded extensions run after yours, they can still change what is ultimately sent.
 
 ```typescript
-pi.on("before_agent_start", (event, ctx) => {
+porcupine.on("before_agent_start", (event, ctx) => {
   const prompt = ctx.getSystemPrompt();
   console.log(`System prompt length: ${prompt.length}`);
 });
@@ -1103,7 +1103,7 @@ This reports the current base prompt inputs. It does not include per-turn `befor
 Wait for the agent to fully settle, including automatic retries, auto-compaction retries, and queued continuations:
 
 ```typescript
-pi.registerCommand("my-cmd", {
+porcupine.registerCommand("my-cmd", {
   handler: async (args, ctx) => {
     await ctx.waitForIdle();
     // Agent is now idle, safe to modify session
@@ -1212,7 +1212,7 @@ To discover available sessions, use the static `SessionManager.list()` or `Sessi
 ```typescript
 import { SessionManager } from "@porcupineai/coding-agent";
 
-pi.registerCommand("switch", {
+porcupine.registerCommand("switch", {
   description: "Switch to another session",
   handler: async (args, ctx) => {
     const sessions = await SessionManager.list(ctx.cwd);
@@ -1246,7 +1246,7 @@ Lifecycle and footguns:
 Safe pattern:
 
 ```typescript
-pi.registerCommand("handoff", {
+porcupine.registerCommand("handoff", {
   handler: async (_args, ctx) => {
     const kickoff = "Continue from the replacement session";
     await ctx.newSession({
@@ -1261,7 +1261,7 @@ pi.registerCommand("handoff", {
 Unsafe pattern:
 
 ```typescript
-pi.registerCommand("handoff", {
+porcupine.registerCommand("handoff", {
   handler: async (_args, ctx) => {
     const oldSessionManager = ctx.sessionManager;
     await ctx.newSession({
@@ -1280,7 +1280,7 @@ pi.registerCommand("handoff", {
 Run the same reload flow as `/reload`.
 
 ```typescript
-pi.registerCommand("reload-runtime", {
+porcupine.registerCommand("reload-runtime", {
   description: "Reload extensions, skills, prompts, themes, and context files",
   handler: async (_args, ctx) => {
     await ctx.reload();
@@ -1307,8 +1307,8 @@ Example tool the LLM can call to trigger reload:
 import type { ExtensionAPI } from "@porcupineai/coding-agent";
 import { Type } from "typebox";
 
-export default function (pi: ExtensionAPI) {
-  pi.registerCommand("reload-runtime", {
+export default function (porcupine: ExtensionAPI) {
+  porcupine.registerCommand("reload-runtime", {
     description: "Reload extensions, skills, prompts, themes, and context files",
     handler: async (_args, ctx) => {
       await ctx.reload();
@@ -1316,7 +1316,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  porcupine.registerTool({
     name: "reload_runtime",
     label: "Reload Runtime",
     description: "Reload extensions, skills, prompts, themes, and context files",
@@ -1333,15 +1333,15 @@ export default function (pi: ExtensionAPI) {
 
 ## ExtensionAPI Methods
 
-### pi.on(event, handler)
+### porcupine.on(event, handler)
 
 Subscribe to events. See [Events](#events) for event types and return values.
 
-### pi.registerTool(definition)
+### porcupine.registerTool(definition)
 
 Register a custom tool callable by the LLM. See [Custom Tools](#custom-tools) for full details.
 
-`pi.registerTool()` works both during extension load and after startup. You can call it inside `session_start`, command handlers, or other event handlers. New tools are refreshed immediately in the same session, so they appear in `porcupine.getAllTools()` and are callable by the LLM without `/reload`.
+`porcupine.registerTool()` works both during extension load and after startup. You can call it inside `session_start`, command handlers, or other event handlers. New tools are refreshed immediately in the same session, so they appear in `porcupine.getAllTools()` and are callable by the LLM without `/reload`.
 
 Use `porcupine.setActiveTools()` to enable or disable tools (including dynamically added tools) at runtime.
 
@@ -1355,7 +1355,7 @@ See [dynamic-tools.ts](../examples/extensions/dynamic-tools.ts) for a full examp
 import { Type } from "typebox";
 import { StringEnum } from "@porcupineai/ai";
 
-pi.registerTool({
+porcupine.registerTool({
   name: "my_tool",
   label: "My Tool",
   description: "What this tool does",
@@ -1448,7 +1448,7 @@ porcupine.appendEntry("my-state", { count: 42 });
 porcupine.appendEntry("status-card", { title: "Indexed files", count: 17 });
 
 // Restore on reload
-pi.on("session_start", async (_event, ctx) => {
+porcupine.on("session_start", async (_event, ctx) => {
   for (const entry of ctx.sessionManager.getEntries()) {
     if (entry.type === "custom" && entry.customType === "my-state") {
       // Reconstruct from entry.data
@@ -1493,14 +1493,14 @@ const label = ctx.sessionManager.getLabel(entryId);
 
 Labels persist in the session and survive restarts. Use them to mark important points (turns, checkpoints) in the conversation tree.
 
-### pi.registerCommand(name, options)
+### porcupine.registerCommand(name, options)
 
 Register a command.
 
 If multiple extensions register the same command name, porcupine keeps them all and assigns numeric invocation suffixes in load order, for example `/review:1` and `/review:2`.
 
 ```typescript
-pi.registerCommand("stats", {
+porcupine.registerCommand("stats", {
   description: "Show session statistics",
   handler: async (args, ctx) => {
     const count = ctx.sessionManager.getEntries().length;
@@ -1514,7 +1514,7 @@ Optional: add argument auto-completion for `/command ...`:
 ```typescript
 import type { AutocompleteItem } from "@porcupineai/tui";
 
-pi.registerCommand("deploy", {
+porcupine.registerCommand("deploy", {
   description: "Deploy to an environment",
   getArgumentCompletions: (prefix: string): AutocompleteItem[] | null => {
     const envs = ["dev", "staging", "prod"];
@@ -1704,7 +1704,7 @@ porcupine.events.on("my:event", (data) => { ... });
 porcupine.events.emit("my:event", { ... });
 ```
 
-### pi.registerProvider(name, config)
+### porcupine.registerProvider(name, config)
 
 Register or override a model provider dynamically. Useful for proxies, custom endpoints, or team-wide model configurations.
 
@@ -1741,10 +1741,10 @@ const provider = createProvider({
   api: openAICompletionsApi(),
 });
 
-pi.registerProvider(provider);
+porcupine.registerProvider(provider);
 
 // Register a new provider with custom models
-pi.registerProvider("my-proxy", {
+porcupine.registerProvider("my-proxy", {
   name: "My Proxy",
   baseUrl: "https://proxy.example.com",
   apiKey: "$PROXY_API_KEY",  // env var reference
@@ -1763,7 +1763,7 @@ pi.registerProvider("my-proxy", {
 });
 
 // Register a live llama.cpp catalog without persisting discovered models
-pi.registerProvider("llama.cpp", {
+porcupine.registerProvider("llama.cpp", {
   baseUrl: "http://localhost:8080/v1",
   apiKey: "local",
   api: "openai-completions",
@@ -1783,12 +1783,12 @@ pi.registerProvider("llama.cpp", {
 });
 
 // Override baseUrl for an existing provider (keeps all models)
-pi.registerProvider("anthropic", {
+porcupine.registerProvider("anthropic", {
   baseUrl: "https://proxy.example.com"
 });
 
 // Register provider with OAuth support for /login
-pi.registerProvider("corporate-ai", {
+porcupine.registerProvider("corporate-ai", {
   baseUrl: "https://ai.corp.com",
   api: "openai-responses",
   models: [...],
@@ -1834,7 +1834,7 @@ Remove a previously registered provider and its models. Built-in models that wer
 Like `registerProvider`, this takes effect immediately when called after the initial load phase, so a `/reload` is not required.
 
 ```typescript
-pi.registerCommand("my-setup-teardown", {
+porcupine.registerCommand("my-setup-teardown", {
   description: "Remove the custom proxy provider",
   handler: async (_args, _ctx) => {
     api.unregisterProvider("my-proxy");
@@ -1847,11 +1847,11 @@ pi.registerCommand("my-setup-teardown", {
 Extensions with state should store it in tool result `details` for proper branching support:
 
 ```typescript
-export default function (pi: ExtensionAPI) {
+export default function (porcupine: ExtensionAPI) {
   let items: string[] = [];
 
   // Reconstruct state from session
-  pi.on("session_start", async (_event, ctx) => {
+  porcupine.on("session_start", async (_event, ctx) => {
     items = [];
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type === "message" && entry.message.role === "toolResult") {
@@ -1862,7 +1862,7 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  pi.registerTool({
+  porcupine.registerTool({
     name: "my_tool",
     // ...
     async execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -1878,7 +1878,7 @@ export default function (pi: ExtensionAPI) {
 
 ## Custom Tools
 
-Register tools the LLM can call via `pi.registerTool()`. Tools appear in the system prompt and can have custom rendering.
+Register tools the LLM can call via `porcupine.registerTool()`. Tools appear in the system prompt and can have custom rendering.
 
 Use `promptSnippet` for a short one-line entry in the `Available tools` section in the default system prompt. If omitted, custom tools are left out of that section.
 
@@ -1925,7 +1925,7 @@ import { Type } from "typebox";
 import { StringEnum } from "@porcupineai/ai";
 import { Text } from "@porcupineai/tui";
 
-pi.registerTool({
+porcupine.registerTool({
   name: "my_tool",
   label: "My Tool",
   description: "What this tool does (shown to LLM)",
@@ -2001,7 +2001,7 @@ async execute(toolCallId, params) {
 Example: an older session may contain an `edit` tool call with top-level `oldText` and `newText`, while the current schema only accepts `edits: [{ oldText, newText }]`.
 
 ```typescript
-pi.registerTool({
+porcupine.registerTool({
   name: "edit",
   label: "Edit",
   description: "Edit a single file using exact text replacement",
@@ -2091,7 +2091,7 @@ const remoteRead = createReadTool(cwd, {
 });
 
 // Register, checking flag at execution time
-pi.registerTool({
+porcupine.registerTool({
   ...remoteRead,
   async execute(id, params, signal, onUpdate, _ctx) {
     const ssh = getSshConfig();
@@ -2189,14 +2189,14 @@ See [examples/extensions/truncated-tool.ts](../examples/extensions/truncated-too
 One extension can register multiple tools with shared state:
 
 ```typescript
-export default function (pi: ExtensionAPI) {
+export default function (porcupine: ExtensionAPI) {
   let connection = null;
 
-  pi.registerTool({ name: "db_connect", ... });
-  pi.registerTool({ name: "db_query", ... });
-  pi.registerTool({ name: "db_close", ... });
+  porcupine.registerTool({ name: "db_connect", ... });
+  porcupine.registerTool({ name: "db_query", ... });
+  porcupine.registerTool({ name: "db_close", ... });
 
-  pi.on("session_shutdown", async () => {
+  porcupine.on("session_shutdown", async () => {
     connection?.close();
   });
 }
@@ -2211,7 +2211,7 @@ By default, tool output is wrapped in a `Box` that handles padding and backgroun
 Set `renderShell: "self"` when the tool should render its own shell instead of using the default `Box`. This is useful for tools that need complete control over framing or background behavior, for example large previews that must stay visually stable after the tool settles.
 
 ```typescript
-pi.registerTool({
+porcupine.registerTool({
   name: "my_tool",
   label: "My Tool",
   description: "Custom shell example",
@@ -2335,7 +2335,7 @@ This works with every model. Models with native deferred-loading support preserv
 
 The lifecycle is:
 
-1. Register every tool with `pi.registerTool()` so it appears in `porcupine.getAllTools()`.
+1. Register every tool with `porcupine.registerTool()` so it appears in `porcupine.getAllTools()`.
 2. Keep loader tools, such as `search_tools`, active and leave searchable tools inactive.
 3. During loader execution, call `porcupine.setActiveTools([...currentTools, ...matchingTools])`. The change must be additive: do not remove currently active tools in the same call.
 4. Porcupine records which tools were added on the loader's tool result.
@@ -2372,8 +2372,8 @@ import { Type } from "typebox";
 
 const SEARCHABLE_TOOL_NAMES = new Set(["lookup_weather", "search_issues"]);
 
-export default function (pi: ExtensionAPI) {
-  pi.registerTool({
+export default function (porcupine: ExtensionAPI) {
+  porcupine.registerTool({
     name: "lookup_weather",
     label: "Lookup Weather",
     description: "Look up the current weather for a city",
@@ -2386,7 +2386,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  porcupine.registerTool({
     name: "search_issues",
     label: "Search Issues",
     description: "Search project issues by keyword",
@@ -2399,7 +2399,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  porcupine.registerTool({
     name: "search_tools",
     label: "Search Tools",
     description: "Search for and enable tools relevant to a task",
@@ -2451,7 +2451,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.on("session_start", () => {
+  porcupine.on("session_start", () => {
     // Keep searchable tools registered but initially inactive. Preserve built-ins
     // and tools owned by other extensions, and keep the loader itself active.
     const initialTools = porcupine.getActiveTools().filter(
@@ -2660,7 +2660,7 @@ Typical pattern:
 - delegate `applyCompletion(...)` unless you need custom insertion behavior
 
 ```typescript
-pi.on("session_start", (_event, ctx) => {
+porcupine.on("session_start", (_event, ctx) => {
   ctx.ui.addAutocompleteProvider((current) => ({
     triggerCharacters: ["#"],
     async getSuggestions(lines, cursorLine, cursorCol, options) {
@@ -2782,8 +2782,8 @@ class VimEditor extends CustomEditor {
   }
 }
 
-export default function (pi: ExtensionAPI) {
-  pi.on("session_start", (_event, ctx) => {
+export default function (porcupine: ExtensionAPI) {
+  porcupine.on("session_start", (_event, ctx) => {
     ctx.ui.setEditorComponent((tui, theme, keybindings) =>
       new VimEditor(tui, theme, keybindings)
     );

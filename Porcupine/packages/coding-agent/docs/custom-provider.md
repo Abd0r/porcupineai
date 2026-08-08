@@ -1,6 +1,6 @@
 # Custom Providers
 
-Extensions can register custom model providers via `pi.registerProvider()`. This enables:
+Extensions can register custom model providers via `porcupine.registerProvider()`. This enables:
 
 - **Proxies** - Route requests through corporate proxies or API gateways
 - **Custom endpoints** - Use self-hosted or private model deployments
@@ -36,8 +36,8 @@ Extensions can register either a complete @porcupineai/ai `Provider` or use the 
 import { createProvider, openAICompletionsApi } from "@porcupineai/ai";
 import type { ExtensionAPI } from "@porcupineai/coding-agent";
 
-export default function (pi: ExtensionAPI) {
-  pi.registerProvider(createProvider({
+export default function (porcupine: ExtensionAPI) {
+  porcupine.registerProvider(createProvider({
     id: "native-local",
     name: "Native Local",
     baseUrl: "http://localhost:8080/v1",
@@ -63,12 +63,12 @@ export default function (pi: ExtensionAPI) {
 
   // Legacy provider-config form:
   // Override baseUrl for existing provider
-  pi.registerProvider("anthropic", {
+  porcupine.registerProvider("anthropic", {
     baseUrl: "https://proxy.example.com"
   });
 
   // Register new provider with models
-  pi.registerProvider("my-provider", {
+  porcupine.registerProvider("my-provider", {
     name: "My Provider",
     baseUrl: "https://api.example.com",
     apiKey: "$MY_API_KEY",
@@ -96,19 +96,19 @@ The simplest use case: redirect an existing provider through a proxy.
 
 ```typescript
 // All Anthropic requests now go through your proxy
-pi.registerProvider("anthropic", {
+porcupine.registerProvider("anthropic", {
   baseUrl: "https://proxy.example.com"
 });
 
 // Add custom headers to OpenAI requests
-pi.registerProvider("openai", {
+porcupine.registerProvider("openai", {
   headers: {
     "X-Custom-Header": "value"
   }
 });
 
 // Both baseUrl and headers
-pi.registerProvider("google", {
+porcupine.registerProvider("google", {
   baseUrl: "https://ai-gateway.corp.com/google",
   headers: {
     "X-Corp-Auth": "$CORP_AUTH_TOKEN"  // env var or literal
@@ -127,7 +127,7 @@ If the model list comes from a remote endpoint, use an async extension factory:
 ```typescript
 import type { ExtensionAPI } from "@porcupineai/coding-agent";
 
-export default async function (pi: ExtensionAPI) {
+export default async function (porcupine: ExtensionAPI) {
   const response = await fetch("http://localhost:1234/v1/models");
   const payload = (await response.json()) as {
     data: Array<{
@@ -138,7 +138,7 @@ export default async function (pi: ExtensionAPI) {
     }>;
   };
 
-  pi.registerProvider("local-openai", {
+  porcupine.registerProvider("local-openai", {
     baseUrl: "http://localhost:1234/v1",
     apiKey: "$LOCAL_OPENAI_API_KEY",
     api: "openai-completions",
@@ -158,7 +158,7 @@ export default async function (pi: ExtensionAPI) {
 This registers the fetched models before startup finishes.
 
 ```typescript
-pi.registerProvider("my-llm", {
+porcupine.registerProvider("my-llm", {
   baseUrl: "https://api.my-llm.com/v1",
   apiKey: "$MY_LLM_API_KEY",  // env var reference
   api: "openai-completions",  // which streaming API to use
@@ -187,11 +187,11 @@ When `models` is provided, it **replaces** all existing models for that provider
 
 ## Unregister Provider
 
-Use `pi.unregisterProvider(name)` to remove a provider that was previously registered via `pi.registerProvider(name, ...)`:
+Use `porcupine.unregisterProvider(name)` to remove a provider that was previously registered via `porcupine.registerProvider(name, ...)`:
 
 ```typescript
 // Register
-pi.registerProvider("my-llm", {
+porcupine.registerProvider("my-llm", {
   baseUrl: "https://api.my-llm.com/v1",
   apiKey: "$MY_LLM_API_KEY",
   api: "openai-completions",
@@ -209,7 +209,7 @@ pi.registerProvider("my-llm", {
 });
 
 // Later, remove it
-pi.unregisterProvider("my-llm");
+porcupine.unregisterProvider("my-llm");
 ```
 
 Unregistering removes that provider's dynamic models, API key fallback, OAuth provider registration, and custom stream handler registrations. Any built-in models or provider behavior that were overridden are restored.
@@ -272,7 +272,7 @@ For Anthropic-compatible providers using `api: "anthropic-messages"`, set `compa
 If your provider expects `Authorization: Bearer <key>` but doesn't use a standard API, set `authHeader: true`:
 
 ```typescript
-pi.registerProvider("custom-api", {
+porcupine.registerProvider("custom-api", {
   baseUrl: "https://api.example.com",
   apiKey: "$MY_API_KEY",
   authHeader: true,  // adds Authorization: Bearer header
@@ -290,7 +290,7 @@ Add OAuth/SSO authentication that integrates with `/login`:
 ```typescript
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@porcupineai/ai";
 
-pi.registerProvider("corporate-ai", {
+porcupine.registerProvider("corporate-ai", {
   baseUrl: "https://ai.corp.com/v1",
   api: "openai-responses",
   models: [...],
@@ -578,10 +578,10 @@ If your provider returns overflow errors with a message porcupine does not recog
 ```typescript
 const MY_PROVIDER_OVERFLOW_PATTERN = /your provider's overflow phrase/i;
 
-export default function (pi: ExtensionAPI) {
-  pi.registerProvider("my-provider", { /* ... */ });
+export default function (porcupine: ExtensionAPI) {
+  porcupine.registerProvider("my-provider", { /* ... */ });
 
-  pi.on("message_end", (event, ctx) => {
+  porcupine.on("message_end", (event, ctx) => {
     const message = event.message;
     if (message.role !== "assistant") return;
     if (message.stopReason !== "error") return;
@@ -623,7 +623,7 @@ Guard the rewrite carefully:
 Register your stream function:
 
 ```typescript
-pi.registerProvider("my-provider", {
+porcupine.registerProvider("my-provider", {
   baseUrl: "https://api.example.com",
   apiKey: "$MY_API_KEY",
   api: "my-custom-api",

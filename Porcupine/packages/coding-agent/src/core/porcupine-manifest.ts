@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-export interface PiManifest {
+export interface PorcupineManifest {
 	extensions?: string[];
 	skills?: string[];
 	prompts?: string[];
@@ -13,14 +13,16 @@ function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function readPiManifest(packageJsonPath: string): PiManifest | null {
+export function readPorcupineManifest(packageJsonPath: string): PorcupineManifest | null {
 	try {
 		const pkg: unknown = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+		// The package.json manifest field stays "pi" for backward compatibility
+		// with published extensions (the rename is internal only).
 		if (!isObject(pkg) || !isObject(pkg.pi)) {
 			return null;
 		}
 
-		const manifest: PiManifest = {};
+		const manifest: PorcupineManifest = {};
 		for (const field of RESOURCE_FIELDS) {
 			const entries = pkg.pi[field];
 			if (Array.isArray(entries) && entries.every((entry) => typeof entry === "string")) {

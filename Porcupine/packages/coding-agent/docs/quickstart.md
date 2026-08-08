@@ -55,7 +55,7 @@ Then select a provider. Built-in subscription logins include Claude Pro/Max, Cha
 
 ### Option 2: API key
 
-Set an API key before launching pi:
+Set an API key before launching porcupine:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...

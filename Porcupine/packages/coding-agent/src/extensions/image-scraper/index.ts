@@ -100,15 +100,15 @@ function buildOcrPrompt(_paths: string[], ocrResults: Array<{ path: string; text
 	return lines.join("\n");
 }
 
-export default function imageScraperExtension(pi: ExtensionAPI): void {
-	pi.on(
+export default function imageScraperExtension(porcupine: ExtensionAPI): void {
+	porcupine.on(
 		"before_agent_start",
 		async (event: BeforeAgentStartEvent, ctx: ExtensionContext): Promise<BeforeAgentStartEventResult | undefined> => {
 			const images = event.images ?? [];
 			if (images.length === 0) return undefined;
 
 			// Only activate when the active model has no native vision support.
-			const model = (pi as unknown as { model?: { input?: string | string[] } }).model;
+			const model = (porcupine as unknown as { model?: { input?: string | string[] } }).model;
 			if (!model) return undefined;
 			const input = Array.isArray(model.input) ? model.input : [model.input ?? "text"];
 			if (input.includes("image")) return undefined;

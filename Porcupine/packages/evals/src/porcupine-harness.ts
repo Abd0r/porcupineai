@@ -25,35 +25,45 @@ import {
 } from "vitest-evals/harness";
 import { PI_SESSION_SNAPSHOT_ARTIFACT } from "./vitest-evals/artifacts.ts";
 
-export type PiCodingAgentInput = string | Array<{ type: "prompt"; content: string } | { type: "reload" }>;
+export type PorcupineCodingAgentInput = string | Array<{ type: "prompt"; content: string } | { type: "reload" }>;
 
-type PiCodingAgentModelSelection = {
+type PorcupineCodingAgentModelSelection = {
 	provider: string;
 	id: string;
 };
 
-type PiCodingAgentHarnessOptions = {
+type PorcupineCodingAgentHarnessOptions = {
 	name?: string;
-	model?: PiCodingAgentModelSelection;
+	model?: PorcupineCodingAgentModelSelection;
 	noTools?: CreateAgentSessionOptions["noTools"];
 	transformSystemPrompt?: (defaultPrompt: string) => string;
 };
 
-type PiCodingAgentHarnessWithOutput<TOutput extends JsonValue> = PiCodingAgentHarnessOptions & {
+type PorcupineCodingAgentHarnessWithOutput<TOutput extends JsonValue> = PorcupineCodingAgentHarnessOptions & {
 	output: (args: { response: string; session: AgentSession }) => TOutput | Promise<TOutput>;
 };
 
 export function resolveModelSelection(
-	explicitModel: PiCodingAgentModelSelection | undefined,
-	environment: { PI_PROVIDER?: string; PI_MODEL?: string } = process.env,
-): PiCodingAgentModelSelection {
-	const provider = (explicitModel?.provider ?? environment.PI_PROVIDER)?.trim();
-	const id = (explicitModel?.id ?? environment.PI_MODEL)?.trim();
+	explicitModel: PorcupineCodingAgentModelSelection | undefined,
+	environment: {
+		PORCUPINE_PROVIDER?: string;
+		PORCUPINE_MODEL?: string;
+		PI_PROVIDER?: string;
+		PI_MODEL?: string;
+	} = process.env,
+): PorcupineCodingAgentModelSelection {
+	const provider = (explicitModel?.provider ?? environment.PORCUPINE_PROVIDER ?? environment.PI_PROVIDER)?.trim();
+	const id = (explicitModel?.id ?? environment.PORCUPINE_MODEL ?? environment.PI_MODEL)?.trim();
 	if (!provider || !id) {
-		throw new Error("Select a harness model explicitly or set both PI_PROVIDER and PI_MODEL as defaults.");
+		throw new Error(
+			"Select a harness model explicitly or set both PORCUPINE_PROVIDER and PORCUPINE_MODEL (legacy PI_PROVIDER/PI_MODEL) as defaults.",
+		);
 	}
 	return { provider, id };
 }
+
+/** Shared across harness runs within this process (see runPorcupineCodingAgent). */
+let sharedModelRuntime: ModelRuntime | undefined;
 
 function toTranscriptEvents(messages: AgentSession["messages"]): TranscriptEvent[] {
 	const events: TranscriptEvent[] = [];
@@ -106,20 +116,23 @@ async function promptAgent(session: AgentSession, input: string, signal: AbortSi
 	return output;
 }
 
-async function runPiCodingAgent<TOutput extends JsonValue>(
-	input: PiCodingAgentInput,
+async function runPorcupineCodingAgent<TOutput extends JsonValue>(
+	input: PorcupineCodingAgentInput,
 	signal: AbortSignal | undefined,
 	setArtifact: HarnessContext["setArtifact"],
-	options: PiCodingAgentHarnessOptions | PiCodingAgentHarnessWithOutput<TOutput>,
+	options: PorcupineCodingAgentHarnessOptions | PorcupineCodingAgentHarnessWithOutput<TOutput>,
 ): Promise<SimpleHarnessResult<string | TOutput>> {
 	const startedAt = performance.now();
 	signal?.throwIfAborted();
 	const selection = resolveModelSelection(options.model);
-	const modelRuntime = await ModelRuntime.create();
+	// Memoize one ModelRuntime per process: ModelRuntime.create() reloads the
+	// provider catalog (+ possible network refresh) on every harness run.
+	if (sharedModelRuntime === undefined) sharedModelRuntime = await ModelRuntime.create();
+	const modelRuntime = sharedModelRuntime;
 	const model = modelRuntime.getModel(selection.provider, selection.id);
 	if (!model) throw new Error(`Eval model not found: ${selection.provider}/${selection.id}`);
 
-	const root = await mkdtemp(join(tmpdir(), "pi-eval-"));
+	const root = await mkdtemp(join(tmpdir(), "porcupine-eval-"));
 	const cwd = join(root, "workspace");
 	const agentDir = join(root, "agent");
 	let transformedSystemPrompt: string | undefined;
@@ -175,7 +188,7 @@ async function runPiCodingAgent<TOutput extends JsonValue>(
 					await evalSession.reload();
 				}
 			}
-			if (response === undefined) throw new Error("Pi eval input must include at least one prompt step.");
+			if (response === undefined) throw new Error("Porcupine eval input must include at least one prompt step.");
 			const output = "output" in options ? await options.output({ response, session: evalSession }) : response;
 			const stats = evalSession.getSessionStats();
 			const hasPricing = [model.cost, ...(model.cost.tiers ?? [])].some(
@@ -243,15 +256,17 @@ async function runPiCodingAgent<TOutput extends JsonValue>(
 	};
 }
 
-export function createPiCodingAgentHarness<TOutput extends JsonValue>(
-	options: PiCodingAgentHarnessWithOutput<TOutput>,
-): Harness<PiCodingAgentInput, TOutput>;
-export function createPiCodingAgentHarness(options?: PiCodingAgentHarnessOptions): Harness<PiCodingAgentInput, string>;
-export function createPiCodingAgentHarness<TOutput extends JsonValue>(
-	options: PiCodingAgentHarnessOptions | PiCodingAgentHarnessWithOutput<TOutput> = {},
+export function createPorcupineCodingAgentHarness<TOutput extends JsonValue>(
+	options: PorcupineCodingAgentHarnessWithOutput<TOutput>,
+): Harness<PorcupineCodingAgentInput, TOutput>;
+export function createPorcupineCodingAgentHarness(
+	options?: PorcupineCodingAgentHarnessOptions,
+): Harness<PorcupineCodingAgentInput, string>;
+export function createPorcupineCodingAgentHarness<TOutput extends JsonValue>(
+	options: PorcupineCodingAgentHarnessOptions | PorcupineCodingAgentHarnessWithOutput<TOutput> = {},
 ) {
-	return createHarness<PiCodingAgentInput, string | TOutput>({
-		name: options.name ?? "pi-coding-agent",
-		run: ({ input, signal, setArtifact }) => runPiCodingAgent(input, signal, setArtifact, options),
+	return createHarness<PorcupineCodingAgentInput, string | TOutput>({
+		name: options.name ?? "porcupine-coding-agent",
+		run: ({ input, signal, setArtifact }) => runPorcupineCodingAgent(input, signal, setArtifact, options),
 	});
 }

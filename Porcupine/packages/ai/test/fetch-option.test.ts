@@ -8,7 +8,7 @@ import { streamSimple as streamOpenAICodexResponses } from "../src/api/openai-co
 import { streamSimple as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import { streamSimple as streamOpenAIResponses } from "../src/api/openai-responses.ts";
 import { generateImages } from "../src/api/openrouter-images.ts";
-import { streamSimple as streamPiMessages } from "../src/api/pi-messages.ts";
+import { streamSimple as streamPorcupineMessages } from "../src/api/porcupine-messages.ts";
 import type { Api, Context, FetchFunction, ImagesModel, Model } from "../src/types.ts";
 
 const context: Context = {
@@ -99,7 +99,7 @@ describe("fetch stream option", () => {
 		expect(globalThis.fetch).toBe(fallback);
 	});
 
-	it("uses fetch for Mistral, Codex SSE, and pi-messages HTTP requests", async () => {
+	it("uses fetch for Mistral, Codex SSE, and porcupine-messages HTTP requests", async () => {
 		const { custom, fallback } = mockFetches();
 		await streamMistral(createModel("mistral-conversations"), context, {
 			apiKey: "test-key",
@@ -111,7 +111,7 @@ describe("fetch stream option", () => {
 			transport: "sse",
 			maxRetries: 0,
 		}).result();
-		await streamPiMessages(createModel("pi-messages"), context, {
+		await streamPorcupineMessages(createModel("porcupine-messages"), context, {
 			apiKey: "test-key",
 			fetch: custom,
 		}).result();

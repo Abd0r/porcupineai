@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { collectRequests, connectClient, MemoryByteServer, sessionSnapshot } from "./support.ts";
 
-describe("PiClient", () => {
+describe("PorcupineClient", () => {
 	test("correlates coalesced out-of-order responses", async () => {
 		const server = new MemoryByteServer();
 		const client = await connectClient(server);
@@ -63,6 +63,6 @@ describe("PiClient", () => {
 			ok: false,
 			error: { code: "session_locked", message: "Already attached" },
 		});
-		await expect(attaching).rejects.toMatchObject({ name: "PiServerError", code: "session_locked" });
+		await expect(attaching).rejects.toMatchObject({ name: "PorcupineServerError", code: "session_locked" });
 	});
 });

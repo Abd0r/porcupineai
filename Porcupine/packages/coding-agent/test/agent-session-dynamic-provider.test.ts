@@ -39,7 +39,7 @@ describe("AgentSession dynamic provider registration", () => {
 	let agentDir: string;
 
 	beforeEach(() => {
-		tempDir = join(tmpdir(), `pi-dynamic-provider-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		tempDir = join(tmpdir(), `porcupine-dynamic-provider-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		agentDir = join(tempDir, "agent");
 		mkdirSync(agentDir, { recursive: true });
 	});
@@ -122,7 +122,7 @@ describe("AgentSession dynamic provider registration", () => {
 		session.dispose();
 	});
 
-	it("registers native pi-ai providers during extension loading", async () => {
+	it("registers native porcupine-ai providers during extension loading", async () => {
 		const session = await createSession([
 			(pi) => {
 				pi.registerProvider(nativeAnthropicProvider("http://localhost:8080/native-top-level"));
@@ -156,7 +156,7 @@ describe("AgentSession dynamic provider registration", () => {
 		session.dispose();
 	});
 
-	it("registers native pi-ai providers at command time", async () => {
+	it("registers native porcupine-ai providers at command time", async () => {
 		const session = await createSession([
 			(pi) => {
 				pi.registerCommand("use-native", {

@@ -389,7 +389,7 @@ export function createBashToolDefinition(
 			}
 			const resolvedCommand = commandPrefix ? `${commandPrefix}\n${command}` : command;
 			const spawnContext = resolveSpawnContext(resolvedCommand, cwd, spawnHook, exposeSessionEnvironment, ctx);
-			const output = new OutputAccumulator({ tempFilePrefix: "pi-bash", stripAnsi: true });
+			const output = new OutputAccumulator({ tempFilePrefix: "porcupine-bash", stripAnsi: true });
 			let acceptingOutput = true;
 			let updateTimer: NodeJS.Timeout | undefined;
 			let updateDirty = false;

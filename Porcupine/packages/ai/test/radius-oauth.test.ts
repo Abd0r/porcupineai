@@ -44,7 +44,7 @@ describe("Radius OAuth", () => {
 				urls.push(url);
 				const form = new URLSearchParams(String(init?.body));
 				if (url === `${GATEWAY}/v1/oauth/device`) {
-					expect(form.get("client_id")).toBe("pi-gateway");
+					expect(form.get("client_id")).toBe("porcupine-gateway");
 					expect(form.get("scope")).toBe("gateway offline_access");
 					return jsonResponse({
 						device_code: "device-code",
@@ -56,7 +56,7 @@ describe("Radius OAuth", () => {
 				}
 				if (url === `${GATEWAY}/v1/oauth/token`) {
 					expect(form.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
-					expect(form.get("client_id")).toBe("pi-gateway");
+					expect(form.get("client_id")).toBe("porcupine-gateway");
 					expect(form.get("device_code")).toBe("device-code");
 					return jsonResponse({
 						access_token: "access-token",
@@ -94,7 +94,7 @@ describe("Radius OAuth", () => {
 			expect(requestUrl(input)).toBe(`${GATEWAY}/v1/oauth/token`);
 			const form = new URLSearchParams(String(init?.body));
 			expect(form.get("grant_type")).toBe("refresh_token");
-			expect(form.get("client_id")).toBe("pi-gateway");
+			expect(form.get("client_id")).toBe("porcupine-gateway");
 			expect(form.get("refresh_token")).toBe("old-refresh");
 			return jsonResponse({
 				access_token: "new-access",

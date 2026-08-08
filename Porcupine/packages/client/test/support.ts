@@ -8,8 +8,8 @@ import {
 	type ServerSnapshot,
 	type SessionSnapshot,
 } from "@porcupineai/protocol";
-import type { ByteTransport, ByteTransportHandlers, PiSessionHandle } from "../src/index.ts";
-import { PiClient } from "../src/index.ts";
+import type { ByteTransport, ByteTransportHandlers, PorcupineSessionHandle } from "../src/index.ts";
+import { PorcupineClient } from "../src/index.ts";
 
 export class MemoryByteServer {
 	private handlers: ByteTransportHandlers | undefined;
@@ -104,14 +104,14 @@ export function sessionSnapshot(id: string, overrides: Partial<SessionSnapshot> 
 	};
 }
 
-export function createClient(server: MemoryByteServer, token = "bearer-secret"): PiClient {
-	return new PiClient({
+export function createClient(server: MemoryByteServer, token = "bearer-secret"): PorcupineClient {
+	return new PorcupineClient({
 		token,
 		transportFactory: (handlers) => server.connect(handlers),
 	});
 }
 
-export async function connectClient(server: MemoryByteServer, token = "bearer-secret"): Promise<PiClient> {
+export async function connectClient(server: MemoryByteServer, token = "bearer-secret"): Promise<PorcupineClient> {
 	const client = createClient(server, token);
 	server.onMessage((message) => {
 		if (message.type === "hello") {
@@ -136,10 +136,10 @@ export function collectRequests(server: MemoryByteServer): RequestEnvelope[] {
 }
 
 export async function attachSession(
-	client: PiClient,
+	client: PorcupineClient,
 	server: MemoryByteServer,
 	snapshot: SessionSnapshot,
-): Promise<PiSessionHandle> {
+): Promise<PorcupineSessionHandle> {
 	const requests = collectRequests(server);
 	const attaching = client.attachSession(snapshot.id);
 	const request = requests.find((candidate) => candidate.request.command === "attach");

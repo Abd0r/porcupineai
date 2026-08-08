@@ -1,59 +1,59 @@
 import type { JsonValue, ProtocolError, ProtocolErrorCode } from "@porcupineai/protocol";
 
-export class PiServerError extends Error {
+export class PorcupineServerError extends Error {
 	readonly code: ProtocolErrorCode;
 	readonly details: JsonValue | undefined;
 
 	constructor(error: ProtocolError) {
 		super(error.message);
-		this.name = "PiServerError";
+		this.name = "PorcupineServerError";
 		this.code = error.code;
 		this.details = error.details;
 	}
 }
 
-export class PiDisconnectedError extends Error {
-	constructor(message = "Pi client is disconnected") {
+export class PorcupineDisconnectedError extends Error {
+	constructor(message = "Porcupine client is disconnected") {
 		super(message);
-		this.name = "PiDisconnectedError";
+		this.name = "PorcupineDisconnectedError";
 	}
 }
 
-export class PiClientDisposedError extends Error {
+export class PorcupineClientDisposedError extends Error {
 	constructor() {
-		super("Pi client is disposed");
-		this.name = "PiClientDisposedError";
+		super("Porcupine client is disposed");
+		this.name = "PorcupineClientDisposedError";
 	}
 }
 
-export class PiRequestTimeoutError extends Error {
+export class PorcupineRequestTimeoutError extends Error {
 	readonly command: string;
 	readonly timeoutMs: number;
 
 	constructor(command: string, timeoutMs: number) {
-		super(`Pi request "${command}" timed out after ${timeoutMs}ms`);
-		this.name = "PiRequestTimeoutError";
+		super(`Porcupine request "${command}" timed out after ${timeoutMs}ms`);
+		this.name = "PorcupineRequestTimeoutError";
 		this.command = command;
 		this.timeoutMs = timeoutMs;
 	}
 }
 
-export class PiSessionOwnershipError extends Error {
+export class PorcupineSessionOwnershipError extends Error {
 	readonly sessionId: string;
 
 	constructor(sessionId: string, message: string) {
 		super(message);
-		this.name = "PiSessionOwnershipError";
+		this.name = "PorcupineSessionOwnershipError";
 		this.sessionId = sessionId;
 	}
 }
 
-export class PiSessionDetachedError extends Error {
+export class PorcupineSessionDetachedError extends Error {
 	readonly sessionId: string;
 
 	constructor(sessionId: string) {
 		super(`Session ${sessionId} is not attached`);
-		this.name = "PiSessionDetachedError";
+		this.name = "PorcupineSessionDetachedError";
 		this.sessionId = sessionId;
 	}
 }
@@ -62,7 +62,7 @@ export function toError(error: unknown): Error {
 	return error instanceof Error ? error : new Error(String(error));
 }
 
-export function toDisconnectedError(error: unknown): PiDisconnectedError {
+export function toDisconnectedError(error: unknown): PorcupineDisconnectedError {
 	const cause = toError(error);
-	return cause instanceof PiDisconnectedError ? cause : new PiDisconnectedError(cause.message);
+	return cause instanceof PorcupineDisconnectedError ? cause : new PorcupineDisconnectedError(cause.message);
 }

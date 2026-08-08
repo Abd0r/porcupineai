@@ -32,7 +32,7 @@ export interface SessionLease extends AsyncDisposable {
 	setThinking(thinkingLevel: ThinkingLevel): Promise<SessionSnapshot>;
 }
 
-export type PiSessionHandle = SessionLease;
+export type PorcupineSessionHandle = SessionLease;
 
 export interface SessionHandleCallbacks {
 	isAttached(): boolean;

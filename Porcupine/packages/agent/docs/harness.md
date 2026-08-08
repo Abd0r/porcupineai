@@ -470,7 +470,7 @@ a ── b ── c ── d                        main → d
       └── e ── f                        slack:1719432.0021 → f
 ```
 
-- Every session has the default ref **`main`**. `AgentHarness` implements the ref surface directly (section 7): `harness.prompt(...)` *is* main's prompt. Interactive pi never creates a second ref — one active branch, resume-where-you-left-off, `/tree` — nothing about that model changes.
+- Every session has the default ref **`main`**. `AgentHarness` implements the ref surface directly (section 7): `harness.prompt(...)` *is* main's prompt. Interactive porcupine never creates a second ref — one active branch, resume-where-you-left-off, `/tree` — nothing about that model changes.
 - Embedders create refs keyed by external identities: Slack channel = session + `main`, each thread = a ref anchored at the pinged entry; each email thread = a ref. The platform's UI is the ref picker; no client browses refs abstractly, and end users never see the word.
 - Each ref owns: its leaf; one active operation; its steer/followUp/nextRun queues; its pending deferred writes; and its persisted config view — model, thinking level, and active tools are point queries on the path behind its leaf, so two refs run different models without knowing of each other. Harness-global stay: tool implementations, resources, stream options, retry policy — registries and runtime capabilities are shared, activation is per-ref and branch-anchored.
 - Refs are pointers, not containers. Deleting one removes the name, never entries. Two refs at the same entry diverge on their next append. `navigateTree` moves one ref.
@@ -485,7 +485,7 @@ a ── b ── c ── d                        main → d
 const { harness, suspended } = await AgentHarness.create({ session, models, model, ... });
 
 for (const s of suspended) {
-  await harness.ref(s.ref)!.resume();   // or .abort(); interactive pi: 0 or 1, always "main"
+  await harness.ref(s.ref)!.resume();   // or .abort(); interactive porcupine: 0 or 1, always "main"
 }
 await harness.prompt("...");
 ```
@@ -1280,7 +1280,7 @@ interface BeforeNavigationHook {
 
 ### Failure semantics
 
-The old coding-agent catches every extension handler error, wraps it as `ExtensionError`, emits it to `onError` listeners, skips that handler's contribution, and continues; an extension bug never kills a run. (Only the old pi-agent harness `emitHook` rethrew into the run; that behavior is dropped.)
+The old coding-agent catches every extension handler error, wraps it as `ExtensionError`, emits it to `onError` listeners, skips that handler's contribution, and continues; an extension bug never kills a run. (Only the old porcupine-agent harness `emitHook` rethrew into the run; that behavior is dropped.)
 
 The new harness keeps that model:
 
@@ -1988,7 +1988,7 @@ Rules, both scopes:
 
 - **Session entries only, zero harness entries.** Orchestration history describes the source's execution. A fork starts idle: no operation, no queues, no pending writes, `suspended: []`.
 - **Refs:** `scope: "branch"` → the new session has only `main`, at the fork point. `scope: "tree"` → **TBD**: current proposal copies all refs as-is; alternatives (only `main`, positioned at the source's `main`) unresolved. Labels and the session name (global records, section 5) copy with `scope: "tree"`; with `scope: "branch"`, labels copy iff their target entry was copied, the name always.
-- **The source is untouched.** Copying while the source has an active run reads the committed prefix; the run stays active in the source and is never inherited. Forking a running session is safe in both scopes: a fork point may be **any message entry** (relaxed from the old user-message-only validation — platform threads root at arbitrary messages), and a copy whose tip sits mid-tool-batch is still promptable — pi-ai's `transformMessages` inserts synthetic empty results for orphaned tool calls at request build time, so no acceptance check or history rewriting is needed.
+- **The source is untouched.** Copying while the source has an active run reads the committed prefix; the run stays active in the source and is never inherited. Forking a running session is safe in both scopes: a fork point may be **any message entry** (relaxed from the old user-message-only validation — platform threads root at arbitrary messages), and a copy whose tip sits mid-tool-batch is still promptable — porcupine-ai's `transformMessages` inserts synthetic empty results for orphaned tool calls at request build time, so no acceptance check or history rewriting is needed.
 - **Linkage** via metadata (`parentSessionPath` in JSONL, the equivalent in SQLite), set automatically by `fork()` and explicitly by `create({ parentSessionId })` — the basis for session-group operations like export bundles and subagent parent/child tracking. A subagent tool creates its child session this way and returns the child's id in its tool result. Durability needs no schema support: the tool can derive the child id deterministically from its invocation (`execute(toolCallId, ...)` — e.g. `f(parentSessionId, toolCallId)`), so a `replay: "safe"` re-execution derives the same id and reattaches instead of spawning a twin; and because the child records `parentSessionId` at creation, children remain discoverable from the parent even when a crash swallowed the tool result.
 - Persisted config derives from the copied tree via the usual branch point queries; `main` sits at the fork point (`scope: "branch"`) or the source's `main` leaf (`scope: "tree"`).
 - **Threads are refs first.** A platform thread sharing one source of truth with its channel is a ref in the same session (section 6), not a fork. Fork when a *separate* session is wanted: subagents, exports, clones. Whether a thread becomes a ref, a fork, or a fresh session with platform backlog as prompt-time context is application policy; all three are supported.
@@ -2125,16 +2125,16 @@ Any storage append failure faults the harness (section 4): the instance stops, i
 
 ## 15. Telemetry
 
-The third channel, next to events (observe from outside) and hooks (control): in-process diagnostics for logging and tracing. Vendor-neutral — pi emits stable, structured span events; external subscribers convert them to OTel spans, Sentry spans, logs, or metrics. Core packages never import OTel, Sentry, or Node-only APIs. (Origin: `packages/agent/docs/observability.md`; this section supersedes its event names with the new vocabulary.)
+The third channel, next to events (observe from outside) and hooks (control): in-process diagnostics for logging and tracing. Vendor-neutral — porcupine emits stable, structured span events; external subscribers convert them to OTel spans, Sentry spans, logs, or metrics. Core packages never import OTel, Sentry, or Node-only APIs. (Origin: `packages/agent/docs/observability.md`; this section supersedes its event names with the new vocabulary.)
 
 ### Mechanism
 
 A trace is one causal tree of work (one run). A span is one timed operation in it, represented by ids:
 
 ```ts
-interface PiObservabilityEvent {
+interface PorcupineObservabilityEvent {
   type: "start" | "end" | "error" | "event";
-  name: string;                          // e.g. "pi.harness.generation"
+  name: string;                          // e.g. "porcupine.harness.generation"
   traceId: string;
   spanId?: string;
   parentSpanId?: string;
@@ -2146,16 +2146,16 @@ interface PiObservabilityEvent {
 }
 
 // Runtime-agnostic core; adapters supply context propagation.
-interface PiObservability {
-  getContext(): PiObservabilityContext | undefined;
-  runWithContext<T>(context: PiObservabilityContext, fn: () => T): T;
-  emit(event: PiObservabilityEvent): void;
+interface PorcupineObservability {
+  getContext(): PorcupineObservabilityContext | undefined;
+  runWithContext<T>(context: PorcupineObservabilityContext, fn: () => T): T;
+  emit(event: PorcupineObservabilityEvent): void;
   hasSubscribers(): boolean;             // skip payload assembly when nobody listens
 }
 
-function configurePiObservability(o: PiObservability): void;
-function subscribePiObservability(listener: (e: PiObservabilityEvent) => void): () => void;
-function runWithPiContext<T>(userContext: Record<string, unknown>, fn: () => T): T;
+function configurePorcupineObservability(o: PorcupineObservability): void;
+function subscribePorcupineObservability(listener: (e: PorcupineObservabilityEvent) => void): () => void;
+function runWithPorcupineContext<T>(userContext: Record<string, unknown>, fn: () => T): T;
 function traceOperation<T>(name: string, payload: Record<string, unknown>, fn: () => T): T;
 ```
 
@@ -2165,8 +2165,8 @@ Context propagation is a runtime adapter, not a core dependency: Node uses `Asyn
 
 ```ts
 await Promise.all([
-  runWithPiContext({ userId: "alice" }, () => harnessA.prompt("A")),
-  runWithPiContext({ userId: "bob"   }, () => harnessB.prompt("B")),
+  runWithPorcupineContext({ userId: "alice" }, () => harnessA.prompt("A")),
+  runWithPorcupineContext({ userId: "bob"   }, () => harnessB.prompt("B")),
 ]);
 ```
 
@@ -2177,24 +2177,24 @@ Every span emitted inside a chain carries that chain's `context` — an OTel ada
 Aligned to the execution model; each span emits `start` + `end`/`error`:
 
 ```text
-pi.harness.run            runId, sessionId, recovery
-├─ pi.harness.step         stepId
-│  ├─ pi.harness.generation   purpose, attempt, provider, model
-│  │  └─ pi.ai.provider.request  physical request — emitted by packages/ai
+porcupine.harness.run            runId, sessionId, recovery
+├─ porcupine.harness.step         stepId
+│  ├─ porcupine.harness.generation   purpose, attempt, provider, model
+│  │  └─ porcupine.ai.provider.request  physical request — emitted by packages/ai
 │  │                            (several per generation for split-turn compaction)
-│  └─ pi.harness.tool         toolName, toolCallId, replay
-├─ pi.harness.checkpoint    deferred writes / queue consumption / compaction decision
-└─ pi.harness.hook          hook type — the awaited control points
+│  └─ porcupine.harness.tool         toolName, toolCallId, replay
+├─ porcupine.harness.checkpoint    deferred writes / queue consumption / compaction decision
+└─ porcupine.harness.hook          hook type — the awaited control points
 
-pi.harness.compaction     manual operation (auto-compaction nests under its run)
-pi.harness.navigation
-pi.harness.resume         wraps recovery work; child spans as above
-pi.session.append         entry type, seq — storage-level timing
+porcupine.harness.compaction     manual operation (auto-compaction nests under its run)
+porcupine.harness.navigation
+porcupine.harness.resume         wraps recovery work; child spans as above
+porcupine.session.append         entry type, seq — storage-level timing
 ```
 
 Instrumentation points: the operation methods (`prompt`/`skill`/`promptFromTemplate`/`compact`/`navigateTree`/`resume`), the driver loop's step/generation/tool boundaries, hook dispatch, `Session` appends, and `streamSimple()`/`completeSimple()` in `packages/ai`. End payloads for provider requests carry safe metadata: stop reason, status code, retry count, token counts, cost, aborted/timeout flags.
 
-Correlation attributes are the same ids the public events carry (`ref`, `runId`, `stepId`, `toolCallId`), so a trace, the event stream, and the log line up without translation. Concurrent refs produce concurrent `pi.harness.run` traces, distinguished by `ref`. `handler_error` and `fault` are mirrored here, as specced in sections 9/10.
+Correlation attributes are the same ids the public events carry (`ref`, `runId`, `stepId`, `toolCallId`), so a trace, the event stream, and the log line up without translation. Concurrent refs produce concurrent `porcupine.harness.run` traces, distinguished by `ref`. `handler_error` and `fault` are mirrored here, as specced in sections 9/10.
 
 ### Safety and redaction
 
@@ -2213,7 +2213,7 @@ Content capture (the "down to provider internals" of section 1) is opt-in via ex
 ### Subscriber contract
 
 - Passive, always: subscriber errors are swallowed/isolated and can never affect execution — unlike hooks, which are control-plane by design.
-- Exporting, sampling, and scrubbing are the subscriber's job. Pi emits facts; it does not talk to APM vendors.
+- Exporting, sampling, and scrubbing are the subscriber's job. Porcupine emits facts; it does not talk to APM vendors.
 - Package layout: a minimal runtime-agnostic `packages/observability` (context + traceOperation + subscribe); `packages/ai` and `packages/agent` emit; optional adapters (`observability-node` with ALS/diagnostics_channel, an OTel bridge) live outside core.
 
 ### Integration examples
@@ -2223,28 +2223,28 @@ Harness — spans wrap the section 12 procedures; ALS context propagation makes 
 ```ts
 // prompt() and resume() both land here
 async function executeRun(op: RunOperation): Promise<RunResult> {
-  return traceOperation("pi.harness.run",
+  return traceOperation("porcupine.harness.run",
     { runId: op.id, sessionId, recovery: op.persisted },
     () => runProcedure());
 }
 
 // driverLoop(): one span per step, per generation, per tool
-await traceOperation("pi.harness.step", { runId: op.id, stepId }, async () => {
-  const assistant = await traceOperation("pi.harness.generation",
+await traceOperation("porcupine.harness.step", { runId: op.id, stepId }, async () => {
+  const assistant = await traceOperation("porcupine.harness.generation",
     { purpose: "step", attempt, provider: model.provider, model: model.id },
-    () => requestAssistant());              // pi.ai.provider.request nests underneath
+    () => requestAssistant());              // porcupine.ai.provider.request nests underneath
   if (hasToolCalls(assistant)) await executeToolBatch(assistant);
 });
 
 // executeToolBatch(), per call
-await traceOperation("pi.harness.tool",
+await traceOperation("porcupine.harness.tool",
   { runId: op.id, toolName: call.name, toolCallId: call.id, replay },
   () => executeTool(call));
 
 // hook dispatch and Session appends: same one-line wrapping
 ```
 
-pi-ai — `streamSimple()` returns its stream synchronously, so the span cannot wrap the return value; it ends when the stream settles. That is the correct span boundary for a streaming API, not a workaround — the caller gets the identical stream, unchanged:
+porcupine-ai — `streamSimple()` returns its stream synchronously, so the span cannot wrap the return value; it ends when the stream settles. That is the correct span boundary for a streaming API, not a workaround — the caller gets the identical stream, unchanged:
 
 ```ts
 // packages/ai/src/models.ts
@@ -2253,10 +2253,10 @@ streamSimple(model, context, options): AssistantMessageEventStream {
   if (!hasSubscribers()) return stream;                          // zero cost when idle
 
   // stream.result() is the existing final-message promise; the span becomes
-  // one more awaiter. Provider errors are in-band in pi-ai (stopReason
+  // one more awaiter. Provider errors are in-band in porcupine-ai (stopReason
   // "error"/"aborted" messages, not rejections), so span status derives from
   // the final message; nothing propagates to the caller.
-  void traceOperation("pi.ai.provider.request", {
+  void traceOperation("porcupine.ai.provider.request", {
     api: model.api, provider: model.provider, model: model.id,
     sessionId: options?.sessionId, reasoning: options?.reasoning,
   }, async () => {
@@ -2275,13 +2275,13 @@ Application — per-request context and subscribers:
 
 ```ts
 // every span in this run carries the user context
-await runWithPiContext({ userId, orgId, sessionId }, () => harness.prompt(text));
+await runWithPorcupineContext({ userId, orgId, sessionId }, () => harness.prompt(text));
 
 // console JSON sink
-subscribePiObservability((e) => log.write(JSON.stringify(e)));
+subscribePorcupineObservability((e) => log.write(JSON.stringify(e)));
 
 // OTel bridge, in its entirety
-subscribePiObservability((e) => {
+subscribePorcupineObservability((e) => {
   if (e.type === "start") {
     spans.set(e.spanId!, tracer.startSpan(e.name, { attributes: flatten(e.payload) }));
   } else if (e.type === "end" || e.type === "error") {
@@ -2297,7 +2297,7 @@ subscribePiObservability((e) => {
 ## 16. API examples
 
 ```ts
-// Interactive pi: single ref, nothing changes. AgentHarness implements
+// Interactive porcupine: single ref, nothing changes. AgentHarness implements
 // AgentRef for main; suspended has 0 or 1 entries, always "main".
 const { harness, suspended } = await AgentHarness.create({ session, models, model });
 for (const s of suspended) await harness.ref(s.ref)!.resume();   // or offer resume/abort in UI

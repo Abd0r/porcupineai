@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveModelSelection } from "../src/pi-harness.ts";
+import { resolveModelSelection } from "../src/porcupine-harness.ts";
 
 describe("resolveModelSelection", () => {
 	it("prefers an explicit harness model over environment defaults", () => {
@@ -20,15 +20,28 @@ describe("resolveModelSelection", () => {
 
 	it.each([
 		[undefined, {}],
+		[undefined, { PORCUPINE_PROVIDER: "openai-codex" }],
+		[undefined, { PORCUPINE_MODEL: "gpt-5.6-sol" }],
 		[undefined, { PI_PROVIDER: "openai-codex" }],
 		[undefined, { PI_MODEL: "gpt-5.6-sol" }],
 		[
 			{ provider: "", id: "gpt-5.6-sol" },
-			{ PI_PROVIDER: "openai-codex", PI_MODEL: "gpt-5.6-sol" },
+			{ PORCUPINE_PROVIDER: "openai-codex", PORCUPINE_MODEL: "gpt-5.6-sol" },
 		],
 	] as const)("rejects an incomplete model selection", (explicitModel, environment) => {
 		expect(() => resolveModelSelection(explicitModel, environment)).toThrow(
-			"Select a harness model explicitly or set both PI_PROVIDER and PI_MODEL as defaults.",
+			"Select a harness model explicitly or set both PORCUPINE_PROVIDER and PORCUPINE_MODEL (legacy PI_PROVIDER/PI_MODEL) as defaults.",
 		);
+	});
+
+	it("prefers PORCUPINE_* env vars with PI_* as a legacy fallback", () => {
+		expect(
+			resolveModelSelection(undefined, {
+				PI_PROVIDER: "openai-codex",
+				PI_MODEL: "gpt-5.6-sol",
+				PORCUPINE_PROVIDER: "anthropic",
+				PORCUPINE_MODEL: "claude-sonnet-4-5",
+			}),
+		).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5" });
 	});
 });

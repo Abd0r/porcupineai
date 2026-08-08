@@ -1,5 +1,77 @@
-import hljs from "highlight.js/lib/index.js";
+import { createRequire } from "node:module";
+import hljs from "highlight.js/lib/core.js";
+
+// ESM build: sync require() is not available; createRequire provides it.
+const nodeRequire = createRequire(import.meta.url);
+
 import { decodeHtmlEntityAt } from "./html.ts";
+
+// Register ONLY the languages the agent can actually highlight (see
+// getLanguageFromPath in the theme). The full highlight.js bundle is ~1MB and
+// cost ~40ms at startup; the core build plus these grammars is a fraction of
+// that. Languages not listed here fall back to plain rendering.
+const HIGHLIGHT_LANGUAGES = [
+	"typescript",
+	"javascript",
+	"python",
+	"ruby",
+	"rust",
+	"go",
+	"java",
+	"kotlin",
+	"swift",
+	"c",
+	"cpp",
+	"csharp",
+	"php",
+	"bash",
+	"fish",
+	"powershell",
+	"sql",
+	"xml", // xml grammar also covers html/xhtml via aliases
+	"css",
+	"scss",
+	"sass",
+	"less",
+	"json",
+	"yaml",
+	"toml",
+	"markdown",
+	"dockerfile",
+	"makefile",
+	"cmake",
+	"lua",
+	"perl",
+	"r",
+	"scala",
+	"clojure",
+	"elixir",
+	"erlang",
+	"haskell",
+	"ocaml",
+	"vim",
+	"graphql",
+	"protobuf",
+	"hcl",
+] as const;
+
+let languagesRegistered = false;
+function ensureLanguagesRegistered(): void {
+	if (languagesRegistered) return;
+	languagesRegistered = true;
+	for (const name of HIGHLIGHT_LANGUAGES) {
+		try {
+			const mod = nodeRequire(`highlight.js/lib/languages/${name}.js`) as {
+				default?: unknown;
+			};
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const languageFn = (mod.default ?? mod) as any;
+			if (languageFn) hljs.registerLanguage(name, languageFn);
+		} catch {
+			// Unknown/unavailable grammar: skip silently (plain rendering).
+		}
+	}
+}
 
 export type HighlightFormatter = (text: string) => string;
 export type HighlightTheme = Partial<Record<string, HighlightFormatter>>;
@@ -132,6 +204,7 @@ export function renderHighlightedHtml(html: string, theme: HighlightTheme = {}):
 }
 
 export function highlight(code: string, options: HighlightOptions = {}): string {
+	ensureLanguagesRegistered();
 	const html = options.language
 		? hljs.highlight(code, {
 				language: options.language,
@@ -142,5 +215,6 @@ export function highlight(code: string, options: HighlightOptions = {}): string 
 }
 
 export function supportsLanguage(name: string): boolean {
+	ensureLanguagesRegistered();
 	return hljs.getLanguage(name) !== undefined;
 }

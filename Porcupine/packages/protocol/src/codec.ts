@@ -45,11 +45,21 @@ export function parseClientMessage(value: unknown): ClientMessage {
 	return value;
 }
 
+/** Encode path: in-process messages are trusted (validated on decode, where bytes are untrusted). */
+function validateClientMessageShape(value: unknown): ClientMessage {
+	return value as ClientMessage;
+}
+
 export function parseServerMessage(value: unknown): ServerMessage {
 	if (!isProtocolValue(value) || !Check(ServerMessageSchema, value)) {
 		throw new ProtocolValidationError("Invalid server protocol message");
 	}
 	return value;
+}
+
+/** Encode path: in-process messages are trusted (validated on decode, where bytes are untrusted). */
+function validateServerMessageShape(value: unknown): ServerMessage {
+	return value as ServerMessage;
 }
 
 function boundedErrorMessage(error: unknown): string {
@@ -77,12 +87,12 @@ function encodeProtocolMessage<T>(
 
 /** Validates and encodes one complete length-prefixed client message. */
 export function encodeClientMessage(message: ClientMessage, options?: FrameDecoderOptions): Uint8Array {
-	return encodeProtocolMessage(message, parseClientMessage, "client", options);
+	return encodeProtocolMessage(message, validateClientMessageShape, "client", options);
 }
 
 /** Validates and encodes one complete length-prefixed server message. */
 export function encodeServerMessage(message: ServerMessage, options?: FrameDecoderOptions): Uint8Array {
-	return encodeProtocolMessage(message, parseServerMessage, "server", options);
+	return encodeProtocolMessage(message, validateServerMessageShape, "server", options);
 }
 
 class ValidatedMessageDecoder<T> {

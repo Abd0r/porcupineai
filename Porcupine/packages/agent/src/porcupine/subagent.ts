@@ -214,9 +214,19 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 		});
 	});
 
+	let lastEstimatedMessages = 0;
+	let runningContextTokens = Math.ceil(systemPrompt.length / 4);
+
 	agent.subscribe((event) => {
 		if (event.type === "turn_end") {
-			const contextTokens = estimateContextTokens(systemPrompt, agent.state.messages);
+			// Incremental context estimate: only the messages added since the last
+			// turn are scanned (a full re-scan per turn was O(n^2) in message count).
+			const messages = agent.state.messages;
+			for (let i = lastEstimatedMessages; i < messages.length; i++) {
+				runningContextTokens += estimateTokens(messages[i]!);
+			}
+			lastEstimatedMessages = messages.length;
+			const contextTokens = runningContextTokens;
 			inputTokens = Math.max(inputTokens, contextTokens);
 			const content =
 				event.message && "content" in event.message && Array.isArray(event.message.content)
@@ -284,6 +294,9 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 					...keepRecentTail(segment, maxContextTokens),
 				];
 				agent.reset();
+				// The segment's messages are gone: restart the incremental estimate.
+				lastEstimatedMessages = 0;
+				runningContextTokens = Math.ceil(systemPrompt.length / 4);
 			} catch (error) {
 				// Summarization failed: fall back to the hard context stop.
 				budgetHit = true;

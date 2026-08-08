@@ -14,5 +14,5 @@ export interface ByteTransportHandlers {
 	onError(error: Error): void;
 }
 
-/** Creates a fresh connected transport for each PiClient connection attempt. Exactly one terminal handler is expected. */
+/** Creates a fresh connected transport for each PorcupineClient connection attempt. Exactly one terminal handler is expected. */
 export type ByteTransportFactory = (handlers: ByteTransportHandlers) => ByteTransport | Promise<ByteTransport>;

@@ -1,18 +1,23 @@
-export { PiClient } from "./client.ts";
+export { PorcupineClient } from "./client.ts";
 export {
-	PiClientDisposedError,
-	PiDisconnectedError,
-	PiServerError,
-	PiSessionDetachedError,
-	PiSessionOwnershipError,
+	PorcupineClientDisposedError,
+	PorcupineDisconnectedError,
+	PorcupineServerError,
+	PorcupineSessionDetachedError,
+	PorcupineSessionOwnershipError,
 } from "./errors.ts";
-export type { AcquireSessionOptions, PiSessionHandle, SessionLease, SessionLeaseMode } from "./session-handle.ts";
+export type {
+	AcquireSessionOptions,
+	PorcupineSessionHandle,
+	SessionLease,
+	SessionLeaseMode,
+} from "./session-handle.ts";
 export type { ByteTransport, ByteTransportFactory, ByteTransportHandlers } from "./transport.ts";
 export type {
 	ConnectionState,
 	ConnectionStateChange,
 	CreateSessionOptions,
 	ListenerErrorHandler,
-	PiClientOptions,
+	PorcupineClientOptions,
 	Unsubscribe,
 } from "./types.ts";

@@ -101,7 +101,7 @@ describe("experimental CLI commands", () => {
 
 	test.each([
 		[
-			["--listen", "unix:///tmp/pi.sock", "--listen", "unix:///tmp/pi-admin.sock"],
+			["--listen", "unix:///tmp/pi.sock", "--listen", "unix:///tmp/porcupine-admin.sock"],
 			"--listen may only be specified once",
 		],
 		[

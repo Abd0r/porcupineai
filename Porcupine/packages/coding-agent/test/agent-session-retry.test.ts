@@ -55,7 +55,7 @@ describe("AgentSession retry", () => {
 	let tempDir: string;
 
 	beforeEach(async () => {
-		tempDir = join(tmpdir(), `pi-retry-test-${Date.now()}`);
+		tempDir = join(tmpdir(), `porcupine-retry-test-${Date.now()}`);
 		mkdirSync(tempDir, { recursive: true });
 	});
 

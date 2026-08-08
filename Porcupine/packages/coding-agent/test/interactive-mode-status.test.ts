@@ -621,44 +621,50 @@ describe("InteractiveMode.showLoadedResources", () => {
 				}),
 			},
 			{
-				path: "/tmp/project/.pi/npm/node_modules/pi-markdown-preview/extensions/index.ts",
-				sourceInfo: createSourceInfo("/tmp/project/.pi/npm/node_modules/pi-markdown-preview/extensions/index.ts", {
-					source: "npm:pi-markdown-preview",
-					scope: "project",
-					origin: "package",
-					baseDir: "/tmp/project/.pi/npm/node_modules/pi-markdown-preview",
-				}),
-			},
-			{
-				path: "/tmp/project/.pi/npm/node_modules/@scope/pi-scoped/extensions/index.ts",
-				sourceInfo: createSourceInfo("/tmp/project/.pi/npm/node_modules/@scope/pi-scoped/extensions/index.ts", {
-					source: "npm:@scope/pi-scoped",
-					scope: "project",
-					origin: "package",
-					baseDir: "/tmp/project/.pi/npm/node_modules/@scope/pi-scoped",
-				}),
-			},
-			{
-				path: "/tmp/project/.pi/git/github.com/HazAT/pi-interactive-subagents/extensions/index.ts",
+				path: "/tmp/project/.pi/npm/node_modules/porcupine-markdown-preview/extensions/index.ts",
 				sourceInfo: createSourceInfo(
-					"/tmp/project/.pi/git/github.com/HazAT/pi-interactive-subagents/extensions/index.ts",
+					"/tmp/project/.pi/npm/node_modules/porcupine-markdown-preview/extensions/index.ts",
 					{
-						source: "git:github.com/HazAT/pi-interactive-subagents",
+						source: "npm:porcupine-markdown-preview",
 						scope: "project",
 						origin: "package",
-						baseDir: "/tmp/project/.pi/git/github.com/HazAT/pi-interactive-subagents",
+						baseDir: "/tmp/project/.pi/npm/node_modules/porcupine-markdown-preview",
 					},
 				),
 			},
 			{
-				path: "/tmp/project/.pi/git/github.com/HazAT/pi-interactive-subagents/extensions/subagents/index.ts",
+				path: "/tmp/project/.pi/npm/node_modules/@scope/porcupine-scoped/extensions/index.ts",
 				sourceInfo: createSourceInfo(
-					"/tmp/project/.pi/git/github.com/HazAT/pi-interactive-subagents/extensions/subagents/index.ts",
+					"/tmp/project/.pi/npm/node_modules/@scope/porcupine-scoped/extensions/index.ts",
 					{
-						source: "git:github.com/HazAT/pi-interactive-subagents",
+						source: "npm:@scope/porcupine-scoped",
 						scope: "project",
 						origin: "package",
-						baseDir: "/tmp/project/.pi/git/github.com/HazAT/pi-interactive-subagents",
+						baseDir: "/tmp/project/.pi/npm/node_modules/@scope/porcupine-scoped",
+					},
+				),
+			},
+			{
+				path: "/tmp/project/.pi/git/github.com/HazAT/porcupine-interactive-subagents/extensions/index.ts",
+				sourceInfo: createSourceInfo(
+					"/tmp/project/.pi/git/github.com/HazAT/porcupine-interactive-subagents/extensions/index.ts",
+					{
+						source: "git:github.com/HazAT/porcupine-interactive-subagents",
+						scope: "project",
+						origin: "package",
+						baseDir: "/tmp/project/.pi/git/github.com/HazAT/porcupine-interactive-subagents",
+					},
+				),
+			},
+			{
+				path: "/tmp/project/.pi/git/github.com/HazAT/porcupine-interactive-subagents/extensions/subagents/index.ts",
+				sourceInfo: createSourceInfo(
+					"/tmp/project/.pi/git/github.com/HazAT/porcupine-interactive-subagents/extensions/subagents/index.ts",
+					{
+						source: "git:github.com/HazAT/porcupine-interactive-subagents",
+						scope: "project",
+						origin: "package",
+						baseDir: "/tmp/project/.pi/git/github.com/HazAT/porcupine-interactive-subagents",
 					},
 				),
 			},
@@ -754,7 +760,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 		expect(normalizeRenderedOutput(fakeThis.loadedResourcesContainer)).toMatchInlineSnapshot(`
 "[Extensions]
-  @scope/pi-scoped, answer.ts, cli-extension.ts, HazAT/pi-interactive-subagents, HazAT/pi-interactive-subagents:subagents, local-index, pi-markdown-preview, user-index"`);
+  @scope/porcupine-scoped, answer.ts, cli-extension.ts, HazAT/porcupine-interactive-subagents, HazAT/porcupine-interactive-subagents:subagents, local-index, porcupine-markdown-preview, user-index"`);
 	});
 
 	test("adds more parent folders until local extension labels are unique", () => {
@@ -1001,13 +1007,16 @@ describe("InteractiveMode.showLoadedResources", () => {
 	test("package extensions still strip index.ts correctly (regression guard)", () => {
 		const extensions: ExtensionFixture[] = [
 			{
-				path: "/tmp/project/.pi/npm/node_modules/pi-markdown-preview/extensions/index.ts",
-				sourceInfo: createSourceInfo("/tmp/project/.pi/npm/node_modules/pi-markdown-preview/extensions/index.ts", {
-					source: "npm:pi-markdown-preview",
-					scope: "project",
-					origin: "package",
-					baseDir: "/tmp/project/.pi/npm/node_modules/pi-markdown-preview",
-				}),
+				path: "/tmp/project/.pi/npm/node_modules/porcupine-markdown-preview/extensions/index.ts",
+				sourceInfo: createSourceInfo(
+					"/tmp/project/.pi/npm/node_modules/porcupine-markdown-preview/extensions/index.ts",
+					{
+						source: "npm:porcupine-markdown-preview",
+						scope: "project",
+						origin: "package",
+						baseDir: "/tmp/project/.pi/npm/node_modules/porcupine-markdown-preview",
+					},
+				),
 			},
 		];
 
@@ -1023,7 +1032,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 		expect(normalizeRenderedOutput(fakeThis.loadedResourcesContainer)).toMatchInlineSnapshot(`
 "[Extensions]
-  pi-markdown-preview"`);
+  porcupine-markdown-preview"`);
 	});
 
 	test("labels npm sibling extensions relative to the declaring package", () => {
@@ -1120,12 +1129,12 @@ describe("InteractiveMode.showLoadedResources", () => {
   project
     /tmp/project/.pi/extensions/answer.ts
     /tmp/project/.pi/extensions/local-index
-    git:github.com/HazAT/pi-interactive-subagents
+    git:github.com/HazAT/porcupine-interactive-subagents
       extensions
       extensions/subagents
-    npm:@scope/pi-scoped
+    npm:@scope/porcupine-scoped
       extensions
-    npm:pi-markdown-preview
+    npm:porcupine-markdown-preview
       extensions
   user
     /tmp/agent/extensions/user-index
@@ -1135,7 +1144,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 	test("shows context paths relative to cwd while preserving full external paths", () => {
 		const home = homedir();
-		const cwd = path.join(home, "Development", "pi-mono");
+		const cwd = path.join(home, "Development", "porcupine-mono");
 		const fakeThis = createShowLoadedResourcesThis({
 			quietStartup: false,
 			cwd,
@@ -1173,7 +1182,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 	test("shows full context paths when expanded", () => {
 		const home = homedir();
-		const cwd = path.join(home, "Development", "pi-mono");
+		const cwd = path.join(home, "Development", "porcupine-mono");
 		const fakeThis = createShowLoadedResourcesThis({
 			quietStartup: false,
 			toolOutputExpanded: true,
@@ -1188,7 +1197,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 		const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/g, "/");
 		expect(output).toContain("[Context]");
 		expect(output).toContain("~/.pi/agent/AGENTS.md");
-		expect(output).toContain("~/Development/pi-mono/AGENTS.md");
+		expect(output).toContain("~/Development/porcupine-mono/AGENTS.md");
 		expect(output).not.toContain("~/.pi/agent/AGENTS.md, AGENTS.md");
 	});
 

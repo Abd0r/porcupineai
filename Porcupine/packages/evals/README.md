@@ -36,15 +36,15 @@ output.
 ## Writing evals
 
 Follow [`vitest-evals`](https://github.com/getsentry/vitest-evals) for general suite, judge, assertion, and normalized
-trace guidance. Pi-specific evals use `createPiCodingAgentHarness(...)` from `src/pi-harness.ts`, with one harness bound
+trace guidance. Pi-specific evals use `createPorcupineCodingAgentHarness(...)` from `src/porcupine-harness.ts`, with one harness bound
 to each `describeEval(...)` suite:
 
 ```ts
 import { expect } from "vitest";
 import { describeEval } from "vitest-evals";
-import { createPiCodingAgentHarness } from "./pi-harness.ts";
+import { createPorcupineCodingAgentHarness } from "./porcupine-harness.ts";
 
-const harness = createPiCodingAgentHarness({ noTools: "all" });
+const harness = createPorcupineCodingAgentHarness({ noTools: "all" });
 
 describeEval("Pi smoke", { harness }, (it) => {
 	it("answers a factual question", async ({ run }) => {
@@ -56,7 +56,7 @@ describeEval("Pi smoke", { harness }, (it) => {
 
 ### Configuring the Pi harness
 
-`createPiCodingAgentHarness(...)` accepts:
+`createPorcupineCodingAgentHarness(...)` accepts:
 
 - `name`: stable harness identity used by reports and comparisons.
 - `model`: optional `{ provider, id }` selection. It overrides the runner's default model.
@@ -67,7 +67,7 @@ describeEval("Pi smoke", { harness }, (it) => {
 An explicitly selected model makes model-comparison harnesses independent of the runner default:
 
 ```ts
-const harness = createPiCodingAgentHarness({
+const harness = createPorcupineCodingAgentHarness({
 	name: "claude-opus-4-6",
 	model: { provider: "anthropic", id: "claude-opus-4-6" },
 });
@@ -89,7 +89,7 @@ const result = await run([
 Use `output` to expose scenario-specific, JSON-safe behavior without adding that behavior to the generic Pi adapter:
 
 ```ts
-const harness = createPiCodingAgentHarness({
+const harness = createPorcupineCodingAgentHarness({
 	output: ({ response, session }) => ({
 		response,
 		activeTools: session.getActiveToolNames(),

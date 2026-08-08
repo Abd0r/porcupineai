@@ -24,7 +24,7 @@ describe("regression #5596: missing configured theme export", () => {
 	});
 
 	it("exports with the active fallback theme when the configured theme is missing", async () => {
-		const tempDir = mkdtempSync(join(tmpdir(), "pi-5596-"));
+		const tempDir = mkdtempSync(join(tmpdir(), "porcupine-5596-"));
 		const faux = registerFauxProvider({
 			models: [{ id: "faux-1", reasoning: false }],
 		});

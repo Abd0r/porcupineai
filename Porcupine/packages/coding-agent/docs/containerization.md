@@ -52,7 +52,7 @@ Requirements: Node.js >= 23.6.0 for `@earendil-works/gondolin`, plus QEMU (requi
 
 Run the the whole `porcupine` process in Docker when you want the simplest local container boundary.
 
-`Dockerfile.pi`:
+`Dockerfile.porcupine`:
 
 ```dockerfile
 FROM node:24-bookworm-slim
@@ -69,13 +69,13 @@ ENTRYPOINT ["porcupine"]
 Build and run:
 
 ```bash
-docker build -t pi-sandbox -f Dockerfile.pi .
+docker build -t porcupine-sandbox -f Dockerfile.porcupine .
 
 docker run --rm -it \
   -e ANTHROPIC_API_KEY \
   -v "$PWD:/workspace" \
-  -v pi-agent-home:/root/.porcupine/agent \
-  pi-sandbox
+  -v porcupine-agent-home:/root/.porcupine/agent \
+  porcupine-sandbox
 ```
 
 The `-v "$PWD:/workspace"` mounts your current directory into the container at /workspace such that reads and writes in `/workspace` inside Docker directly affect your host files, like in the Gondolin example.
@@ -98,7 +98,7 @@ openshell gateway select <name>
 Launch `porcupine` inside an OpenShell sandbox:
 
 ```bash
-openshell sandbox create --name pi-sandbox --from porcupine -- porcupine
+openshell sandbox create --name porcupine-sandbox --from porcupine -- porcupine
 ```
 
 In this pattern, the the whole `porcupine` process runs inside the sandbox.
@@ -108,8 +108,8 @@ If the gateway is remote, project files are not bind-mounted from the host, mean
 Clone the repository inside the sandbox or use OpenShell file transfer commands:
 
 ```bash
-openshell sandbox upload pi-sandbox ./repo /workspace
-openshell sandbox download pi-sandbox /workspace/repo ./repo-out
+openshell sandbox upload porcupine-sandbox ./repo /workspace
+openshell sandbox download porcupine-sandbox /workspace/repo ./repo-out
 ```
 
 OpenShell providers can keep raw model API keys outside the sandbox.

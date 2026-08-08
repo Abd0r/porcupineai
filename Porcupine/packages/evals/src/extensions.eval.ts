@@ -2,21 +2,21 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect } from "vitest";
 import { createJudge, describeEval } from "vitest-evals";
-import { createPiCodingAgentHarness, type PiCodingAgentInput } from "./pi-harness.ts";
+import { createPorcupineCodingAgentHarness, type PorcupineCodingAgentInput } from "./porcupine-harness.ts";
 import { recordEvalSourceArtifact } from "./vitest-evals/artifacts.ts";
 import { evalHarnessTable } from "./vitest-evals/harness-table.ts";
 
 type ExtensionAuthoringOutput = {
 	response: string;
 	systemPromptHasGuidelines: boolean;
-	systemPromptHasPiDocs: boolean;
+	systemPromptHasPorcupineDocs: boolean;
 	extensionErrors: Array<{ path: string; error: string }>;
 	loadedExtensions: Array<{ path: string; tools: string[] }>;
 	extensionSource: string | null;
 };
 
 function createExtensionAuthoringHarness(name: string, transformSystemPrompt?: (defaultPrompt: string) => string) {
-	return createPiCodingAgentHarness({
+	return createPorcupineCodingAgentHarness({
 		name,
 		...(transformSystemPrompt ? { transformSystemPrompt } : {}),
 		output: ({ response, session }) => {
@@ -26,7 +26,7 @@ function createExtensionAuthoringHarness(name: string, transformSystemPrompt?: (
 			return {
 				response,
 				systemPromptHasGuidelines: session.systemPrompt.includes("\nGuidelines:\n"),
-				systemPromptHasPiDocs: session.systemPrompt.includes("\nPi documentation (read only"),
+				systemPromptHasPorcupineDocs: session.systemPrompt.includes("\nPorcupine documentation (read only"),
 				extensionErrors: extensions.errors,
 				loadedExtensions: extensions.extensions.map(({ path, tools }) => ({
 					path,
@@ -40,17 +40,17 @@ function createExtensionAuthoringHarness(name: string, transformSystemPrompt?: (
 
 function excludeGuidelinesAndDocumentation(defaultPrompt: string): string {
 	const guidelinesStart = defaultPrompt.indexOf("\nGuidelines:\n");
-	if (guidelinesStart === -1) throw new Error("Default Pi system prompt has no Guidelines section.");
+	if (guidelinesStart === -1) throw new Error("Default Porcupine system prompt has no Guidelines section.");
 	return defaultPrompt.slice(0, guidelinesStart);
 }
 
 function prepareDefaultPromptOverride(defaultPrompt: string): string {
 	const cwdStart = defaultPrompt.lastIndexOf("\nCurrent working directory: ");
-	if (cwdStart === -1) throw new Error("Default Pi system prompt has no working-directory section.");
+	if (cwdStart === -1) throw new Error("Default Porcupine system prompt has no working-directory section.");
 	return defaultPrompt.slice(0, cwdStart);
 }
 
-const ExtensionAuthoringJudge = createJudge<PiCodingAgentInput, ExtensionAuthoringOutput>(
+const ExtensionAuthoringJudge = createJudge<PorcupineCodingAgentInput, ExtensionAuthoringOutput>(
 	"ExtensionAuthoringJudge",
 	({ output, toolCalls }) => {
 		const failures: string[] = [];
@@ -97,14 +97,14 @@ const ExtensionAuthoringJudge = createJudge<PiCodingAgentInput, ExtensionAuthori
 	},
 );
 
-const extensionHarnessTable = evalHarnessTable("Pi extension authoring system prompt", {
+const extensionHarnessTable = evalHarnessTable("Porcupine extension authoring system prompt", {
 	baseline: createExtensionAuthoringHarness("system-prompt-without-docs", excludeGuidelinesAndDocumentation),
 	candidate: createExtensionAuthoringHarness("default-system-prompt", prepareDefaultPromptOverride),
 });
 
 describe.for(extensionHarnessTable)("$name", ({ harness }) => {
 	describeEval(
-		"Pi extension authoring system prompt",
+		"Porcupine extension authoring system prompt",
 		{ harness, judges: [ExtensionAuthoringJudge], judgeThreshold: null },
 		(it) => {
 			it("creates, reloads, and uses a hello extension", async ({ run, task }) => {
@@ -112,7 +112,7 @@ describe.for(extensionHarnessTable)("$name", ({ harness }) => {
 					{
 						type: "prompt",
 						content:
-							"Create a Pi extension with a hello tool that takes a name and returns a greeting. For example, passing Bob should return `Hello, Bob!`.",
+							"Create a Porcupine extension with a hello tool that takes a name and returns a greeting. For example, passing Bob should return `Hello, Bob!`.",
 					},
 					{ type: "reload" },
 					{
@@ -123,7 +123,7 @@ describe.for(extensionHarnessTable)("$name", ({ harness }) => {
 				]);
 				if (result.output.extensionSource !== null) {
 					const runId = result.artifacts?.runId;
-					if (typeof runId !== "string") throw new Error("Pi eval run did not record a run ID.");
+					if (typeof runId !== "string") throw new Error("Porcupine eval run did not record a run ID.");
 					await recordEvalSourceArtifact(task, runId, {
 						name: "hello.ts",
 						contentType: "text/typescript",
@@ -133,7 +133,7 @@ describe.for(extensionHarnessTable)("$name", ({ harness }) => {
 				}
 				const expectsFullPrompt = harness.name === "default-system-prompt";
 				expect(result.output.systemPromptHasGuidelines).toBe(expectsFullPrompt);
-				expect(result.output.systemPromptHasPiDocs).toBe(expectsFullPrompt);
+				expect(result.output.systemPromptHasPorcupineDocs).toBe(expectsFullPrompt);
 			});
 		},
 	);

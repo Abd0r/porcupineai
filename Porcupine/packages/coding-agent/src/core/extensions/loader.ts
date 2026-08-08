@@ -7,13 +7,13 @@ import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import * as _bundledPiAgentCore from "@porcupineai/agent-core";
+import * as _bundledPorcupineAgentCore from "@porcupineai/agent-core";
 import type { Provider } from "@porcupineai/ai";
-import * as _bundledPiAiCompat from "@porcupineai/ai/compat";
-import * as _bundledPiAiOauth from "@porcupineai/ai/oauth";
-import * as _bundledPiAiProviders from "@porcupineai/ai/providers/all";
+import * as _bundledPorcupineAiCompat from "@porcupineai/ai/compat";
+import * as _bundledPorcupineAiOauth from "@porcupineai/ai/oauth";
+import * as _bundledPorcupineAiProviders from "@porcupineai/ai/providers/all";
 import type { KeyId } from "@porcupineai/tui";
-import * as _bundledPiTui from "@porcupineai/tui";
+import * as _bundledPorcupineTui from "@porcupineai/tui";
 import { createJiti } from "jiti/static";
 // Static imports of packages that extensions may use.
 // These MUST be static so Bun bundles them into the compiled binary.
@@ -24,12 +24,12 @@ import * as _bundledTypeboxValue from "typebox/value";
 import { CONFIG_DIR_NAME, getAgentDir, isBunBinary } from "../../config.ts";
 // NOTE: This import works because loader.ts exports are NOT re-exported from index.ts,
 // avoiding a circular dependency. Extensions can import from @porcupineai/coding-agent.
-import * as _bundledPiCodingAgent from "../../index.ts";
+import * as _bundledPorcupineCodingAgent from "../../index.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
 import { execCommand } from "../exec.ts";
-import { readPiManifest } from "../pi-manifest.ts";
+import { readPorcupineManifest } from "../porcupine-manifest.ts";
 import { createSyntheticSourceInfo } from "../source-info.ts";
 import { time } from "../timings.ts";
 import type {
@@ -54,23 +54,23 @@ const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@sinclair/typebox": _bundledTypebox,
 	"@sinclair/typebox/compile": _bundledTypeboxCompile,
 	"@sinclair/typebox/value": _bundledTypeboxValue,
-	"@porcupineai/agent-core": _bundledPiAgentCore,
-	"@porcupineai/tui": _bundledPiTui,
-	// Extensions resolve the pi-ai root to the compat entrypoint (a strict
+	"@porcupineai/agent-core": _bundledPorcupineAgentCore,
+	"@porcupineai/tui": _bundledPorcupineTui,
+	// Extensions resolve the porcupine-ai root to the compat entrypoint (a strict
 	// superset of the core entrypoint): existing extensions using the old
 	// global API keep working at runtime until compat is removed.
-	"@porcupineai/ai": _bundledPiAiCompat,
-	"@porcupineai/ai/compat": _bundledPiAiCompat,
-	"@porcupineai/ai/oauth": _bundledPiAiOauth,
-	"@porcupineai/ai/providers/all": _bundledPiAiProviders,
-	"@porcupineai/coding-agent": _bundledPiCodingAgent,
-	"@mariozechner/pi-agent-core": _bundledPiAgentCore,
-	"@mariozechner/pi-tui": _bundledPiTui,
-	"@mariozechner/pi-ai": _bundledPiAiCompat,
-	"@mariozechner/pi-ai/compat": _bundledPiAiCompat,
-	"@mariozechner/pi-ai/oauth": _bundledPiAiOauth,
-	"@mariozechner/pi-ai/providers/all": _bundledPiAiProviders,
-	"@mariozechner/pi-coding-agent": _bundledPiCodingAgent,
+	"@porcupineai/ai": _bundledPorcupineAiCompat,
+	"@porcupineai/ai/compat": _bundledPorcupineAiCompat,
+	"@porcupineai/ai/oauth": _bundledPorcupineAiOauth,
+	"@porcupineai/ai/providers/all": _bundledPorcupineAiProviders,
+	"@porcupineai/coding-agent": _bundledPorcupineCodingAgent,
+	"@mariozechner/porcupine-agent-core": _bundledPorcupineAgentCore,
+	"@mariozechner/porcupine-tui": _bundledPorcupineTui,
+	"@mariozechner/porcupine-ai": _bundledPorcupineAiCompat,
+	"@mariozechner/porcupine-ai/compat": _bundledPorcupineAiCompat,
+	"@mariozechner/porcupine-ai/oauth": _bundledPorcupineAiOauth,
+	"@mariozechner/porcupine-ai/providers/all": _bundledPorcupineAiProviders,
+	"@mariozechner/porcupine-coding-agent": _bundledPorcupineCodingAgent,
 };
 
 const require = createRequire(import.meta.url);
@@ -105,7 +105,7 @@ function getAliases(): Record<string, string> {
 	const piCodingAgentEntry = packageIndex;
 	const piAgentCoreEntry = resolveWorkspaceOrImport("agent/dist/index.js", "@porcupineai/agent-core");
 	const piTuiEntry = resolveWorkspaceOrImport("tui/dist/index.js", "@porcupineai/tui");
-	// Extensions resolve the pi-ai root to the compat entrypoint (a strict
+	// Extensions resolve the porcupine-ai root to the compat entrypoint (a strict
 	// superset of the core entrypoint): existing extensions using the old
 	// global API keep working at runtime until compat is removed.
 	const piAiCompatEntry = resolveWorkspaceOrImport("ai/dist/compat.js", "@porcupineai/ai/compat");
@@ -120,13 +120,13 @@ function getAliases(): Record<string, string> {
 		"@porcupineai/ai/compat": piAiCompatEntry,
 		"@porcupineai/ai/oauth": piAiOauthEntry,
 		"@porcupineai/ai": piAiCompatEntry,
-		"@mariozechner/pi-coding-agent": piCodingAgentEntry,
-		"@mariozechner/pi-agent-core": piAgentCoreEntry,
-		"@mariozechner/pi-tui": piTuiEntry,
-		"@mariozechner/pi-ai/providers/all": piAiProvidersEntry,
-		"@mariozechner/pi-ai/compat": piAiCompatEntry,
-		"@mariozechner/pi-ai/oauth": piAiOauthEntry,
-		"@mariozechner/pi-ai": piAiCompatEntry,
+		"@mariozechner/porcupine-coding-agent": piCodingAgentEntry,
+		"@mariozechner/porcupine-agent-core": piAgentCoreEntry,
+		"@mariozechner/porcupine-tui": piTuiEntry,
+		"@mariozechner/porcupine-ai/providers/all": piAiProvidersEntry,
+		"@mariozechner/porcupine-ai/compat": piAiCompatEntry,
+		"@mariozechner/porcupine-ai/oauth": piAiOauthEntry,
+		"@mariozechner/porcupine-ai": piAiCompatEntry,
 		typebox: typeboxEntry,
 		"typebox/compile": typeboxCompileEntry,
 		"typebox/value": typeboxValueEntry,
@@ -584,7 +584,7 @@ function resolveExtensionEntries(dir: string): string[] | null {
 	// Check for package.json with "pi" field first
 	const packageJsonPath = path.join(dir, "package.json");
 	if (fs.existsSync(packageJsonPath)) {
-		const manifest = readPiManifest(packageJsonPath);
+		const manifest = readPorcupineManifest(packageJsonPath);
 		if (manifest?.extensions?.length) {
 			const entries: string[] = [];
 			for (const extPath of manifest.extensions) {
@@ -692,7 +692,7 @@ export async function discoverAndLoadExtensions(
 	for (const p of configuredPaths) {
 		const resolved = resolvePath(p, resolvedCwd, { normalizeUnicodeSpaces: true });
 		if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
-			// Check for package.json with pi manifest or index.ts
+			// Check for package.json with porcupine manifest or index.ts
 			const entries = resolveExtensionEntries(resolved);
 			if (entries) {
 				addPaths(entries);

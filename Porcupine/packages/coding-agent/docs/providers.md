@@ -1,6 +1,6 @@
 # Providers
 
-Porcupine supports subscription-based providers via OAuth and API key providers via environment variables or auth file. Built-in catalogs ship with pi; configured providers may refresh newer catalogs and cache them in `~/.porcupine/agent/models-store.json` for offline use.
+Porcupine supports subscription-based providers via OAuth and API key providers via environment variables or auth file. Built-in catalogs ship with porcupine; configured providers may refresh newer catalogs and cache them in `~/.porcupine/agent/models-store.json` for offline use.
 
 ## Table of Contents
 
@@ -53,7 +53,7 @@ Anthropic subscription auth is active for Claude Pro/Max accounts. Third-party h
 
 ### Radius
 
-Radius is a dynamic `pi-messages` gateway. `/login radius` stores OAuth tokens in `auth.json`; the gateway catalog is refreshed independently and cached in `models-store.json`. Custom Radius gateways can be declared in `models.json` with `"oauth": "radius"` and a gateway `baseUrl`.
+Radius is a dynamic `porcupine-messages` gateway. `/login radius` stores OAuth tokens in `auth.json`; the gateway catalog is refreshed independently and cached in `models-store.json`. Custom Radius gateways can be declared in `models.json` with `"oauth": "radius"` and a gateway `baseUrl`.
 
 ## API Keys
 

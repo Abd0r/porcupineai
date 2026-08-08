@@ -30,7 +30,7 @@ const { skills: sourcedSkills } = await loadSourcedSkills<Source, SourcedSkill>(
 	[
 		source("project", join(env.cwd, ".pi/skills")),
 		source("user", join(homedir(), ".pi/agent/skills")),
-		source("path", join(env.cwd, "../../../pi-skills")),
+		source("path", join(env.cwd, "../../../porcupine-skills")),
 	],
 	(skill, source) => ({ ...skill, source }),
 );

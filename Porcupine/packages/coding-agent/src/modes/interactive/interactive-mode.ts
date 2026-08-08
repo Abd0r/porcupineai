@@ -189,10 +189,14 @@ import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipb
 import { parseGitUrl } from "../../utils/git.ts";
 import { openBrowser } from "../../utils/open-browser.ts";
 import { getCwdRelativePath } from "../../utils/paths.ts";
-import { getPorcupineUserAgent } from "../../utils/pi-user-agent.ts";
+import { getPorcupineUserAgent } from "../../utils/porcupine-user-agent.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { ensureTool } from "../../utils/tools-manager.ts";
-import { checkForNewPiVersion, getInstalledPackageName, type LatestPiRelease } from "../../utils/version-check.ts";
+import {
+	checkForNewPorcupineVersion,
+	getInstalledPackageName,
+	type LatestPorcupineRelease,
+} from "../../utils/version-check.ts";
 import { ArminComponent } from "./components/armin.ts";
 import { ArtifactChangeComponent } from "./components/artifact-change.ts";
 import { AssistantMessageComponent } from "./components/assistant-message.ts";
@@ -1154,14 +1158,14 @@ export class InteractiveMode {
 
 		// Start version check asynchronously (npm registry / GitHub, cached 24h)
 		if (this.settingsManager.getUpdateCheck()) {
-			checkForNewPiVersion(this.version, { cacheTtlMs: this.settingsManager.getUpdateCheckIntervalMs() }).then(
-				(newRelease) => {
-					if (newRelease) {
-						this.latestVersion = newRelease.version;
-						this.showNewVersionNotification(newRelease);
-					}
-				},
-			);
+			checkForNewPorcupineVersion(this.version, {
+				cacheTtlMs: this.settingsManager.getUpdateCheckIntervalMs(),
+			}).then((newRelease) => {
+				if (newRelease) {
+					this.latestVersion = newRelease.version;
+					this.showNewVersionNotification(newRelease);
+				}
+			});
 		}
 
 		// Start package update check asynchronously
@@ -3521,7 +3525,7 @@ export class InteractiveMode {
 			if (image) {
 				const tmpDir = os.tmpdir();
 				const ext = extensionForImageMimeType(image.mimeType) ?? "png";
-				const fileName = `pi-clipboard-${crypto.randomUUID()}.${ext}`;
+				const fileName = `porcupine-clipboard-${crypto.randomUUID()}.${ext}`;
 				const filePath = path.join(tmpDir, fileName);
 				fs.writeFileSync(filePath, Buffer.from(image.bytes));
 
@@ -6329,7 +6333,7 @@ export class InteractiveMode {
 		}
 		// Clear any cached result so /refresh revalidates against the registry.
 		this.latestVersion = undefined;
-		checkForNewPiVersion(this.version, { cacheTtlMs: 0 })
+		checkForNewPorcupineVersion(this.version, { cacheTtlMs: 0 })
 			.then((newRelease) => {
 				if (newRelease) {
 					this.latestVersion = newRelease.version;
@@ -6341,7 +6345,7 @@ export class InteractiveMode {
 			});
 	}
 
-	showNewVersionNotification(release: LatestPiRelease): void {
+	showNewVersionNotification(release: LatestPorcupineRelease): void {
 		const action = theme.fg("accent", `${APP_NAME} update`);
 		const updateInstruction = theme.fg("muted", `New version ${release.version} is available. Run `) + action;
 		const changelogUrl = getProductEnvironment("CHANGELOG_URL");
@@ -8595,7 +8599,7 @@ export class InteractiveMode {
 	private async handleUpdateCommand(): Promise<void> {
 		const current = this.version;
 		this.showStatus("Checking for updates…");
-		const latest = await checkForNewPiVersion(current, { cacheTtlMs: 0 }).catch(() => undefined);
+		const latest = await checkForNewPorcupineVersion(current, { cacheTtlMs: 0 }).catch(() => undefined);
 		this.chatContainer.addChild(new Spacer(1));
 		if (!latest) {
 			this.chatContainer.addChild(

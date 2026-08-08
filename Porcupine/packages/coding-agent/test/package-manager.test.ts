@@ -1001,7 +1001,7 @@ Content`,
 			expect(runCommandSyncSpy).toHaveBeenNthCalledWith(2, "mise", ["exec", "node@22", "--", "npm", "root", "-g"]);
 		});
 
-		it("should install user npm packages into the pi-managed npm root", async () => {
+		it("should install user npm packages into the porcupine-managed npm root", async () => {
 			settingsManager = SettingsManager.inMemory({
 				npmCommand: ["pnpm"],
 				packages: ["npm:pnpm-pkg"],
@@ -1229,7 +1229,7 @@ Content`,
 
 			expect(pathEndsWith(installPath, "node_modules/left-pad")).toBe(true);
 			expect(relative(tempRoot, installPath).startsWith("..")).toBe(false);
-			expect(installPath.startsWith(join(tmpdir(), "pi-extensions"))).toBe(false);
+			expect(installPath.startsWith(join(tmpdir(), "porcupine-extensions"))).toBe(false);
 			if (process.platform !== "win32") {
 				expect(statSync(tempRoot).mode & 0o777).toBe(0o700);
 			}
@@ -1712,14 +1712,14 @@ Content`,
 		});
 
 		it("should resolve autoload-disabled project package entries as deltas over global packages", async () => {
-			const pkgDir = join(agentDir, "npm", "node_modules", "pi-tools");
+			const pkgDir = join(agentDir, "npm", "node_modules", "porcupine-tools");
 			mkdirSync(join(pkgDir, "extensions"), { recursive: true });
-			writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ name: "pi-tools", version: "1.0.0" }));
+			writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ name: "porcupine-tools", version: "1.0.0" }));
 			writeFileSync(join(pkgDir, "extensions", "foo.ts"), "export default function() {}");
 			writeFileSync(join(pkgDir, "extensions", "bar.ts"), "export default function() {}");
-			settingsManager.setPackages(["npm:pi-tools"]);
+			settingsManager.setPackages(["npm:porcupine-tools"]);
 			settingsManager.setProjectPackages([
-				{ source: "npm:pi-tools", autoload: false, extensions: ["-extensions/foo.ts"] },
+				{ source: "npm:porcupine-tools", autoload: false, extensions: ["-extensions/foo.ts"] },
 			]);
 			const runCommandSpy = vi
 				.spyOn(packageManager as unknown as PackageManagerInternals, "runCommand")

@@ -1,4 +1,4 @@
-import { PiSessionOwnershipError } from "@porcupineai/client";
+import { PorcupineSessionOwnershipError } from "@porcupineai/client";
 import { describe, expect, test } from "vitest";
 import { RemoteSession } from "../../src/client/remote-session.ts";
 import { collectRequests, connectClient, MemoryServer, sessionSnapshot } from "./support.ts";
@@ -63,7 +63,7 @@ describe("RemoteSession ownership", () => {
 		const directHandle = await client.attachSession("session-1");
 		const requests = collectRequests(server);
 
-		await expect(RemoteSession.open(client, "session-1")).rejects.toBeInstanceOf(PiSessionOwnershipError);
+		await expect(RemoteSession.open(client, "session-1")).rejects.toBeInstanceOf(PorcupineSessionOwnershipError);
 
 		expect(requests).toEqual([]);
 		expect(directHandle.active).toBe(true);

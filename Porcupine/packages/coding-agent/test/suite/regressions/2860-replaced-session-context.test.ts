@@ -39,7 +39,7 @@ describe("regression #2860: replaced session callbacks", () => {
 	});
 
 	async function createRuntimeForTest(extensionFactory: ExtensionFactory, responses: string[]) {
-		const tempDir = join(tmpdir(), `pi-2860-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		const tempDir = join(tmpdir(), `porcupine-2860-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(tempDir, { recursive: true });
 
 		const faux = registerFauxProvider({
@@ -152,7 +152,7 @@ describe("regression #2860: replaced session callbacks", () => {
 		let oldPi: ExtensionAPI | undefined;
 		let oldSessionFile: string | undefined;
 		let staleCtxThrows = false;
-		let stalePiThrows = false;
+		let stalePorcupineThrows = false;
 		let replacementSessionFile: string | undefined;
 		let instanceId = 0;
 		const { runtime } = await createRuntimeForTest(
@@ -183,7 +183,7 @@ describe("regression #2860: replaced session callbacks", () => {
 								try {
 									oldPi?.sendUserMessage("stale message");
 								} catch {
-									stalePiThrows = true;
+									stalePorcupineThrows = true;
 								}
 								await replacedCtx.sendUserMessage("Hello from the new session!");
 							},
@@ -202,7 +202,7 @@ describe("regression #2860: replaced session callbacks", () => {
 		expect(replacementSessionFile).toBeDefined();
 		expect(replacementSessionFile).not.toBe(oldSessionFile);
 		expect(staleCtxThrows).toBe(true);
-		expect(stalePiThrows).toBe(true);
+		expect(stalePorcupineThrows).toBe(true);
 		expect(runtime.session.messages.map((message) => `${message.role}:${getText(message)}`)).toEqual([
 			"user:Hello from the new session!",
 			"assistant:hello reply",

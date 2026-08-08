@@ -8,7 +8,7 @@ Porcupine packages bundle extensions, skills, prompt templates, and themes so yo
 
 - [Install and Manage](#install-and-manage)
 - [Package Sources](#package-sources)
-- [Creating a Porcupine Package](#creating-a-pi-package)
+- [Creating a Porcupine Package](#creating-a-porcupine-package)
 - [Package Structure](#package-structure)
 - [Dependencies](#dependencies)
 - [Package Filtering](#package-filtering)
@@ -62,7 +62,7 @@ npm:pkg
 
 - Versioned specs are pinned and skipped by package updates (`porcupine update --extensions`, `porcupine update --all`).
 - User installs go under `~/.porcupine/agent/npm/`.
-- Project installs go under `.pi/npm/`.
+- Project installs go under `.porcupine/npm/`.
 - Set `npmCommand` in `settings.json` to pin npm package lookup and install operations to a specific wrapper command such as `mise` or `asdf`.
 
 Example:
@@ -89,7 +89,7 @@ ssh://git@github.com/user/repo@v1
 - For non-interactive runs (for example CI), you can set `GIT_TERMINAL_PROMPT=0` to disable credential prompts and set `GIT_SSH_COMMAND` (for example `ssh -o BatchMode=yes -o ConnectTimeout=5`) to fail fast.
 - Refs are pinned tags or commits. `porcupine update --extensions` and `porcupine update --all` do not move them to newer refs, but they do reconcile an existing clone to the configured ref.
 - Use `porcupine install git:host/user/repo@new-ref` to update settings and move an existing package to a new pinned ref.
-- Cloned to `~/.porcupine/agent/git/<host>/<path>` (global) or `.pi/git/<host>/<path>` (project).
+- Cloned to `~/.porcupine/agent/git/<host>/<path>` (global) or `.porcupine/git/<host>/<path>` (project).
 - When reconciliation changes the checkout, porcupine resets and cleans the clone, then runs `npm install` if `package.json` exists.
 
 **SSH examples:**
@@ -115,13 +115,13 @@ Local paths point to files or directories on disk and are added to settings with
 
 ## Creating a Porcupine Package
 
-Add a `porcupine` manifest to `package.json` or use conventional directories. Include the `pi-package` keyword for discoverability.
+Add a `porcupine` manifest to `package.json` or use conventional directories. Include the `porcupine-package` keyword for discoverability.
 
 ```json
 {
   "name": "my-package",
-  "keywords": ["pi-package"],
-  "pi": {
+  "keywords": ["porcupine-package"],
+  "porcupine": {
     "extensions": ["./extensions"],
     "skills": ["./skills"],
     "prompts": ["./prompts"],
@@ -139,8 +139,8 @@ Package metadata can include `video` or `image` fields to show a preview:
 ```json
 {
   "name": "my-package",
-  "keywords": ["pi-package"],
-  "pi": {
+  "keywords": ["porcupine-package"],
+  "porcupine": {
     "extensions": ["./extensions"],
     "video": "https://example.com/demo.mp4",
     "image": "https://example.com/screenshot.png"
@@ -180,7 +180,7 @@ Example:
     "shitty-extensions": "^1.0.1"
   },
   "bundledDependencies": ["shitty-extensions"],
-  "pi": {
+  "porcupine": {
     "extensions": ["extensions", "node_modules/shitty-extensions/extensions"],
     "skills": ["skills", "node_modules/shitty-extensions/skills"]
   }

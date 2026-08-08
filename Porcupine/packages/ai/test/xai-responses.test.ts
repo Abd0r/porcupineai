@@ -87,7 +87,7 @@ describe("xAI Responses provider", () => {
 			},
 			{
 				apiKey: "xai-test-token",
-				sessionId: "pi-session-123",
+				sessionId: "porcupine-session-123",
 				cacheRetention: "long",
 				reasoningEffort: "medium",
 			},
@@ -95,12 +95,12 @@ describe("xAI Responses provider", () => {
 
 		expect(captured.url).toBe("https://api.x.ai/v1/responses");
 		expect(captured.headers.get("authorization")).toBe("Bearer xai-test-token");
-		expect(captured.headers.get("session_id")).toBe("pi-session-123");
+		expect(captured.headers.get("session_id")).toBe("porcupine-session-123");
 		expect(captured.body).toMatchObject({
 			model: "grok-4.5",
 			store: false,
 			stream: true,
-			prompt_cache_key: "pi-session-123",
+			prompt_cache_key: "porcupine-session-123",
 			reasoning: { effort: "medium" },
 			include: ["reasoning.encrypted_content"],
 		});

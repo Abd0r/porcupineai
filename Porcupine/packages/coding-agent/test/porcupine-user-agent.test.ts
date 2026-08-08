@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPorcupineUserAgent } from "../src/utils/pi-user-agent.ts";
+import { getPorcupineUserAgent } from "../src/utils/porcupine-user-agent.ts";
 
 describe("getPorcupineUserAgent", () => {
 	it("formats the Porcupine user agent", () => {

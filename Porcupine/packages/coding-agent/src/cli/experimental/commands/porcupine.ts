@@ -21,11 +21,6 @@ export interface PorcupineCommandContext {
 	runPorcupine(command: PorcupineCommand): void | Promise<void>;
 }
 
-/** @deprecated Use PorcupineCommand */
-export type PiCommand = PorcupineCommand;
-/** @deprecated Use PorcupineCommandContext */
-export type PiCommandContext = PorcupineCommandContext;
-
 const listenOption = transportOption("--listen");
 
 export const porcupineCommand = new Command<PorcupineCommand, PorcupineCommandContext>("porcupine")
@@ -50,6 +45,3 @@ export const porcupineCommand = new Command<PorcupineCommand, PorcupineCommandCo
 		};
 	})
 	.action((command, context) => context.runPorcupine(command));
-
-/** @deprecated Use porcupineCommand */
-export const piCommand = porcupineCommand;

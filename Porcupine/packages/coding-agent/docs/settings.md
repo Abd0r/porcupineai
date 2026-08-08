@@ -11,7 +11,7 @@ Edit directly or use `/settings` for common options.
 
 ## Project Trust
 
-On interactive startup, porcupine asks before trusting a project folder that contains project-local settings, resources, or project `.agents/skills` and has no saved decision for the folder or a parent folder in `~/.porcupine/agent/trust.json`. Trusting a project allows porcupine to load `.porcupine/settings.json` and `.pi` resources, install missing project packages, and execute project extensions.
+On interactive startup, porcupine asks before trusting a project folder that contains project-local settings, resources, or project `.agents/skills` and has no saved decision for the folder or a parent folder in `~/.porcupine/agent/trust.json`. Trusting a project allows porcupine to load `.porcupine/settings.json` and `.porcupine` resources, install missing project packages, and execute project extensions.
 
 Non-interactive modes (`-p`, `--mode json`, and `--mode rpc`) do not show a trust prompt. Without an applicable saved trust decision, they use `defaultProjectTrust` from global settings: `ask` (default) and `never` ignore those project resources, while `always` trusts them. Pass `--approve`/`-a` or `--no-approve`/`-na` to override project trust for one run.
 
@@ -225,7 +225,7 @@ Keep `retry.provider.maxRetries` at `0` unless provider-level retries are explic
 }
 ```
 
-`npmCommand` is used for all npm package-manager operations, including installs, uninstalls, and dependency installs inside git packages. User-scoped npm packages install under `~/.porcupine/agent/npm/`; project-scoped npm packages install under `.pi/npm/`. Use argv-style entries exactly as the process should be launched. When `npmCommand` is configured, git package dependency installs use plain `install` to avoid npm-specific flags in wrappers or alternate package managers.
+`npmCommand` is used for all npm package-manager operations, including installs, uninstalls, and dependency installs inside git packages. User-scoped npm packages install under `~/.porcupine/agent/npm/`; project-scoped npm packages install under `.porcupine/npm/`. Use argv-style entries exactly as the process should be launched. When `npmCommand` is configured, git package dependency installs use plain `install` to avoid npm-specific flags in wrappers or alternate package managers.
 
 ### Sessions
 
@@ -234,7 +234,7 @@ Keep `retry.provider.maxRetries` at `0` unless provider-level retries are explic
 | `sessionDir` | string | - | Directory where session files are stored. Accepts absolute or relative paths, plus `~`. |
 
 ```json
-{ "sessionDir": ".pi/sessions" }
+{ "sessionDir": ".porcupine/sessions" }
 ```
 
 When multiple sources specify a session directory, precedence is `--session-dir`, `PORCUPINE_CODING_AGENT_SESSION_DIR`, then `sessionDir` in settings.json.
@@ -261,7 +261,7 @@ When multiple sources specify a session directory, precedence is `--session-dir`
 
 These settings define where to load extensions, skills, prompts, and themes from.
 
-Paths in `~/.porcupine/agent/settings.json` resolve relative to `~/.porcupine/agent`. Paths in `.porcupine/settings.json` resolve relative to `.pi`. Absolute paths and `~` are supported.
+Paths in `~/.porcupine/agent/settings.json` resolve relative to `~/.porcupine/agent`. Paths in `.porcupine/settings.json` resolve relative to `.porcupine`. Absolute paths and `~` are supported.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
@@ -280,7 +280,7 @@ String form loads all resources from a package:
 
 ```json
 {
-  "packages": ["pi-skills", "@org/my-extension"]
+  "packages": ["porcupine-skills", "@org/my-extension"]
 }
 ```
 
@@ -290,7 +290,7 @@ Object form filters which resources to load:
 {
   "packages": [
     {
-      "source": "pi-skills",
+      "source": "porcupine-skills",
       "skills": ["brave-search", "transcribe"],
       "extensions": []
     }
@@ -320,7 +320,7 @@ See [packages.md](packages.md) for package management details.
   "warnings": {
     "anthropicExtraUsage": true
   },
-  "packages": ["pi-skills"]
+  "packages": ["porcupine-skills"]
 }
 ```
 

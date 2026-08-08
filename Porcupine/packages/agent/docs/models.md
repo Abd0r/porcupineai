@@ -1,6 +1,6 @@
 # Models architecture
 
-This document describes the target design for the next `pi-ai` model/provider refactor. It describes the desired shape, not the current implementation. It is intended to be complete enough to start implementing from a fresh session.
+This document describes the target design for the next `porcupine-ai` model/provider refactor. It describes the desired shape, not the current implementation. It is intended to be complete enough to start implementing from a fresh session.
 
 Goals:
 
@@ -14,7 +14,7 @@ Goals:
 - `models.json` and extensions layer by wrapping providers, not by mutating provider internals ad hoc.
 - Old global APIs survive only in an explicit, temporary `/compat` entrypoint.
 
-Non-goals for the immediate `pi-ai` pass:
+Non-goals for the immediate `porcupine-ai` pass:
 
 - Do not migrate coding-agent `ModelRegistry` yet.
 - Do not keep the stream/API registry inside `Models`.
@@ -471,7 +471,7 @@ export type Credential = ApiKeyCredential | OAuthCredential;
 
 ### Credential store
 
-The app injects storage; `pi-ai` ships an in-memory default. Keyed by provider id, one credential per provider:
+The app injects storage; `porcupine-ai` ships an in-memory default. Keyed by provider id, one credential per provider:
 
 ```ts
 export interface CredentialStore {
@@ -791,8 +791,8 @@ Current interim state:
 
 - `AgentHarness` already accepts a `Models` instance and uses it for turn streaming, compaction, and branch summaries.
 - coding-agent does not use `AgentHarness` yet; `AgentSession` still drives the low-level `Agent` with a `streamFn`.
-- coding-agent still uses legacy `AuthStorage` + `ModelRegistry` and imports old global pi-ai APIs through `@porcupineai/ai/compat`.
-- The extension loader still aliases the pi-ai root to `/compat` as the runtime grace period for old extensions.
+- coding-agent still uses legacy `AuthStorage` + `ModelRegistry` and imports old global porcupine-ai APIs through `@porcupineai/ai/compat`.
+- The extension loader still aliases the porcupine-ai root to `/compat` as the runtime grace period for old extensions.
 
 ## Implementation TODOs
 
@@ -844,20 +844,20 @@ Check items off as they land. Keep this list current; it is the working state fo
 
 ### Phase 7 — coding-agent bridge (minimal)
 
-- [x] Switch old-global imports to `@porcupineai/ai/compat` (landed with Phase 5; compat is a superset so the switch was path-only). Extension loader resolves the pi-ai root to compat as the runtime grace period.
+- [x] Switch old-global imports to `@porcupineai/ai/compat` (landed with Phase 5; compat is a superset so the switch was path-only). Extension loader resolves the porcupine-ai root to compat as the runtime grace period.
 - [x] Everything else originally sketched here is gated on coding-agent actually streaming through a `Models` instance — coding-agent's `AgentSession` drives the low-level `Agent` via `streamFn`, not the harness — and moved to Phase 9.
 
 ### Phase 8 — wrap-up
 
 - [x] Update/add tests; run affected suites (tests landed with each phase; `./test.sh` green throughout).
 - [x] `packages/ai/CHANGELOG.md`: `### Breaking Changes` with migration guide (compat entrypoint, `Provider` -> `ProviderId`, api module moves) + `### Added` for the new Models/provider/auth API.
-- [x] `packages/coding-agent/CHANGELOG.md`: `### Changed` entry for extension authors — runtime unaffected (loader resolves the pi-ai root to compat), typecheck nudges to `/compat` or the new API; removal happens later with a migration guide.
+- [x] `packages/coding-agent/CHANGELOG.md`: `### Changed` entry for extension authors — runtime unaffected (loader resolves the porcupine-ai root to compat), typecheck nudges to `/compat` or the new API; removal happens later with a migration guide.
 - [x] `packages/agent/CHANGELOG.md`: `### Breaking Changes` for required `AgentHarnessOptions.models`, compaction signature changes, structural `StreamFn`.
 - [x] `npm run check` clean.
 
 ### Phase 9 — coding-agent on Models + CredentialStore (in scope)
 
-coding-agent replaces AuthStorage and ModelRegistry's internals with `FileCredentialStore` + a `MutableModels` collection. AgentSession itself stays (AgentHarness adoption is pi 2.0); only its model/auth substrate swaps. Layering is strictly one-directional:
+coding-agent replaces AuthStorage and ModelRegistry's internals with `FileCredentialStore` + a `MutableModels` collection. AgentSession itself stays (AgentHarness adoption is porcupine 2.0); only its model/auth substrate swaps. Layering is strictly one-directional:
 
 ```txt
 FileCredentialStore (auth.json, locked, $ENV/!command resolution) + explicit --api-key overlay
@@ -882,10 +882,10 @@ Decisions:
 
 Ordering for new sessions:
 
-1. [x] pi-ai rework first: `Provider.getModels()` sync + optional `refreshModels()`; `Models.getModels`/`getModel` sync, `Models.refresh(provider?)` async; `createProvider` takes `models` array + optional `refreshModels` fetcher (in-flight dedupe). Reverses Phase 1's async-listing decision — see "Provider model listing" for rationale (sync-or-async unions breed latent sync assumptions; async-only breaks sync consumer surfaces like extension `find`/`getAll`).
-2. [x] Cloudflare provider auth in pi-ai factories: Workers AI and AI Gateway validate their required account/gateway env/config and return resolved `baseUrl`, provider-scoped env, and header suppression/override metadata from provider auth.
+1. [x] porcupine-ai rework first: `Provider.getModels()` sync + optional `refreshModels()`; `Models.getModels`/`getModel` sync, `Models.refresh(provider?)` async; `createProvider` takes `models` array + optional `refreshModels` fetcher (in-flight dedupe). Reverses Phase 1's async-listing decision — see "Provider model listing" for rationale (sync-or-async unions breed latent sync assumptions; async-only breaks sync consumer surfaces like extension `find`/`getAll`).
+2. [x] Cloudflare provider auth in porcupine-ai factories: Workers AI and AI Gateway validate their required account/gateway env/config and return resolved `baseUrl`, provider-scoped env, and header suppression/override metadata from provider auth.
 3. [ ] Add `FileCredentialStore` in coding-agent.
-   - Implement the pi-ai `CredentialStore` interface as a self-contained `auth.json` store; do not depend on the old `AuthStorageBackend` abstraction, though its lock/retry semantics may be ported.
+   - Implement the porcupine-ai `CredentialStore` interface as a self-contained `auth.json` store; do not depend on the old `AuthStorageBackend` abstraction, though its lock/retry semantics may be ported.
    - Preserve the existing file format. `ApiKeyCredential` uses `{ type: "api_key", key?, env? }`, matching today's `auth.json`; do not translate `env` into metadata or rewrite discriminators.
    - Resolve `$ENV`/`!command` in stored API-key `key` and `env` values out of the box using an injected execution/config environment. `$ENV` lookup should come from that environment, and `!command` should run through the shared shell execution path rather than direct `execSync`.
    - Persist raw config values; resolved credentials returned for auth use must be copies and must not rewrite `$ENV`/`!command` strings unless a caller explicitly stores new values.
@@ -913,7 +913,7 @@ Ordering for new sessions:
    - Keep only the legacy callback/credential declarations required by coding-agent `ProviderConfig.oauth`.
    - `login` maps legacy callbacks/events to `AuthInteraction.prompt()`/`notify()`.
    - `refreshToken` maps to `refresh`; `getApiKey` maps to `toAuth`.
-   - Preserve the type-only pi-ai `oauth` barrel and extension-loader aliases.
+   - Preserve the type-only porcupine-ai `oauth` barrel and extension-loader aliases.
 8. [ ] Rebuild coding-agent `ModelRegistry` over `MutableModels`.
    - It owns a `MutableModels` instance built from decorated built-ins + models.json custom providers + extension providers.
    - `getAll()`, `find()`, and `getAvailable()` remain sync compatibility methods over last-known model lists and fast configured-looking auth status. Do not break the extension-facing `modelRegistry` surface for these reads.
@@ -933,7 +933,7 @@ Ordering for new sessions:
     - Update existing tests for sync last-known `ModelRegistry.getAll/find/getAvailable` plus explicit async refresh behavior.
     - Run targeted non-e2e suites plus tmux validation of login flows against real providers (Anthropic OAuth/API key, OpenAI Codex OAuth, GitHub Copilot OAuth, Cloudflare AI Gateway, Bedrock if credentials are available).
 
-### Phase 10 — compat deletion (pi 2.0 era, separate)
+### Phase 10 — compat deletion (porcupine 2.0 era, separate)
 
 - [ ] AgentSession -> AgentHarness; the registry facade dies in favor of harness `Models`.
 - [ ] Move ALL internal `/compat` imports to the new API: every package's src, all tests, and the example extensions (examples then demonstrate the new API). Nothing inside the repo may import `/compat` at that point.

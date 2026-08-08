@@ -89,7 +89,7 @@ Without this propagation, typing with an IME (Chinese, Japanese, Korean, etc.) w
 **In extensions** via `ctx.ui.custom()`:
 
 ```typescript
-pi.on("session_start", async (_event, ctx) => {
+porcupine.on("session_start", async (_event, ctx) => {
   const result = await ctx.ui.custom<string | null>((tui, theme, keybindings, done) =>
     new MyComponent({
       theme,
@@ -385,7 +385,7 @@ class MySelector {
 Usage in an extension:
 
 ```typescript
-pi.registerCommand("pick", {
+porcupine.registerCommand("pick", {
   description: "Pick an item",
   handler: async (_args, ctx) => {
     const items = ["Option A", "Option B", "Option C"];
@@ -618,7 +618,7 @@ import type { ExtensionAPI } from "@porcupineai/coding-agent";
 import { DynamicBorder } from "@porcupineai/coding-agent";
 import { Container, type SelectItem, SelectList, Text } from "@porcupineai/tui";
 
-pi.registerCommand("pick", {
+porcupine.registerCommand("pick", {
   handler: async (_args, ctx) => {
     const items: SelectItem[] = [
       { value: "opt1", label: "Option 1", description: "First option" },
@@ -676,7 +676,7 @@ For operations that take time and should be cancellable. `BorderedLoader` shows 
 ```typescript
 import { BorderedLoader } from "@porcupineai/coding-agent";
 
-pi.registerCommand("fetch", {
+porcupine.registerCommand("fetch", {
   handler: async (_args, ctx) => {
     const result = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
       const loader = new BorderedLoader(tui, theme, "Fetching data...");
@@ -709,7 +709,7 @@ For toggling multiple settings. Use `SettingsList` from `@porcupineai/tui` with 
 import { getSettingsListTheme } from "@porcupineai/coding-agent";
 import { Container, type SettingItem, SettingsList, Text } from "@porcupineai/tui";
 
-pi.registerCommand("settings", {
+porcupine.registerCommand("settings", {
   handler: async (_args, ctx) => {
     const items: SettingItem[] = [
       { id: "verbose", label: "Verbose mode", currentValue: "off", values: ["on", "off"] },
@@ -898,8 +898,8 @@ class VimEditor extends CustomEditor {
   }
 }
 
-export default function (pi: ExtensionAPI) {
-  pi.on("session_start", (_event, ctx) => {
+export default function (porcupine: ExtensionAPI) {
+  porcupine.on("session_start", (_event, ctx) => {
     // Factory receives the TUI, theme, and keybindings from the app
     ctx.ui.setEditorComponent((tui, theme, keybindings) =>
       new VimEditor(tui, theme, keybindings)

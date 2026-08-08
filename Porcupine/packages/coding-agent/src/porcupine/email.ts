@@ -13,8 +13,25 @@
  *   the wrapper holds no cross-call connection state and never leaks sockets.
  */
 
-import { type FetchMessageObject, ImapFlow, type ListResponse } from "imapflow";
-import nodemailer from "nodemailer";
+import { createRequire } from "node:module";
+// Runtime imports are lazy (imapflow ~56ms + nodemailer ~17ms at cold load):
+// the email feature must not tax CLI startup. Types are compile-time only.
+import type { FetchMessageObject, ImapFlow, ListResponse } from "imapflow";
+
+// ESM build: sync require() is not available; createRequire provides it while
+// keeping the modules out of the startup import graph.
+const nodeRequire = createRequire(import.meta.url);
+let imapflowModule: typeof import("imapflow") | undefined;
+function getImapFlow(): typeof import("imapflow") {
+	imapflowModule ??= nodeRequire("imapflow") as typeof import("imapflow");
+	return imapflowModule;
+}
+
+let nodemailerModule: typeof import("nodemailer") | undefined;
+function getNodemailer(): typeof import("nodemailer") {
+	nodemailerModule ??= nodeRequire("nodemailer") as typeof import("nodemailer");
+	return nodemailerModule;
+}
 
 /** Non-secret email configuration. The password is resolved via the keyring. */
 export interface EmailConfig {
@@ -244,7 +261,7 @@ export function createEmailClient(config: EmailConfig): EmailClient {
 	}
 
 	async function openImap<T>(op: (client: ImapFlow) => Promise<T>): Promise<T> {
-		const client = new ImapFlow({
+		const client = new (getImapFlow().ImapFlow)({
 			host: config.host,
 			port: config.port,
 			secure: config.secure,
@@ -366,7 +383,7 @@ export function createEmailClient(config: EmailConfig): EmailClient {
 	async function composeRaw(to: string, subject: string, body: string): Promise<{ raw: Buffer; messageId: string }> {
 		requirePass();
 		// streamTransport builds the encoded message without sending it.
-		const transporter = nodemailer.createTransport({ streamTransport: true, buffer: true });
+		const transporter = getNodemailer().createTransport({ streamTransport: true, buffer: true });
 		const info = await transporter.sendMail({
 			from: config.user,
 			to,
@@ -425,7 +442,7 @@ export function createEmailClient(config: EmailConfig): EmailClient {
 				timeoutMs,
 				"SMTP send",
 				(async () => {
-					const transporter = nodemailer.createTransport({
+					const transporter = getNodemailer().createTransport({
 						host: config.host,
 						port: config.port,
 						secure: config.secure,

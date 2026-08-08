@@ -9,7 +9,7 @@ export interface UnixTransportOptions {
 	maxPendingBytes?: number;
 }
 
-/** Creates fresh Unix-domain socket transports for PiClient connection attempts in Node-compatible runtimes. */
+/** Creates fresh Unix-domain socket transports for PorcupineClient connection attempts in Node-compatible runtimes. */
 export function createUnixTransportFactory(options: UnixTransportOptions): ByteTransportFactory {
 	if (options.path.length === 0) throw new TypeError("Unix transport path must not be empty");
 	if (Buffer.byteLength(options.path) > MAX_UNIX_SOCKET_PATH_BYTES) {

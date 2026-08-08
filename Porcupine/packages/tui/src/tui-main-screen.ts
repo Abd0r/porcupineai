@@ -75,6 +75,16 @@ export class TuiMainScreen extends TuiBase implements TUI {
 	}
 
 	private collectKittyImageIds(lines: string[]): Set<number> {
+		// Fast path: no escape bytes anywhere — skip the per-line parse entirely
+		// (the common case: image-less docs were paying a full scan every render).
+		let sawImageEscape = false;
+		for (const line of lines) {
+			if (line.includes("\x1b_G")) {
+				sawImageEscape = true;
+				break;
+			}
+		}
+		if (!sawImageEscape) return new Set<number>();
 		const ids = new Set<number>();
 		for (const line of lines) {
 			for (const id of extractKittyImageIds(line)) {
@@ -115,6 +125,8 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		let expandedLastChanged = lastChanged;
 		const expandForLines = (lines: string[]): void => {
 			for (let i = 0; i < lines.length; i++) {
+				// Cheap indexOf before the per-line regex parse.
+				if (!lines[i].includes("\x1b_G")) continue;
 				if (extractKittyImageIds(lines[i]).length === 0) continue;
 				const blockEnd = i + this.getKittyImageReservedRows(lines, i) - 1;
 				if (i >= firstChanged || (i <= lastChanged && blockEnd >= firstChanged)) {
@@ -216,10 +228,10 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			this.previousHeight = height;
 		};
 
-		const debugRedraw = process.env.PI_DEBUG_REDRAW === "1";
+		const debugRedraw = (process.env.PORCUPINE_DEBUG_REDRAW ?? process.env.PI_DEBUG_REDRAW) === "1";
 		const logRedraw = (reason: string): void => {
 			if (!debugRedraw) return;
-			const logPath = path.join(this.logDirectory, "pi-debug.log");
+			const logPath = path.join(this.logDirectory, "porcupine-debug.log");
 			const msg = `[${new Date().toISOString()}] fullRender: ${reason} (prev=${this.previousLines.length}, new=${newLines.length}, height=${height})\n`;
 			fs.mkdirSync(path.dirname(logPath), { recursive: true });
 			fs.appendFileSync(logPath, msg);
@@ -412,7 +424,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			buffer += "\x1b[2K"; // Clear current line
 			if (!isImage && visibleWidth(line) > width) {
 				// Log all lines to crash file for debugging
-				const crashLogPath = path.join(this.logDirectory, "pi-crash.log");
+				const crashLogPath = path.join(this.logDirectory, "porcupine-crash.log");
 				const crashData = [
 					`Crash at ${new Date().toISOString()}`,
 					`Terminal width: ${width}`,
@@ -462,7 +474,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
 
 		buffer += "\x1b[?2026l"; // End synchronized output
 
-		if (process.env.PI_TUI_DEBUG === "1") {
+		if ((process.env.PORCUPINE_TUI_DEBUG ?? process.env.PI_TUI_DEBUG) === "1") {
 			const debugDir = "/tmp/tui";
 			fs.mkdirSync(debugDir, { recursive: true });
 			const debugPath = path.join(debugDir, `render-${Date.now()}-${Math.random().toString(36).slice(2)}.log`);

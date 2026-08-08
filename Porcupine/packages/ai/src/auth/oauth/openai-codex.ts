@@ -290,7 +290,7 @@ async function pollOpenAICodexDeviceAuth(device: DeviceAuthInfo, signal?: AbortS
 }
 
 async function createAuthorizationFlow(
-	originator: string = "pi",
+	originator: string = "porcupine",
 ): Promise<{ verifier: string; state: string; url: string }> {
 	const { verifier, challenge } = await generatePKCE();
 	const state = createState();

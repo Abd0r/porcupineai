@@ -58,7 +58,7 @@ describe("issue #6999 models.json hot reload", () => {
 	});
 
 	it("reloads models.json when opening /model", async () => {
-		tempDir = mkdtempSync(join(tmpdir(), "pi-models-json-hot-reload-"));
+		tempDir = mkdtempSync(join(tmpdir(), "porcupine-models-json-hot-reload-"));
 		const modelsPath = join(tempDir, "models.json");
 		writeFileSync(modelsPath, JSON.stringify(modelsJson("old-provider", "old-model")));
 		const modelRuntime = getModelRuntime(await createModelRegistry(AuthStorage.inMemory(), modelsPath));

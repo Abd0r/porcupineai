@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { attachSession, collectRequests, connectClient, MemoryByteServer, sessionSnapshot } from "./support.ts";
 
-describe("PiClient", () => {
+describe("PorcupineClient", () => {
 	test("reduces only authoritative snapshots and supports unsubscribe", async () => {
 		const server = new MemoryByteServer();
 		const client = await connectClient(server);

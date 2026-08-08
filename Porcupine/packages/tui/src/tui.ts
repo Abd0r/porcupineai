@@ -330,8 +330,8 @@ export abstract class TuiBase extends Container implements TUI {
 	private renderTimer: NodeJS.Timeout | undefined;
 	private lastRenderAt = 0;
 	private static readonly MIN_RENDER_INTERVAL_MS = 16;
-	private showHardwareCursor = process.env.PI_HARDWARE_CURSOR === "1";
-	private clearOnShrink = process.env.PI_CLEAR_ON_SHRINK === "1";
+	private showHardwareCursor = (process.env.PORCUPINE_HARDWARE_CURSOR ?? process.env.PI_HARDWARE_CURSOR) === "1";
+	private clearOnShrink = (process.env.PORCUPINE_CLEAR_ON_SHRINK ?? process.env.PI_CLEAR_ON_SHRINK) === "1";
 	protected fullRedrawCount = 0;
 	protected stopped = false;
 	private pendingOsc11BackgroundReplies = 0;
@@ -352,7 +352,11 @@ export abstract class TuiBase extends Container implements TUI {
 	constructor(terminal: Terminal, showHardwareCursor?: boolean, logDirectory?: string) {
 		super();
 		this.terminal = terminal;
-		this.logDirectory = logDirectory ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
+		this.logDirectory =
+			logDirectory ??
+			process.env.PORCUPINE_CODING_AGENT_DIR ??
+			process.env.PI_CODING_AGENT_DIR ??
+			path.join(os.homedir(), ".pi", "agent");
 		if (showHardwareCursor !== undefined) {
 			this.showHardwareCursor = showHardwareCursor;
 		}

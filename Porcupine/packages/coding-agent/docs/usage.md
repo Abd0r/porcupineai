@@ -648,7 +648,7 @@ porcupine [options] [@files...] [messages...]
 porcupine install <source> [-l]     # Install package, -l for project-local
 porcupine remove <source> [-l]      # Remove package
 porcupine uninstall <source> [-l]   # Alias for remove
-porcupine update [source|self|pi]   # Update porcupine only, or one package source
+porcupine update [source|self|porcupine]   # Update porcupine only, or one package source
 porcupine update --all              # Update porcupine and packages; reconcile pinned git refs
 porcupine update --extensions       # Update packages only; reconcile pinned git refs
 porcupine update --models           # Refresh model catalogs only

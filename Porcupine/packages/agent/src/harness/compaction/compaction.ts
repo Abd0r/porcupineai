@@ -103,13 +103,13 @@ function getMessageFromEntryForCompaction(entry: SessionTreeEntry): AgentMessage
 export interface CompactionResult<T = unknown> {
 	/** Summary text that replaces compacted history in future context. */
 	summary: string;
-	/** Entry id where retained history starts. Optional during Pi 2.0 transition. */
+	/** Entry id where retained history starts. Optional during Porcupine 2.0 transition. */
 	firstKeptEntryId?: string;
 	/** Estimated context tokens before compaction. */
 	tokensBefore: number;
 	/** Usage from the LLM call(s) that generated this summary, if available. */
 	usage?: Usage;
-	/** Retained recent messages stored directly on the compaction entry. Optional during Pi 2.0 transition. */
+	/** Retained recent messages stored directly on the compaction entry. Optional during Porcupine 2.0 transition. */
 	retainedTail?: AgentMessage[];
 	/** Optional implementation-specific details stored with the compaction entry. */
 	details?: T;

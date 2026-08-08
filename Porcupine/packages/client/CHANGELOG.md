@@ -6,4 +6,4 @@
 
 ### Added
 
-- Added the experimental transport-neutral `PiClient` and multi-session `PiSessionHandle` APIs with structured `PiServerError` responses.
+- Added the experimental transport-neutral `PorcupineClient` and multi-session `PorcupineSessionHandle` APIs with structured `PorcupineServerError` responses.

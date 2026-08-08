@@ -20,7 +20,7 @@ describe("getThemeExportColors", () => {
 	let previousAgentDir: string | undefined;
 
 	beforeEach(() => {
-		tempRoot = mkdtempSync(join(tmpdir(), "pi-theme-export-"));
+		tempRoot = mkdtempSync(join(tmpdir(), "porcupine-theme-export-"));
 		previousAgentDir = process.env.PI_CODING_AGENT_DIR;
 		process.env.PI_CODING_AGENT_DIR = join(tempRoot, "agent");
 		mkdirSync(join(process.env.PI_CODING_AGENT_DIR, "themes"), { recursive: true });

@@ -23,7 +23,7 @@
  */
 
 import { isAbsolute, resolve, sep } from "node:path";
-import { type Browser, type BrowserContext, chromium, type Page } from "playwright";
+import type { Browser, BrowserContext, Page } from "playwright";
 
 /** Launch options for opening a Chromium instance. */
 export interface BrowserLaunchOptions {
@@ -81,8 +81,10 @@ export class BrowserSession {
 		const timeoutMs = options?.timeoutMs ?? this.timeoutMs;
 		try {
 			if (options?.userDataDir) {
+				const { chromium } = await import("playwright");
 				this.context = await chromium.launchPersistentContext(options.userDataDir, { headless });
 			} else {
+				const { chromium } = await import("playwright");
 				this.browser = await chromium.launch({ headless });
 				this.context = await this.browser.newContext();
 			}

@@ -9,7 +9,7 @@ import {
 	type ServerSnapshot,
 } from "@porcupineai/protocol";
 import { describe, expect, test } from "vitest";
-import { PiClient } from "../src/index.ts";
+import { PorcupineClient } from "../src/index.ts";
 import { createUnixTransportFactory } from "../src/unix.ts";
 
 const serverSnapshot: ServerSnapshot = {
@@ -44,8 +44,8 @@ test("rejects invalid Unix transport options", () => {
 });
 
 describe.runIf(process.platform !== "win32")("Unix-domain sockets", () => {
-	test("PiClient exchanges fragmented framed messages over a real Unix socket", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "pi-client-"));
+	test("PorcupineClient exchanges fragmented framed messages over a real Unix socket", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "porcupine-client-"));
 		const socketPath = join(directory, "pi.sock");
 		const sockets = new Set<Socket>();
 		const server = createServer((socket) => {
@@ -77,7 +77,7 @@ describe.runIf(process.platform !== "win32")("Unix-domain sockets", () => {
 			});
 		});
 		await listen(server, socketPath);
-		const client = new PiClient({
+		const client = new PorcupineClient({
 			token: "unix-secret",
 			transportFactory: createUnixTransportFactory({ path: socketPath }),
 		});
@@ -93,7 +93,7 @@ describe.runIf(process.platform !== "win32")("Unix-domain sockets", () => {
 	});
 
 	test("bounds pending writes, preserves order, and reports remote end once", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "pi-client-"));
+		const directory = await mkdtemp(join(tmpdir(), "porcupine-client-"));
 		const socketPath = join(directory, "pi.sock");
 		const sockets = new Set<Socket>();
 		const first = new Uint8Array(2 * 1024 * 1024).fill(1);
@@ -165,8 +165,8 @@ describe.runIf(process.platform !== "win32")("Unix-domain sockets", () => {
 		}
 	});
 
-	test("PiClient rejects a truncated final frame from a real Unix socket", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "pi-client-"));
+	test("PorcupineClient rejects a truncated final frame from a real Unix socket", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "porcupine-client-"));
 		const socketPath = join(directory, "pi.sock");
 		const sockets = new Set<Socket>();
 		const server = createServer((socket) => {
@@ -191,7 +191,7 @@ describe.runIf(process.platform !== "win32")("Unix-domain sockets", () => {
 			});
 		});
 		await listen(server, socketPath);
-		const client = new PiClient({
+		const client = new PorcupineClient({
 			token: "unix-secret",
 			transportFactory: createUnixTransportFactory({ path: socketPath }),
 		});
@@ -208,7 +208,7 @@ describe.runIf(process.platform !== "win32")("Unix-domain sockets", () => {
 	});
 
 	test("rejects connection errors", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "pi-client-"));
+		const directory = await mkdtemp(join(tmpdir(), "porcupine-client-"));
 		const missingPath = join(directory, "missing.sock");
 		try {
 			await expect(

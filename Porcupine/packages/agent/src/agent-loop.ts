@@ -7,6 +7,7 @@ import {
 	type AssistantMessage,
 	type Context,
 	EventStream,
+	type Message,
 	type ToolResultMessage,
 	validateToolArguments,
 } from "@porcupineai/ai";
@@ -23,6 +24,50 @@ import type {
 } from "./types.ts";
 
 export type AgentEventSink = (event: AgentEvent) => Promise<void> | void;
+
+/**
+ * Incremental AgentMessage -> Message conversion cache.
+ *
+ * The run-loop history is append-only except for the in-streaming last
+ * message (which is replaced per delta), so a full-history convertToLlm on
+ * every assistant turn was O(n^2) in message count. This converter converts
+ * only the new tail (or re-converts just the last message when only it
+ * changed) and returns the same array instance when nothing changed.
+ */
+export interface IncrementalConverter {
+	convert(messages: AgentMessage[]): Promise<Message[]>;
+}
+
+export function createIncrementalConverter(config: AgentLoopConfig): IncrementalConverter {
+	let cachedArray: AgentMessage[] | null = null;
+	let converted: Message[] = [];
+	let convertedCount = 0;
+	return {
+		async convert(messages: AgentMessage[]): Promise<Message[]> {
+			if (messages !== cachedArray || messages.length < convertedCount) {
+				// New or reshaped array (transformContext returned a fresh array, or
+				// history shrank): full conversion.
+				converted = await config.convertToLlm(messages);
+				cachedArray = messages;
+				convertedCount = messages.length;
+				return converted;
+			}
+			if (messages.length === convertedCount) {
+				// Only the last message changed (streaming deltas): re-convert it.
+				if (converted.length > 0 && messages.length > 0) {
+					const last = await config.convertToLlm([messages[messages.length - 1]!]);
+					converted[converted.length - 1] = last[0]!;
+				}
+				return converted;
+			}
+			// Appended tail (tool results, follow-up messages): convert only the new.
+			const tail = await config.convertToLlm(messages.slice(convertedCount));
+			converted.push(...tail);
+			convertedCount = messages.length;
+			return converted;
+		},
+	};
+}
 
 /**
  * Start an agent loop with a new prompt message.
@@ -163,6 +208,10 @@ async function runLoop(
 	let currentContext = initialContext;
 	let config = initialConfig;
 	let firstTurn = true;
+	// Incremental AgentMessage -> Message conversion: history is append-only
+	// (except the in-streaming last message, which gets re-converted), so a
+	// full-history convertToLlm per turn was O(n^2) in message count.
+	const converter = createIncrementalConverter(config);
 	// Check for steering messages at start (user may have typed while waiting)
 	let pendingMessages: AgentMessage[] = (await config.getSteeringMessages?.()) || [];
 
@@ -190,7 +239,7 @@ async function runLoop(
 			}
 
 			// Stream assistant response
-			const message = await streamAssistantResponse(currentContext, config, signal, emit, streamFunction);
+			const message = await streamAssistantResponse(currentContext, config, signal, emit, streamFunction, converter);
 			newMessages.push(message);
 
 			if (message.stopReason === "error" || message.stopReason === "aborted") {
@@ -287,6 +336,7 @@ async function streamAssistantResponse(
 	signal: AbortSignal | undefined,
 	emit: AgentEventSink,
 	streamFunction: StreamFn,
+	converter?: IncrementalConverter,
 ): Promise<AssistantMessage> {
 	// Apply context transform if configured (AgentMessage[] → AgentMessage[])
 	let messages = context.messages;
@@ -295,7 +345,7 @@ async function streamAssistantResponse(
 	}
 
 	// Convert to LLM-compatible messages (AgentMessage[] → Message[])
-	const llmMessages = await config.convertToLlm(messages);
+	const llmMessages = converter ? await converter.convert(messages) : await config.convertToLlm(messages);
 
 	// Build LLM context
 	const llmContext: Context = {

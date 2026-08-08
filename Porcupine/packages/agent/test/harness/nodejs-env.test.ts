@@ -98,7 +98,9 @@ describe("NodeExecutionEnv", () => {
 	it("expands home-relative paths and file URLs", async () => {
 		const root = createTempDir();
 		const env = new NodeExecutionEnv({ cwd: root });
-		expect(getOrThrow(await env.absolutePath("~/pi-node-env-test"))).toBe(join(homedir(), "pi-node-env-test"));
+		expect(getOrThrow(await env.absolutePath("~/porcupine-node-env-test"))).toBe(
+			join(homedir(), "porcupine-node-env-test"),
+		);
 		const filePath = join(root, "file with spaces.txt");
 		expect(getOrThrow(await env.absolutePath(pathToFileURL(filePath).href))).toBe(filePath);
 	});

@@ -1537,7 +1537,7 @@ describe("Generate E2E Tests", () => {
 		it("should pass requestMetadata to the SDK payload", { retry: 3 }, async () => {
 			const llmSonnet = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-5-20250929-v1:0");
 			let capturedPayload: unknown;
-			const metadata = { app: "pi-test", env: "ci" };
+			const metadata = { app: "porcupine-test", env: "ci" };
 			const response = await complete(
 				llmSonnet,
 				{

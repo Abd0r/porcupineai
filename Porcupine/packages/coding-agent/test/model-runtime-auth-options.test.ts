@@ -33,7 +33,7 @@ function testModel(id: string) {
 }
 
 describe("ModelRuntime auth options", () => {
-	it("accepts a pi-ai CredentialStore", async () => {
+	it("accepts a porcupine-ai CredentialStore", async () => {
 		const credentials = new InMemoryCredentialStore();
 		await credentials.modify("anthropic", async () => ({ type: "api_key", key: "stored-key" }));
 		const runtime = await ModelRuntime.create({ credentials, modelsPath: null });

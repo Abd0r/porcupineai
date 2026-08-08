@@ -7,7 +7,7 @@ import { NodeExecutionEnv } from "../../src/harness/env/nodejs.ts";
 import { createAssistantMessage, createUserMessage } from "./session-test-utils.ts";
 
 function createTempDir(): string {
-	return mkdtempSync(join(tmpdir(), "pi-agent-sqlite-branch-cache-"));
+	return mkdtempSync(join(tmpdir(), "porcupine-agent-sqlite-branch-cache-"));
 }
 
 describe("SQLite branch cache", () => {

@@ -643,7 +643,10 @@ export class ExtensionRunner {
 
 	getRegisteredCommands(): ResolvedCommand[] {
 		this.commandDiagnostics = [];
-		return this.resolveRegisteredCommands();
+		const resolved = this.resolveRegisteredCommands();
+		// Refresh the per-name cache used by getCommand (slash dispatch).
+		this.cachedResolvedCommands = new Map(resolved.map((command) => [command.invocationName, command]));
+		return resolved;
 	}
 
 	getCommandDiagnostics(): ResourceDiagnostic[] {
@@ -651,8 +654,17 @@ export class ExtensionRunner {
 	}
 
 	getCommand(name: string): ResolvedCommand | undefined {
-		return this.resolveRegisteredCommands().find((command) => command.invocationName === name);
+		// Cached: slash dispatch resolves commands on every keystroke/command; the
+		// full rebuild allocates maps + arrays per call. On a cache miss (e.g.
+		// tests or callers that never refreshed the list) resolve + warm the cache.
+		const cached = this.cachedResolvedCommands.get(name);
+		if (cached) return cached;
+		const resolved = this.resolveRegisteredCommands();
+		this.cachedResolvedCommands = new Map(resolved.map((command) => [command.invocationName, command]));
+		return this.cachedResolvedCommands.get(name);
 	}
+
+	private cachedResolvedCommands = new Map<string, ResolvedCommand>();
 
 	/**
 	 * Request a graceful shutdown. Called by extension tools and event handlers.
@@ -995,6 +1007,18 @@ export class ExtensionRunner {
 
 	async emitContext(messages: AgentMessage[]): Promise<AgentMessage[]> {
 		const ctx = this.createContext();
+		// Fast path: no extension registered a "context" handler — pass through
+		// without a full deep clone (this runs on EVERY LLM request).
+		let anyHandler = false;
+		for (const ext of this.extensions) {
+			const handlers = ext.handlers.get("context");
+			if (handlers && handlers.length > 0) {
+				anyHandler = true;
+				break;
+			}
+		}
+		if (!anyHandler) return messages;
+
 		let currentMessages = structuredClone(messages);
 
 		for (const ext of this.extensions) {

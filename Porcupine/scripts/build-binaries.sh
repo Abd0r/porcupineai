@@ -16,12 +16,12 @@
 #
 # Output:
 #   packages/coding-agent/binaries/
-#     pi-darwin-arm64.tar.gz
-#     pi-darwin-x64.tar.gz
-#     pi-linux-x64.tar.gz
-#     pi-linux-arm64.tar.gz
-#     pi-windows-x64.zip
-#     pi-windows-arm64.zip
+#     porcupine-darwin-arm64.tar.gz
+#     porcupine-darwin-x64.tar.gz
+#     porcupine-linux-x64.tar.gz
+#     porcupine-linux-arm64.tar.gz
+#     porcupine-windows-x64.zip
+#     porcupine-windows-arm64.zip
 
 set -euo pipefail
 
@@ -221,12 +221,12 @@ cd "$OUTPUT_DIR"
 for platform in "${PLATFORMS[@]}"; do
     if [[ "$platform" == windows-* ]]; then
         # Windows (zip)
-        echo "Creating pi-$platform.zip..."
-        (cd "$platform" && zip -r ../pi-$platform.zip .)
+        echo "Creating porcupine-$platform.zip..."
+        (cd "$platform" && zip -r ../porcupine-$platform.zip .)
     else
         # Unix platforms (tar.gz) - use wrapper directory for mise compatibility
-        echo "Creating pi-$platform.tar.gz..."
-        mv "$platform" pi && tar -czf pi-$platform.tar.gz pi && mv pi "$platform"
+        echo "Creating porcupine-$platform.tar.gz..."
+        mv "$platform" pi && tar -czf porcupine-$platform.tar.gz pi && mv pi "$platform"
     fi
 done
 
@@ -235,9 +235,9 @@ echo "==> Extracting archives for testing..."
 for platform in "${PLATFORMS[@]}"; do
     rm -rf "$platform"
     if [[ "$platform" == windows-* ]]; then
-        mkdir -p "$platform" && (cd "$platform" && unzip -q ../pi-$platform.zip)
+        mkdir -p "$platform" && (cd "$platform" && unzip -q ../porcupine-$platform.zip)
     else
-        tar -xzf pi-$platform.tar.gz && mv pi "$platform"
+        tar -xzf porcupine-$platform.tar.gz && mv pi "$platform"
     fi
 done
 

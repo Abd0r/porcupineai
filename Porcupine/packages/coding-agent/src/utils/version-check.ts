@@ -4,19 +4,19 @@ import { join } from "node:path";
 import { compare, valid } from "semver";
 import { getPackageDir } from "../config.ts";
 import { getProductEnvironment } from "../product-environment.ts";
-import { getPorcupineUserAgent } from "./pi-user-agent.ts";
+import { getPorcupineUserAgent } from "./porcupine-user-agent.ts";
 
 const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 10000;
 const DEFAULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const DEFAULT_GITHUB_REPO = "Abd0r/porcupineai";
 
-export interface LatestPiRelease {
+export interface LatestPorcupineRelease {
 	version: string;
 	packageName?: string;
 	note?: string;
 }
 
-export type LatestProductRelease = LatestPiRelease;
+export type LatestProductRelease = LatestPorcupineRelease;
 
 export function comparePackageVersions(leftVersion: string, rightVersion: string): number | undefined {
 	const left = valid(leftVersion.trim());
@@ -89,7 +89,7 @@ async function fetchLatestFromUrl(
 	url: string,
 	currentVersion: string,
 	timeoutMs: number,
-): Promise<LatestPiRelease | undefined> {
+): Promise<LatestPorcupineRelease | undefined> {
 	const response = await fetch(url, {
 		headers: { "User-Agent": getPorcupineUserAgent(currentVersion), accept: "application/json" },
 		signal: AbortSignal.timeout(timeoutMs),
@@ -110,7 +110,7 @@ async function fetchLatestFromNpm(
 	packageName: string,
 	currentVersion: string,
 	timeoutMs: number,
-): Promise<LatestPiRelease | undefined> {
+): Promise<LatestPorcupineRelease | undefined> {
 	const response = await fetch(`https://registry.npmjs.org/${packageName}/latest`, {
 		headers: { "User-Agent": getPorcupineUserAgent(currentVersion), accept: "application/json" },
 		signal: AbortSignal.timeout(timeoutMs),
@@ -125,7 +125,7 @@ async function fetchLatestFromGithub(
 	repo: string,
 	currentVersion: string,
 	timeoutMs: number,
-): Promise<LatestPiRelease | undefined> {
+): Promise<LatestPorcupineRelease | undefined> {
 	const response = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
 		headers: { "User-Agent": getPorcupineUserAgent(currentVersion), accept: "application/json" },
 		signal: AbortSignal.timeout(timeoutMs),
@@ -141,10 +141,10 @@ async function fetchLatestFromGithub(
 	};
 }
 
-export async function getLatestPiRelease(
+export async function getLatestPorcupineRelease(
 	currentVersion: string,
 	options: { timeoutMs?: number; cacheTtlMs?: number } = {},
-): Promise<LatestPiRelease | undefined> {
+): Promise<LatestPorcupineRelease | undefined> {
 	if (getProductEnvironment("OFFLINE")) return undefined;
 
 	const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
@@ -160,7 +160,7 @@ export async function getLatestPiRelease(
 		};
 	}
 
-	let release: LatestPiRelease | undefined;
+	let release: LatestPorcupineRelease | undefined;
 	try {
 		const latestVersionUrl = getProductEnvironment("LATEST_VERSION_URL");
 		if (latestVersionUrl) {
@@ -191,14 +191,14 @@ export async function getLatestPiRelease(
 	return release;
 }
 
-export async function checkForNewPiVersion(
+export async function checkForNewPorcupineVersion(
 	currentVersion: string,
 	options: { timeoutMs?: number; cacheTtlMs?: number } = {},
-): Promise<LatestPiRelease | undefined> {
+): Promise<LatestPorcupineRelease | undefined> {
 	if (getProductEnvironment("SKIP_VERSION_CHECK")) return undefined;
 
 	try {
-		const latestRelease = await getLatestPiRelease(currentVersion, options);
+		const latestRelease = await getLatestPorcupineRelease(currentVersion, options);
 		if (latestRelease && isNewerPackageVersion(latestRelease.version, currentVersion)) {
 			return latestRelease;
 		}
