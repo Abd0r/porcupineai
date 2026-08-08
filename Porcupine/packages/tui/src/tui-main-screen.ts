@@ -59,6 +59,12 @@ export class TuiMainScreen extends TuiBase implements TUI {
 	private previousViewportTop = 0;
 
 	protected override resetRenderState(): void {
+		// Force renders (requestRender(true)) mean full redraw: they reset the
+		// diff baseline so the next doRender re-renders everything. The flicker
+		// problem was NOT this reset — it was callers (the activity chip) using
+		// force for routine updates. Those now use plain requestRender(), so a
+		// full clear only happens where it is genuinely needed (resume after
+		// SIGCONT, mode switches, structural rebuilds).
 		this.previousLines = [];
 		this.previousWidth = -1;
 		this.previousHeight = -1;
@@ -325,8 +331,35 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			return;
 		}
 
+		// FLICKER GUARD: changes that fall entirely outside the visible viewport
+		// (e.g. the status strip or an old message above a long scrolled session)
+		// need no writes — the rows are in scrollback, not on screen. Previously
+		// this fell through to fullRender(true) = clear screen + redraw = a flash
+		// on every such update. Appends are excluded: a growing buffer shifts the
+		// followed viewport, so appended rows ARE the visible change.
+		const viewportBottomRow = prevViewportTop + height - 1;
+		if (!appendedLines && (lastChanged < prevViewportTop || firstChanged > viewportBottomRow)) {
+			this.previousLines = newLines;
+			this.previousKittyImageIds = this.collectKittyImageIds(newLines);
+			this.previousWidth = width;
+			this.previousHeight = height;
+			this.previousViewportTop = prevViewportTop;
+			this.positionHardwareCursor(cursorPos, newLines.length);
+			return;
+		}
+
 		// All changes are in deleted lines (nothing to render, just clear)
 		if (firstChanged >= newLines.length) {
+			// Deletions entirely above the viewport are in scrollback: no writes.
+			if (lastChanged < prevViewportTop) {
+				this.previousLines = newLines;
+				this.previousKittyImageIds = this.collectKittyImageIds(newLines);
+				this.previousWidth = width;
+				this.previousHeight = height;
+				this.previousViewportTop = prevViewportTop;
+				this.positionHardwareCursor(cursorPos, newLines.length);
+				return;
+			}
 			if (this.previousLines.length > newLines.length) {
 				let buffer = "\x1b[?2026h";
 				buffer += this.deleteChangedKittyImages(firstChanged, lastChanged);
@@ -375,7 +408,9 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		}
 
 		// Differential rendering can only touch what was actually visible.
-		// If the first changed line is above the previous viewport, we need a full redraw.
+		// The clamp above keeps changes above the viewport out of the write
+		// window; anything still above the viewport here means the buffer is
+		// shorter than the screen (viewportTop 0), which is always visible.
 		if (firstChanged < prevViewportTop) {
 			logRedraw(`firstChanged < viewportTop (${firstChanged} < ${prevViewportTop})`);
 			fullRender(true);

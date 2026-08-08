@@ -2655,7 +2655,10 @@ export class InteractiveMode {
 		) {
 			this.ui.setFocus(this.editor as Component);
 		}
-		this.ui.requestRender(phaseChanged);
+		// Never force: the diff handles the strip change; a forced render would
+		// reset the render baseline and full-clear the screen on every chip
+		// change (the flicker). Phase changes are rare; the throttle is irrelevant.
+		this.ui.requestRender();
 	}
 
 	private clearExtensionActivityOverride(): void {

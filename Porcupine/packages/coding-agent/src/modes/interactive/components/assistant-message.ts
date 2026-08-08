@@ -76,11 +76,15 @@ export class AssistantMessageComponent extends Container {
 	}
 
 	override render(width: number): string[] {
-		const lines = super.render(width);
-		if (this.hasToolCalls || lines.length === 0) {
-			return lines;
+		const base = super.render(width);
+		if (this.hasToolCalls || base.length === 0) {
+			return base;
 		}
 
+		// Copy before mutating: the parent's render may return a CACHED array
+		// (Container/Box instance-stable caches) — mutating it would compound
+		// the OSC133 markers on every render.
+		const lines = base.slice();
 		lines[0] = OSC133_ZONE_START + lines[0];
 		lines[lines.length - 1] = OSC133_ZONE_END + OSC133_ZONE_FINAL + lines[lines.length - 1];
 		return lines;

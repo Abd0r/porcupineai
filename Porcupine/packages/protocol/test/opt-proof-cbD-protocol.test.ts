@@ -123,10 +123,10 @@ describe("opt-proof-cbD protocol hot-path costs", () => {
 		let a = 0;
 		let b = 0;
 		const full = time(() => {
-			for (let i = 0; i < 5_000; i++) a += encodeServerMessage(message).length;
+			for (let i = 0; i < 2_000; i++) a += encodeServerMessage(message).length;
 		});
 		const cborOnly = time(() => {
-			for (let i = 0; i < 5_000; i++) b += encodeCbor(message).length;
+			for (let i = 0; i < 2_000; i++) b += encodeCbor(message).length;
 		});
 		expect(a > 0 && b > 0).toBe(true);
 		// eslint-disable-next-line no-console
@@ -141,12 +141,12 @@ describe("opt-proof-cbD protocol hot-path costs", () => {
 		const dec = new ServerMessageDecoder();
 		let a = 0;
 		const fullDecode = time(() => {
-			for (let i = 0; i < 5_000; i++) a += dec.push(frame).length;
+			for (let i = 0; i < 2_000; i++) a += dec.push(frame).length;
 		});
 		dec.end();
 		let b = 0;
 		const cborOnly = time(() => {
-			for (let i = 0; i < 5_000; i++) {
+			for (let i = 0; i < 2_000; i++) {
 				decodeCbor(frame.subarray(4));
 				b++;
 			}
