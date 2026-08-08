@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/ai",
-	"version": "0.1.57",
+	"version": "0.1.58",
 	"description": "Unified LLM API with automatic model discovery and provider configuration",
 	"type": "module",
 	"main": "./dist/index.js",

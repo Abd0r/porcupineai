@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.1.58] - 2026-08-09
+
+### Fixed
+
+- stdin reassembly: a partial escape sequence split across the flush timeout is held and completed with its tail (no more broken events or garbage fragments); bare ESC still flushes so Esc keypresses keep working; the Kitty keyboard negotiation sees buffered CSI prefixes via a new `partial` event.
+- markdown-viewer off-by-one: the bottom border is no longer truncated on full-viewport documents.
+- Extension dialogs can no longer stack over an already-open overlay (same guard as the markdown viewer).
+
+### Performance
+
+- Box and Container renders are instance-stable: unchanged frames reuse the cached composite (child mutations invalidate correctly). A 200-message chat tree dropped from ~28ms to ~0.01ms per render (~2,700x), so long sessions no longer exceed the 16ms frame budget.
+- The main screen short-circuits no-op renders (identity check before compositing, diffing and writes; guarded on resize/overlays).
+- Edit-tool diffs are memoized (no per-frame recomputation).
+
+
 ## [0.1.57] - 2026-08-08
 
 ### Rebrand
