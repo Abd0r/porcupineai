@@ -68,6 +68,7 @@
 		"@ricky0123/vad-web": "0.0.30"
 	},
 	"dependencies": {
-		"@modelcontextprotocol/sdk": "1.25.2"
+		"@modelcontextprotocol/sdk": "1.30.0",
+		"undici": "8.10.0"
 	}
 }
