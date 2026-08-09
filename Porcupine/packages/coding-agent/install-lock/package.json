@@ -1,10 +1,10 @@
 {
 	"name": "@porcupineai/coding-agent-install",
-	"version": "0.1.58",
+	"version": "0.1.59",
 	"private": true,
 	"description": "Lockfile root used by the Pi installer and updater.",
 	"dependencies": {
-		"@porcupineai/coding-agent": "0.1.58"
+		"@porcupineai/coding-agent": "0.1.59"
 	},
 	"overrides": {
 		"@ricky0123/vad-web": "0.0.30"

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.1.59] - 2026-08-09
+
+### Fixed
+
+- **TUI rendering corruption**: AssistantMessage/UserMessage components mutated their parent's cached render array while injecting OSC133 markers, compounding the markers on every render — they now copy before mutating (regression-tested).
+- **TUI flicker**: the activity chip no longer forces a full render (which reset the diff baseline and cleared the screen) on every phase change; force stays for genuine full redraws (resume, mode switches).
+- **TUI flicker**: changes entirely outside the visible viewport (status strip above a long scrolled session) previously fell through to a clear-screen full redraw — they now update bookkeeping only; appends remain visible.
+- **CI**: the protocol hot-path benchmark timed out under CI's 5s default (vitest ignores the node:test-style timeout) — iterations reduced to fit; the agent-session-concurrent mock now uses a deterministic abort listener instead of a 5ms poll that starved under CI load; test waits poll `isStreaming` with bounded deadlines.
+
+
 ## [0.1.58] - 2026-08-09
 
 ### Fixed
