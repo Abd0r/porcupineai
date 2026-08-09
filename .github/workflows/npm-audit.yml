@@ -27,7 +27,9 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Audit production vulnerabilities
+        working-directory: Porcupine
         run: npm audit --omit=dev --audit-level=moderate
 
       - name: Verify registry signatures
+        working-directory: Porcupine
         run: npm audit signatures --omit=dev
