@@ -912,6 +912,10 @@ export class SessionManager {
 	private flushed: boolean = false;
 	private fileEntries: FileEntry[] = [];
 	private byId: Map<string, SessionEntry> = new Map();
+	/** Pending JSONL lines for batched appends (debounced — see _schedulePersistFlush). */
+	private persistBuffer: string[] = [];
+	private persistTimer: ReturnType<typeof setTimeout> | null = null;
+	private static readonly PERSIST_DEBOUNCE_MS = 50;
 	private labelsById: Map<string, string> = new Map();
 	private labelTimestampsById: Map<string, string> = new Map();
 	private leafId: string | null = null;
@@ -1035,6 +1039,14 @@ export class SessionManager {
 
 	private _rewriteFile(): void {
 		if (!this.persist || !this.sessionFile) return;
+		// The rewrite writes ALL of fileEntries (the source of truth), which
+		// includes anything still in the append buffer — discard the buffer so
+		// entries are never written twice.
+		if (this.persistTimer) {
+			clearTimeout(this.persistTimer);
+			this.persistTimer = null;
+		}
+		this.persistBuffer = [];
 		const fd = openSync(this.sessionFile, "w");
 		try {
 			for (const entry of this.fileEntries) {
@@ -1093,6 +1105,34 @@ export class SessionManager {
 		return this.sessionFile;
 	}
 
+	/**
+	 * Flush pending buffered appends to the session file in ONE write.
+	 * The entries themselves are always in fileEntries (the source of truth),
+	 * so a rewrite covers everything; this only drains the append buffer.
+	 */
+	private _flushPersistBuffer(): void {
+		if (this.persistTimer) {
+			clearTimeout(this.persistTimer);
+			this.persistTimer = null;
+		}
+		if (!this.persistBuffer.length) return;
+		// Entries already carry their trailing newline; join with no separator.
+		const lines = this.persistBuffer.join("");
+		this.persistBuffer = [];
+		if (!this.persist || !this.sessionFile) return;
+		appendFileSync(this.sessionFile, lines);
+	}
+
+	private _schedulePersistFlush(): void {
+		if (this.persistTimer) return;
+		this.persistTimer = setTimeout(() => {
+			this.persistTimer = null;
+			this._flushPersistBuffer();
+		}, SessionManager.PERSIST_DEBOUNCE_MS);
+		// Never keep the process alive for a pending flush.
+		this.persistTimer.unref?.();
+	}
+
 	_persist(entry: SessionEntry): void {
 		if (!this.persist || !this.sessionFile) return;
 
@@ -1108,6 +1148,10 @@ export class SessionManager {
 		}
 
 		if (!this.flushed) {
+			// First assistant entry: write ALL entries (including anything still
+			// sitting in the append buffer) into the fresh file, then clear the
+			// buffer — fileEntries is complete and the rewrite covers them.
+			this.persistBuffer = [];
 			const fd = openSync(this.sessionFile, "wx");
 			try {
 				for (const e of this.fileEntries) {
@@ -1118,7 +1162,11 @@ export class SessionManager {
 			}
 			this.flushed = true;
 		} else {
-			appendFileSync(this.sessionFile, `${JSON.stringify(entry)}\n`);
+			// Batch appends: same content, same order — one disk write per batch
+			// instead of one syscall per event (large headless/agent sessions
+			// stream thousands of events).
+			this.persistBuffer.push(`${JSON.stringify(entry)}\n`);
+			this._schedulePersistFlush();
 		}
 	}
 
