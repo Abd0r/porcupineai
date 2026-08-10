@@ -63,7 +63,7 @@
 	"engines": {
 		"node": ">=22.19.0"
 	},
-	"version": "0.1.59",
+	"version": "0.1.60",
 	"overrides": {
 		"@ricky0123/vad-web": "0.0.30"
 	},

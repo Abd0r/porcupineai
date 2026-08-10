@@ -15,6 +15,17 @@ Porcupine can turn a document or a research topic into a real, discoverable capa
 
 - **Extract** when the source material already exists: a runbook, a paper (PDF), an article, or a spec you want as a reusable procedure.
 - **Craft** when you want a capability that is not yet written anywhere you have, and live research would improve it.
+
+## Auto-Use (do not wait to be asked)
+
+This skill is the DEFAULT path for capability creation — invoke it yourself when:
+
+1. **A document with a repeatable procedure enters your context**: the user shares a runbook, paper, spec, article, or a notable log/report that describes steps the agent should follow again — extract it proactively (after confirming the document is worth keeping; do not extract one-off chatter).
+2. **A tool or command fails with a reproducible pattern**: you hit the same error twice with a clear recovery path — craft a recovery skill so the next session skips the pain (complements the self-improvement loop's automatic learning; use extract/craft when the failure deserves a hand-written, documented skill).
+3. **A research task produced a reusable procedure**: your deep-research or debugging session distilled steps that would help future sessions — craft it while the knowledge is fresh.
+4. **The user asks to "remember how to X" or "make this a skill"** — that is an explicit extract/craft request.
+
+When auto-triggered, follow the Procedure below; keep the skill lean (one real procedure, not a dump) and verify discoverability before finishing.
 - **Skill vs Tool**:
   - Produce a **Skill** (a SKILL.md) when the outcome is guidance the agent follows - a procedure, checklist, or reference. This is the default.
   - Produce a **Tool** (a callable shell entry in `user-tools.json`) when the outcome is a command the agent should run, e.g. a runbook of terminal steps. Auto-detected for command-heavy documents; override with `--tool`/`--skill`.

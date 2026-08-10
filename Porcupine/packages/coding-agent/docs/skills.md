@@ -4,6 +4,8 @@
 
 Porcupine can create new skills for you: use `/extract-stack` to distill a local document into a reusable skill, or `/craft-stack` to deep-research a topic and then build one. Both write real SKILL.md files (or callable tools) into the agent-home skills dir so they become discoverable and load on demand. See [Skill Crafting](skill-crafting.md).
 
+The agent also authors skills **automatically**: a document with a repeatable procedure (runbook, paper, spec), a recurring tool failure with a clear recovery, or research that produced reusable steps all trigger an automatic extract/craft — you do not need to ask. Authored skills stay lean and verified (see the `skill-crafting` skill for the auto-use triggers).
+
 
 Skills are self-contained capability packages that the agent loads on-demand. A skill provides specialized workflows, setup instructions, helper scripts, and reference documentation for specific tasks.
 

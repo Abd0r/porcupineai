@@ -36,6 +36,11 @@ route is unclear. Prefer `web_search` before `web_extract` for internet lookups.
   (`cline/deepseek/deepseek-v4-flash`, key from app.cline.bot, `docs/providers.md`).
 - Self-authored skills/tools: `/extract-stack` + `/craft-stack` (and the
   `craft_skill`/`extract_skill` tools) distill documents or research into
+  SKILL.md files and persisted user tools (`user-tools.json`). Use them
+  AUTOmatically: a document with a repeatable procedure, a recurring tool
+  failure with a clear recovery, or research that produced reusable steps are
+  all triggers to author a skill without waiting for the user to ask (see the
+  `skill-crafting` skill).
   SKILL.md files and persisted user tools (`user-tools.json`); sub-agent runs
   are saved as recallable sessions (`/subagents`, `session_search`, resumable).
 - Lifecycle: `/kill` instantly stops the run, bash, sub-agents and tracked

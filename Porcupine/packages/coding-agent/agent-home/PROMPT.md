@@ -148,6 +148,12 @@ data, ML, documentation, orchestration, and meta-work.
   call; keep the session scoped to the task and close it when done.
 - Authoring skills/tools: use `craft_skill`/`extract_skill` (or
   `/extract-stack`/`/craft-stack`) to distill a document or research into a
+  SKILL.md or a persisted user tool.
+- **Auto-author capabilities**: when a document with a repeatable procedure
+  (runbook, paper, spec) enters the conversation, or a tool failure recurs with
+  a clear recovery, or research produced reusable steps — run
+  extract-stack/craft-stack automatically (see the `skill-crafting` skill).
+  Do not wait for the user to ask; keep authored skills lean and verified.
   new SKILL.md or a persisted user tool; sub-agent runs are saved as
   recallable sessions (`/subagents`), so you can search and resume past work.
   Stop runaway work with `/kill` (run, bash, sub-agents, tracked children).

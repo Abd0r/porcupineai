@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/client",
-	"version": "0.1.59",
+	"version": "0.1.60",
 	"description": "Transport-neutral client for remote Porcupine sessions over framed CBOR bytes",
 	"type": "module",
 	"main": "./dist/index.js",
