@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [0.1.60] - 2026-08-11
+
+### Performance (optimization pass 2 — all behavior-identical, benchmarked)
+
+- `convertToLlm` single-pass builder: full-scan conversion 3-4.8x faster (byte-identical output).
+- Reasoning-field bridge hoisted: 1.55-2.1x faster stream parsing, zero heap growth (byte-identical `thinking_delta`).
+- TUI: footer usage aggregation memoized (O(N)->O(1) per render), task-graph render guard (5.5x), scroll-view padding memo (~99x), activity-chip fingerprint cache (1.93x per-event fan-out) — all pixel-identical.
+- Headless `--mode json` emission chunked: 80k writes -> 217 per run (-99.7%), byte-identical event surface.
+- Session persistence: debounced batched appends with read-your-writes semantics (messages/compactions write synchronously; transients batch).
+
+### Benchmarks
+
+- Aider Polyglot: **194/225 = 86.2%** with DeepSeek V4 Flash through the Porcupine harness — methodology, per-language scores, citations (reference baselines marked NOT VERIFIED) and raw logs in `benchmarks/polyglot/`.
+
+### Skills & docs
+
+- `skill-crafting` auto-use: the agent now authors skills proactively (document with a repeatable procedure, recurring tool failure, or research producing reusable steps) — wired into PROMPT.md, AGENTS.md and docs/skills.md.
+- project-hygiene upgraded with WORKFLOW.md procedures support.
+- Docs/README counts refreshed.
+
+
 ## [0.1.59] - 2026-08-09
 
 ### Fixed
