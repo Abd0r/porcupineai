@@ -1152,7 +1152,7 @@ export class SessionManager {
 			// sitting in the append buffer) into the fresh file, then clear the
 			// buffer — fileEntries is complete and the rewrite covers them.
 			this.persistBuffer = [];
-			const fd = openSync(this.sessionFile, "wx");
+			const fd = openSync(this.sessionFile, "w");
 			try {
 				for (const e of this.fileEntries) {
 					writeFileSync(fd, `${JSON.stringify(e)}\n`);
@@ -1174,7 +1174,18 @@ export class SessionManager {
 		this.fileEntries.push(entry);
 		this.byId.set(entry.id, entry);
 		this.leafId = entry.id;
-		this._persist(entry);
+		// Read-critical entries (reloads, forking, session info and the tests read
+		// the file right after appending) must write synchronously: messages,
+		// compactions and branch summaries. Only the true transient entries
+		// (thinking level/model changes, labels) batch into the debounced flush.
+		if (entry.type === "message" || entry.type === "compaction" || entry.type === "branch_summary") {
+			// Persist (which buffers for the batched path) then flush synchronously
+			// so the entry is on disk before any reader looks.
+			this._persist(entry);
+			this._flushPersistBuffer();
+		} else {
+			this._persist(entry);
+		}
 	}
 
 	/** Append a message as child of current leaf, then advance leaf. Returns entry id.
