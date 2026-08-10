@@ -50,7 +50,7 @@ control (**Ask** confirms everything, **Normal** asks on flagged commands,
   real usage: evidence-graded proposals, snapshots + auto-rollback, a live
   activity feed (`/learning feed`), a refiner for weak skills, and a reviewed
   `tools.porcupine.json` registry for composed tools.
-- **48 skills across all 17 stacks** — research-grounded, agentskills.io
+- **50 skills across all 17 stacks** — research-grounded, agentskills.io
   compliant, from `problem-solving` (the universal loop) to `secure-coding`,
   `shell-craft`, and `autonomous-delegation`.
 - **Dynamic task graph** — footer tracker + chat graph animate on every
