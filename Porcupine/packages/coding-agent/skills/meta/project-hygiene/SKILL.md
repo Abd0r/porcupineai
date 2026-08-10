@@ -123,7 +123,8 @@ After a meaningful project action:
 1. Run the relevant verification before updating project state.
 2. Update `STATUS.md` with the actual result, blocker, and one next verified action.
 3. Add evidence or a decision only when it changes what should happen next.
-4. Keep claims traceable to a command, file path, measured result, or cited source.
+4. Update `WORKFLOW.md` when a procedure changes (a new flag, a different gate, a new recovery step) so the recorded workflow never silently diverges from reality.
+5. Keep claims traceable to a command, file path, measured result, or cited source.
 
 Do not put credentials, tokens, private session transcripts, speculative benchmark numbers, or copied tool output dumps in project documents.
 

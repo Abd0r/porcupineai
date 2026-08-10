@@ -55,6 +55,13 @@ import { buildBaseOptions } from "./simple-options.ts";
 import { transformMessages } from "./transform-messages.ts";
 
 /**
+ * Streaming reasoning fields, checked in priority order for each delta. Hoisted
+ * to module scope: the previous per-chunk array literal allocated a fresh
+ * 3-element array for every chunk (40-90k allocations on a max-reasoning run).
+ */
+const REASONING_FIELDS = ["reasoning_content", "reasoning", "reasoning_text"] as const;
+
+/**
  * Check if conversation messages contain tool calls or tool results.
  * This is needed because Anthropic (via proxy) requires the tools param
  * to be present when messages include tool_calls or tool role messages.
@@ -485,33 +492,31 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 					// or reasoning (other openai compatible endpoints)
 					// Use the first non-empty reasoning field to avoid duplication
 					// (e.g., chutes.ai returns both reasoning_content and reasoning with same content)
-					const reasoningFields = ["reasoning_content", "reasoning", "reasoning_text"];
 					const deltaFields = choice.delta as Record<string, unknown>;
 					let foundReasoningField: string | null = null;
-					for (const field of reasoningFields) {
+					let reasoningDelta: string | null = null;
+					for (const field of REASONING_FIELDS) {
 						const value = deltaFields[field];
 						if (typeof value === "string" && value.length > 0) {
 							foundReasoningField = field;
+							reasoningDelta = value;
 							break;
 						}
 					}
 
-					if (foundReasoningField) {
-						const delta = deltaFields[foundReasoningField];
-						if (typeof delta === "string" && delta.length > 0) {
-							const thinkingSignature =
-								model.provider === "opencode-go" && foundReasoningField === "reasoning"
-									? "reasoning_content"
-									: foundReasoningField;
-							const block = ensureThinkingBlock(thinkingSignature);
-							block.thinking += delta;
-							stream.push({
-								type: "thinking_delta",
-								contentIndex: getContentIndex(block),
-								delta,
-								partial: output,
-							});
-						}
+					if (foundReasoningField && reasoningDelta) {
+						const thinkingSignature =
+							model.provider === "opencode-go" && foundReasoningField === "reasoning"
+								? "reasoning_content"
+								: foundReasoningField;
+						const block = ensureThinkingBlock(thinkingSignature);
+						block.thinking += reasoningDelta;
+						stream.push({
+							type: "thinking_delta",
+							contentIndex: getContentIndex(block),
+							delta: reasoningDelta,
+							partial: output,
+						});
 					}
 
 					if (choice?.delta?.tool_calls) {

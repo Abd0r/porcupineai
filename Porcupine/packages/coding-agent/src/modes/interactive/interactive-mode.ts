@@ -2524,6 +2524,13 @@ export class InteractiveMode {
 	private subagentFooterFrames: string[] | undefined;
 	private subagentFooterIndex = 0;
 	private subagentFooterTimer: ReturnType<typeof setInterval> | undefined;
+	// Fingerprint of the last-built footer chip content. Sub-agent progress
+	// events fire densely (many `step`/`turn` events per second), but the footer
+	// chip text only changes when a run's phase / tool / relevant tool args
+	// change. We cache the chip rebuild on this cheap key so unchanged events
+	// skip the subagentActivityIndicator/toolChip/resolveToolActivity + string
+	// allocations entirely (the 320ms footer timer still animates the dots).
+	private subagentFooterChipKey = "";
 
 	private getSubagentFooterChip(): string | undefined {
 		if (!this.subagentFooterFrames || this.subagentFooterFrames.length === 0) return undefined;
@@ -2544,6 +2551,28 @@ export class InteractiveMode {
 			clearInterval(this.subagentFooterTimer);
 			this.subagentFooterTimer = undefined;
 		}
+	}
+
+	/**
+	 * Cheap fingerprint of the run state that drives the footer chip. The chip
+	 * is a pure function of each run's { phase, lastTool } plus the tool-arg
+	 * fields resolveToolActivity reads (path/action/kind/query), in slot order.
+	 * When this key is unchanged across consecutive progress events, the chip
+	 * frames are guaranteed identical, so the costly rebuild can be skipped.
+	 */
+	private subagentFooterKey(
+		runs: Array<{ id: string; phase?: string; lastTool?: string; lastToolArgs?: unknown }>,
+	): string {
+		let key = "";
+		for (const run of runs) {
+			const a = (run.lastToolArgs ?? {}) as Record<string, unknown>;
+			const path = typeof a.path === "string" ? a.path : "";
+			const action = typeof a.action === "string" ? a.action : "";
+			const kind = typeof a.kind === "string" ? a.kind : "";
+			const query = typeof a.query === "string" ? a.query : "";
+			key += `${run.id}|${run.phase ?? ""}|${run.lastTool ?? ""}|${path}|${action}|${kind}|${query};`;
+		}
+		return key;
 	}
 
 	private subagentActivityIndicator(
@@ -3924,13 +3953,22 @@ export class InteractiveMode {
 			// "🤖(📄 Extracting, 🌐 Searching)" beside the 🧵 thread counter while
 			// any worker runs. The status strip stays the main agent's.
 			if (state.runs.length > 0 && this.session.runningSubagentCount > 0) {
-				const indicator = this.subagentActivityIndicator(state.runs);
-				this.subagentFooterFrames = indicator?.frames ?? undefined;
+				// Events fire densely, but the chip text only changes when a run's
+				// phase / tool / tool-args change. Reuse the last-built frames when
+				// the state is unchanged; keep the index reset + timer so the visual
+				// rendering stays byte-for-byte identical to the prior per-event rebuild.
+				const key = this.subagentFooterKey(state.runs);
+				if (key !== this.subagentFooterChipKey) {
+					this.subagentFooterChipKey = key;
+					const indicator = this.subagentActivityIndicator(state.runs);
+					this.subagentFooterFrames = indicator?.frames ?? undefined;
+				}
 				this.subagentFooterIndex = 0;
 				this.startSubagentFooterTimer();
 			} else {
 				this.stopSubagentFooterTimer();
 				this.subagentFooterFrames = undefined;
+				this.subagentFooterChipKey = "";
 			}
 			this.ui.requestRender();
 		});

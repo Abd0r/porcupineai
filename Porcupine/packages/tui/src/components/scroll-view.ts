@@ -186,8 +186,26 @@ export class ScrollView extends Container {
 	override render(width: number): string[] {
 		const contentWidth = this.getContentWidth(width);
 		const lines = this.child.render(contentWidth);
-		return contentWidth === width ? lines : lines.map((line) => `${line} `);
+		if (contentWidth === width) {
+			return lines;
+		}
+		// Scrollbar reserves one column: each child line is padded by a trailing space.
+		// Child renders are cached by-reference, so memoize the padded result keyed by the
+		// child array identity + width to avoid re-allocating 1000+ strings on unchanged
+		// content. The cached array is returned by reference and never mutated.
+		if (lines === this.lastPaddedLines && width === this.lastPaddedWidth && this.lastPaddedResult) {
+			return this.lastPaddedResult;
+		}
+		const padded = lines.map((line) => `${line} `);
+		this.lastPaddedLines = lines;
+		this.lastPaddedWidth = width;
+		this.lastPaddedResult = padded;
+		return padded;
 	}
+
+	private lastPaddedLines?: readonly string[];
+	private lastPaddedWidth = -1;
+	private lastPaddedResult?: string[];
 
 	[LAYOUT_NODE](): ScrollLayoutNode {
 		return { type: "scroll", component: this.child, state: this };

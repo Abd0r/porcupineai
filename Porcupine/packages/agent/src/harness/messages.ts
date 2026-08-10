@@ -118,47 +118,58 @@ export function createCustomMessage(
 }
 
 export function convertToLlm(messages: AgentMessage[]): Message[] {
-	return messages
-		.map((m): Message | undefined => {
-			switch (m.role) {
-				case "bashExecution":
-					if (m.excludeFromContext) {
-						return undefined;
-					}
-					return {
-						role: "user",
-						content: [{ type: "text", text: bashExecutionToText(m) }],
-						timestamp: m.timestamp,
-					};
-				case "custom": {
-					const content = typeof m.content === "string" ? [{ type: "text" as const, text: m.content }] : m.content;
-					return {
-						role: "user",
-						content,
-						timestamp: m.timestamp,
-					};
+	// Single-pass builder: avoids the map→filter double pass and the intermediate
+	// `(Message | undefined)[]` allocation. Semantics are identical (same order, same
+	// filtering of un-convertible roles, same object references passed through for
+	// standard roles). Pre-sized so the common no-filter case avoids reallocation.
+	const out = new Array<Message>(messages.length);
+	let n = 0;
+	for (const m of messages) {
+		switch (m.role) {
+			case "bashExecution":
+				if (m.excludeFromContext) {
+					break;
 				}
-				case "branchSummary":
-					return {
-						role: "user",
-						content: [{ type: "text" as const, text: BRANCH_SUMMARY_PREFIX + m.summary + BRANCH_SUMMARY_SUFFIX }],
-						timestamp: m.timestamp,
-					};
-				case "compactionSummary":
-					return {
-						role: "user",
-						content: [
-							{ type: "text" as const, text: COMPACTION_SUMMARY_PREFIX + m.summary + COMPACTION_SUMMARY_SUFFIX },
-						],
-						timestamp: m.timestamp,
-					};
-				case "user":
-				case "assistant":
-				case "toolResult":
-					return m;
-				default:
-					return undefined;
+				out[n++] = {
+					role: "user",
+					content: [{ type: "text", text: bashExecutionToText(m) }],
+					timestamp: m.timestamp,
+				};
+				break;
+			case "custom": {
+				const content = typeof m.content === "string" ? [{ type: "text" as const, text: m.content }] : m.content;
+				out[n++] = {
+					role: "user",
+					content,
+					timestamp: m.timestamp,
+				};
+				break;
 			}
-		})
-		.filter((m): m is Message => m !== undefined);
+			case "branchSummary":
+				out[n++] = {
+					role: "user",
+					content: [{ type: "text" as const, text: BRANCH_SUMMARY_PREFIX + m.summary + BRANCH_SUMMARY_SUFFIX }],
+					timestamp: m.timestamp,
+				};
+				break;
+			case "compactionSummary":
+				out[n++] = {
+					role: "user",
+					content: [
+						{ type: "text" as const, text: COMPACTION_SUMMARY_PREFIX + m.summary + COMPACTION_SUMMARY_SUFFIX },
+					],
+					timestamp: m.timestamp,
+				};
+				break;
+			case "user":
+			case "assistant":
+			case "toolResult":
+				out[n++] = m;
+				break;
+			default:
+				break;
+		}
+	}
+	out.length = n;
+	return out;
 }

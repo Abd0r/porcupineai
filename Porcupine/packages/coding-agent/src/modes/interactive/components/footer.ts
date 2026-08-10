@@ -3,7 +3,7 @@ import { type Component, truncateToWidth, visibleWidth } from "@porcupineai/tui"
 import type { AgentSession } from "../../../core/agent-session.ts";
 import { areExperimentalFeaturesEnabled } from "../../../core/experimental.ts";
 import type { ReadonlyFooterDataProvider } from "../../../core/footer-data-provider.ts";
-import { addUsageToTotals, createUsageTotals } from "../../../core/usage-totals.ts";
+import { addUsageToTotals, createUsageTotals, type UsageTotals } from "../../../core/usage-totals.ts";
 import { formatInteractionModeBadge } from "../../../porcupine/interaction-mode.ts";
 import type { TaskGraphStepView, TaskGraphView } from "../../../porcupine/session-orchestrator.ts";
 import { theme } from "../theme/theme.ts";
@@ -89,6 +89,16 @@ export class FooterComponent implements Component {
 	/** Live animated sub-agent chip frame ("🤖(📄 Extracting, 🌐 Searching)"), from interactive-mode. */
 	private getSubagentChip?: () => string | undefined;
 
+	// Usage aggregation cache. The session is append-only, so the aggregates over all
+	// entries are stable as long as the tail is unchanged. We keyed on the flattened
+	// identity of the entry sequence: its length plus the reference of its last entry (a
+	// new append changes the length, the last reference, or both). This makes the O(entries)
+	// cost of every footer render pay only when the session actually grows.
+	private cachedEntriesLength = -1;
+	private cachedLastEntry?: object;
+	private cachedUsageTotals?: UsageTotals;
+	private cachedLatestCacheHitRate?: number;
+
 	constructor(
 		session: AgentSession,
 		footerData: ReadonlyFooterDataProvider,
@@ -128,23 +138,39 @@ export class FooterComponent implements Component {
 	render(width: number): string[] {
 		const state = this.session.state;
 
-		// Calculate cumulative usage from ALL session entries (not just post-compaction messages)
-		const usageTotals = createUsageTotals();
+		// Calculate cumulative usage from ALL session entries (not just post-compaction messages).
+		// The entries sequence is append-only, so cache the O(entries) aggregation keyed by
+		// sequence identity (entries.length + last-entry reference) and only recompute on growth.
+		const entries = this.session.sessionManager.getEntries();
+		const entriesLength = entries.length;
+		const lastEntry: object | undefined = entries[entriesLength - 1];
+		let usageTotals: UsageTotals;
 		let latestCacheHitRate: number | undefined;
+		if (entriesLength === this.cachedEntriesLength && lastEntry === this.cachedLastEntry) {
+			usageTotals = this.cachedUsageTotals!;
+			latestCacheHitRate = this.cachedLatestCacheHitRate;
+		} else {
+			usageTotals = createUsageTotals();
+			latestCacheHitRate = undefined;
 
-		for (const entry of this.session.sessionManager.getEntries()) {
-			if (entry.type === "message" && entry.message.role === "assistant") {
-				addUsageToTotals(usageTotals, entry.message.usage);
+			for (const entry of entries) {
+				if (entry.type === "message" && entry.message.role === "assistant") {
+					addUsageToTotals(usageTotals, entry.message.usage);
 
-				const latestPromptTokens =
-					entry.message.usage.input + entry.message.usage.cacheRead + entry.message.usage.cacheWrite;
-				latestCacheHitRate =
-					latestPromptTokens > 0 ? (entry.message.usage.cacheRead / latestPromptTokens) * 100 : undefined;
-			} else if (entry.type === "message" && entry.message.role === "toolResult" && entry.message.usage) {
-				addUsageToTotals(usageTotals, entry.message.usage);
-			} else if ((entry.type === "branch_summary" || entry.type === "compaction") && entry.usage) {
-				addUsageToTotals(usageTotals, entry.usage);
+					const latestPromptTokens =
+						entry.message.usage.input + entry.message.usage.cacheRead + entry.message.usage.cacheWrite;
+					latestCacheHitRate =
+						latestPromptTokens > 0 ? (entry.message.usage.cacheRead / latestPromptTokens) * 100 : undefined;
+				} else if (entry.type === "message" && entry.message.role === "toolResult" && entry.message.usage) {
+					addUsageToTotals(usageTotals, entry.message.usage);
+				} else if ((entry.type === "branch_summary" || entry.type === "compaction") && entry.usage) {
+					addUsageToTotals(usageTotals, entry.usage);
+				}
 			}
+			this.cachedEntriesLength = entriesLength;
+			this.cachedLastEntry = lastEntry;
+			this.cachedUsageTotals = usageTotals;
+			this.cachedLatestCacheHitRate = latestCacheHitRate;
 		}
 
 		// Calculate context usage from session (handles compaction correctly).

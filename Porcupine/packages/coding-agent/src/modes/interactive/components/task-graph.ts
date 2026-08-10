@@ -53,14 +53,22 @@ export class TaskGraphComponent extends Text {
 	}
 
 	setGraph(graph: TaskGraphView): void {
+		// Skip work when the graph is unchanged: the base Text cache already returns the
+		// previously rendered lines by reference, but only if we don't invalidate it via
+		// setText. Guard the rebuild on whether the generated display text would change.
+		if (this.graph === graph) return;
 		this.graph = graph;
-		this.updateDisplay();
+		const rendered = this.renderText();
+		if (this.lastRenderedText === rendered) return;
+		this.lastRenderedText = rendered;
+		this.setText(rendered);
 	}
 
-	private updateDisplay(): void {
+	private lastRenderedText?: string;
+
+	private renderText(): string {
 		if (this.graph.status === "idle" || (this.graph.steps.length === 0 && !this.graph.objective)) {
-			this.setText("");
-			return;
+			return "";
 		}
 
 		const header = theme.fg(
@@ -83,6 +91,13 @@ export class TaskGraphComponent extends Text {
 			lines.push(theme.fg("warning", "   blocked — continuing with best-effort tools"));
 		}
 
-		this.setText(lines.join("\n"));
+		return lines.join("\n");
+	}
+
+	private updateDisplay(): void {
+		const rendered = this.renderText();
+		if (this.lastRenderedText === rendered) return;
+		this.lastRenderedText = rendered;
+		this.setText(rendered);
 	}
 }
