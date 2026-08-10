@@ -96,7 +96,7 @@ official benchmark suites. Same model, same benchmark, different harness.
 | Benchmark | DSV4F published | **Porcupine harness** | Status |
 |---|---|---|---|
 | **Aider Polyglot** (225) | 71.6% · 74.1% (⚠️ unverified refs) | **86.2% (194/225)** | ✅ complete |
-| Terminal-Bench 2.1 (89) | 82.7% (official card) | 42/89 scored · 80.8% of clean runs | 🔬 infra-limited run |
+| Terminal-Bench 2.1 (89) | 82.7% (official card) | in progress | 🔬 |
 | SWE-bench Verified (500) | 79.0% | not started | ⏳ |
 
 Aider Polyglot methodology, per-language scores, citations, and raw logs:
@@ -113,7 +113,7 @@ Aider Polyglot methodology, per-language scores, citations, and raw logs:
   other and you live; `send_to_subagent` steers any running worker.
 - **MCP client** — connect MCP servers (stdio + Streamable HTTP); tools, resources (`mcp_resources`) and prompts (`/mcpp:`) become first-class. Fail-closed security gate, browser OAuth, OS-keyring tokens.
 - **Autonomous learning** — the agent improves its own skills and memory from real use: evidence-graded proposals, snapshots + auto-rollback, a live feed (`/learning feed`), and a refiner for weak skills.
-- **49 skills across 17 stacks** — from `problem-solving` to `secure-coding`, `root-cause-analysis`, and `autonomous-delegation`; a `deep-research` skill orchestrates parallel sub-agent research with evidence grading.
+- **50 skills across 17 stacks** — from `problem-solving` to `secure-coding`, `root-cause-analysis`, and `autonomous-delegation`; a `deep-research` skill orchestrates parallel sub-agent research with evidence grading.
 - **Dynamic task graph** — the footer tracker animates on every multi-step turn.
 - **Voice** — `/voice on`, push-to-talk with Space.
 - **Tasks & Cron** — durable task templates with attended schedules (`/task`, `/cron`), task chaining (`next`/`nextOnFail`), event triggers (`file` content-change, `script` exit-code), and completion notifications to your chat bridges (`notifyOnTaskCompletion`).
