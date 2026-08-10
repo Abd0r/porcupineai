@@ -88,6 +88,20 @@ You can switch providers any time with `/model`; bring your own key, no lock-in.
 
 Reasoning depth is separate from permission: `/reasoning` and `/adaptive` tune thinking effort without changing what the agent is allowed to do.
 
+## Benchmarks
+
+Porcupine as the harness, DeepSeek V4 Flash (latest release) as the model,
+official benchmark suites. Same model, same benchmark, different harness.
+
+| Benchmark | DSV4F published | **Porcupine harness** | Status |
+|---|---|---|---|
+| **Aider Polyglot** (225) | 71.6% · 74.1% (⚠️ unverified refs) | **86.2% (194/225)** | ✅ complete |
+| Terminal-Bench 2.1 (89) | 82.7% (official card) | 42/89 scored · 80.8% of clean runs | 🔬 infra-limited run |
+| SWE-bench Verified (500) | 79.0% | not started | ⏳ |
+
+Aider Polyglot methodology, per-language scores, citations, and raw logs:
+[`benchmarks/polyglot/`](benchmarks/polyglot/).
+
 ## What's inside
 
 - **Sub-agents** — up to 3 parallel workers with the whole tool stack (minus
