@@ -96,7 +96,7 @@ official benchmark suites. Same model, same benchmark, different harness.
 | Benchmark | DSV4F published | **Porcupine harness** | Status |
 |---|---|---|---|
 | **Aider Polyglot** (225) | 71.6% · 74.1% (⚠️ unverified refs) | **86.2% (194/225)** | ✅ complete |
-| Terminal-Bench 2.1 (89) | 82.7% (official card) | in progress | 🔬 |
+| Terminal-Bench 2.1 (89) | 82.7% (official card) | **45/89 · 83.3% clean-pass rate** (35 infra-unscored) | ✅ complete |
 | SWE-bench Verified (500) | 79.0% | not started | ⏳ |
 
 Aider Polyglot methodology, per-language scores, citations, and raw logs:
