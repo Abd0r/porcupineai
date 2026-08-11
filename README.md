@@ -225,7 +225,7 @@ Contributions are welcome. Keep changes focused, test behavior changes, and upda
 
 Porcupine is released under the [MIT License](LICENSE).
 
-Porcupine is its own product, built on top of [Pi](https://github.com/earendil-works/pi) and its MIT-licensed foundations. Required attribution is preserved.
+Built on top of [Pi](https://github.com/earendil-works/pi) (MIT).
 
 ---
 
