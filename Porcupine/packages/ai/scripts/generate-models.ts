@@ -827,7 +827,13 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
 	if (model.api === "anthropic-messages" && isAnthropicTemperatureUnsupportedModel(model.id)) {
 		mergeAnthropicMessagesCompat(model, { supportsTemperature: false });
 	}
-	if (model.api === "openai-completions" && model.id.includes("deepseek-v4")) {
+	if (
+		model.id.includes("deepseek-v4") &&
+		(model.api === "openai-completions" || model.provider === "opencode-go")
+	) {
+		// OpenCode Go's upstream API classification can change independently of
+		// the model's verified high/max effort contract. Keep that provider
+		// override stable across catalog regeneration.
 		mergeThinkingLevelMap(
 			model,
 			model.provider === "openrouter"
