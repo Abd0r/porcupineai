@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/porcupineai",
-	"version": "0.1.63",
+	"version": "0.1.64",
 	"description": "Porcupine \u2014 a terminal coding agent that plans, acts inside explicit permission modes, and verifies its work. The whole Porcupine codebase ships as one package.",
 	"license": "MIT",
 	"keywords": [

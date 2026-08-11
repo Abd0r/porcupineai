@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.64] - 2026-08-11
+
 ### Performance
 
 - Reduced streaming content-block indexing from repeated linear scans to stable O(1) lookups across Anthropic, Bedrock, and OpenAI Completions streams.
