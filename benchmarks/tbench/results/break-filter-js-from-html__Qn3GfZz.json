@@ -1,0 +1,115 @@
+{
+    "id": "ba375c27-8481-472a-b33f-7f9b0b26e839",
+    "task_name": "terminal-bench/break-filter-js-from-html",
+    "trial_name": "break-filter-js-from-html__Qn3GfZz",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__09-00-45/break-filter-js-from-html__Qn3GfZz",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "break-filter-js-from-html"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "18c1690b7d400a709a1d488df4b7929717e52a750fddbbf23d3fe07251906d60",
+    "config": {
+        "task": {
+            "path": "break-filter-js-from-html",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "break-filter-js-from-html__Qn3GfZz",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__09-00-45",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "02f95916-636d-4287-9d37-963ba298be5e"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 20411,
+        "n_cache_tokens": 313216,
+        "n_output_tokens": 28808,
+        "cost_usd": 0.005900392399999999,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1.0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-08-10T03:30:47.614697Z",
+    "finished_at": "2026-08-10T03:36:33.671532Z",
+    "environment_setup": {
+        "started_at": "2026-08-10T03:30:47.757662Z",
+        "finished_at": "2026-08-10T03:30:50.222962Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-10T03:30:50.223026Z",
+        "finished_at": "2026-08-10T03:31:11.399771Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-10T03:31:11.399847Z",
+        "finished_at": "2026-08-10T03:36:01.344618Z"
+    },
+    "verifier": {
+        "started_at": "2026-08-10T03:36:09.526170Z",
+        "finished_at": "2026-08-10T03:36:21.602242Z"
+    },
+    "step_results": null
+}

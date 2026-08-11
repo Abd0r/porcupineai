@@ -1,0 +1,113 @@
+{
+    "id": "a8aadadd-e400-499f-90b6-9adfa095ed7c",
+    "task_name": "terminal-bench/sam-cell-seg",
+    "trial_name": "sam-cell-seg__5h8Q8wG",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__18-14-17/sam-cell-seg__5h8Q8wG",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "sam-cell-seg"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "9df074bc4d4e082998b52be5c41c5b24ea259edd1d13a042f064251a16e841ad",
+    "config": {
+        "task": {
+            "path": "sam-cell-seg",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "sam-cell-seg__5h8Q8wG",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__18-14-17",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "90a18fe1-854b-4736-8150-e2b0e56cdb51"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 13530,
+        "n_cache_tokens": 88064,
+        "n_output_tokens": 11689,
+        "cost_usd": 0.0027068496,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": null,
+    "exception_info": {
+        "exception_type": "CancelledError",
+        "exception_message": "",
+        "exception_traceback": "Traceback (most recent call last):\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 354, in run\n    await self._run()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/single_step.py\", line 41, in _run\n    await self._run_agent()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/single_step.py\", line 77, in _run_agent\n    await self._run_agent_phase(\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 450, in _run_agent_phase\n    await asyncio.wait_for(\n  File \"/usr/lib/python3.12/asyncio/tasks.py\", line 520, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"/home/abdur/pi-terminal-bench/src/pi_terminal_bench/porcupine_agent.py\", line 85, in run\n    await self.exec_as_agent(\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/agents/installed/base.py\", line 592, in exec_as_agent\n    return await self._exec(\n           ^^^^^^^^^^^^^^^^^\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/agents/installed/base.py\", line 543, in _exec\n    result = await environment.exec(\n             ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 1096, in exec\n    return await self._compose_exec(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 1173, in _compose_exec\n    return await self._run_docker_compose_command(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 649, in _run_docker_compose_command\n    result = await self._collect_buffered_output(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 675, in _collect_buffered_output\n    stdout_bytes, stderr_bytes = await asyncio.wait_for(\n                                 ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/tasks.py\", line 520, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/subprocess.py\", line 201, in communicate\n    stdin, stdout, stderr = await tasks.gather(stdin, stdout, stderr)\n                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/subprocess.py\", line 181, in _read_stream\n    output = await stream.read()\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/streams.py\", line 706, in read\n    block = await self.read(self._limit)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/streams.py\", line 713, in read\n    await self._wait_for_data('read')\n  File \"/usr/lib/python3.12/asyncio/streams.py\", line 545, in _wait_for_data\n    await self._waiter\nasyncio.exceptions.CancelledError\n",
+        "occurred_at": "2026-08-10T20:01:35.988707"
+    },
+    "started_at": "2026-08-10T14:27:33.101086Z",
+    "finished_at": "2026-08-10T14:31:51.942391Z",
+    "environment_setup": {
+        "started_at": "2026-08-10T14:27:33.102274Z",
+        "finished_at": "2026-08-10T14:28:02.059884Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-10T14:28:02.059901Z",
+        "finished_at": "2026-08-10T14:28:10.018504Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-10T14:28:10.018578Z",
+        "finished_at": "2026-08-10T14:30:36.073441Z"
+    },
+    "verifier": null,
+    "step_results": null
+}

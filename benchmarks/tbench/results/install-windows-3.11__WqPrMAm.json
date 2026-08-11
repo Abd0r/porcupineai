@@ -1,0 +1,115 @@
+{
+    "id": "1aaaaf25-e2be-4cfb-810f-19a541919239",
+    "task_name": "terminal-bench/install-windows-3.11",
+    "trial_name": "install-windows-3.11__WqPrMAm",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__18-14-17/install-windows-3.11__WqPrMAm",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "install-windows-3.11"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "e1dd05887b18fcc9367d363454edb4143a1cd342948e7f875b9e3420eb500ed7",
+    "config": {
+        "task": {
+            "path": "install-windows-3.11",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "install-windows-3.11__WqPrMAm",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__18-14-17",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "90a18fe1-854b-4736-8150-e2b0e56cdb51"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 13946,
+        "n_cache_tokens": 1177856,
+        "n_output_tokens": 28529,
+        "cost_usd": 0.006619278399999999,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 0.0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-08-10T13:10:57.663345Z",
+    "finished_at": "2026-08-10T13:25:04.806741Z",
+    "environment_setup": {
+        "started_at": "2026-08-10T13:10:57.666120Z",
+        "finished_at": "2026-08-10T13:10:59.821903Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-10T13:10:59.821951Z",
+        "finished_at": "2026-08-10T13:11:13.422224Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-10T13:11:13.422378Z",
+        "finished_at": "2026-08-10T13:24:12.447322Z"
+    },
+    "verifier": {
+        "started_at": "2026-08-10T13:24:13.510378Z",
+        "finished_at": "2026-08-10T13:24:53.573092Z"
+    },
+    "step_results": null
+}

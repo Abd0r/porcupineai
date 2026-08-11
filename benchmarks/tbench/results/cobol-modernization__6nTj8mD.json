@@ -1,0 +1,115 @@
+{
+    "id": "d01e7434-5f49-439d-a0e4-9f910d0db2a1",
+    "task_name": "terminal-bench/cobol-modernization",
+    "trial_name": "cobol-modernization__6nTj8mD",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__06-03-09/cobol-modernization__6nTj8mD",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "cobol-modernization"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "1d068f63a7d36ec098b620a8b2062419c1a9a2eff6458bc3ff56eb325ebf5903",
+    "config": {
+        "task": {
+            "path": "cobol-modernization",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "cobol-modernization__6nTj8mD",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__06-03-09",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "2d05b512-e5e1-45d5-9fac-6bd85b8d52da"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 34934,
+        "n_cache_tokens": 2357888,
+        "n_output_tokens": 91329,
+        "cost_usd": 0.018532483199999998,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1.0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-08-10T01:12:15.482878Z",
+    "finished_at": "2026-08-10T01:27:54.478848Z",
+    "environment_setup": {
+        "started_at": "2026-08-10T01:12:15.513022Z",
+        "finished_at": "2026-08-10T01:12:16.686610Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-10T01:12:16.686976Z",
+        "finished_at": "2026-08-10T01:12:26.899207Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-10T01:12:26.900371Z",
+        "finished_at": "2026-08-10T01:27:16.460641Z"
+    },
+    "verifier": {
+        "started_at": "2026-08-10T01:27:27.468152Z",
+        "finished_at": "2026-08-10T01:27:41.280880Z"
+    },
+    "step_results": null
+}

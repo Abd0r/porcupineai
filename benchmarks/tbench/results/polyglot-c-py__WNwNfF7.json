@@ -1,0 +1,115 @@
+{
+    "id": "e8c2220c-09df-47d5-a8a6-2ec012b1a6da",
+    "task_name": "terminal-bench/polyglot-c-py",
+    "trial_name": "polyglot-c-py__WNwNfF7",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__18-14-17/polyglot-c-py__WNwNfF7",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "polyglot-c-py"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "abc8d22035f9bc34cddcabfdf8f6e75f7f1f3c4cc5788ba29214f9fdbcd68d7c",
+    "config": {
+        "task": {
+            "path": "polyglot-c-py",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "polyglot-c-py__WNwNfF7",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__18-14-17",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "90a18fe1-854b-4736-8150-e2b0e56cdb51"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 56218,
+        "n_cache_tokens": 618624,
+        "n_output_tokens": 43738,
+        "cost_usd": 0.010924653599999999,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1.0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-08-10T13:50:17.480402Z",
+    "finished_at": "2026-08-10T14:21:54.616589Z",
+    "environment_setup": {
+        "started_at": "2026-08-10T13:50:17.480939Z",
+        "finished_at": "2026-08-10T13:50:31.754472Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-10T13:50:31.754500Z",
+        "finished_at": "2026-08-10T13:50:56.915498Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-10T13:50:56.915542Z",
+        "finished_at": "2026-08-10T14:18:08.769058Z"
+    },
+    "verifier": {
+        "started_at": "2026-08-10T14:18:14.946338Z",
+        "finished_at": "2026-08-10T14:21:42.156351Z"
+    },
+    "step_results": null
+}

@@ -1,0 +1,100 @@
+{
+    "id": "f961651c-7005-4b3f-bd4d-162939a88f09",
+    "task_name": "terminal-bench/cancel-async-tasks",
+    "trial_name": "cancel-async-tasks__yd7jrUX",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__03-31-17/cancel-async-tasks__yd7jrUX",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "cancel-async-tasks"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "1566331f6913b8a4f9af6779e90cabbb79edf1b15c126b6bc544912df3f14de5",
+    "config": {
+        "task": {
+            "path": "cancel-async-tasks",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "cancel-async-tasks__yd7jrUX",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__03-31-17",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "b6de284e-a313-49f3-941f-32d97a65ab8c"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": null,
+    "verifier_result": null,
+    "exception_info": {
+        "exception_type": "RuntimeError",
+        "exception_message": "Docker compose command failed for environment cancel-async-tasks. Command: docker compose --project-name cancel-async-tasks__yd7jrux__env --project-directory /home/abdur/.cache/harbor/tasks/XA6H42BiUGvKte2sPxwdAp/cancel-async-tasks/environment -f /tmp/tmpxvykkln9/cancel-async-tasks__yd7jrUX__env-docker-compose-resources.json -f /home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmp2e1va98d/docker-compose-environment.json -f /tmp/tmpa7w5p7cv/docker-compose-mounts.json up --detach --wait. Return code: 1. Stdout:  Network cancel-async-tasks__yd7jrux__env_default  Creating\n Network cancel-async-tasks__yd7jrux__env_default  Error\nfailed to create network cancel-async-tasks__yd7jrux__env_default: Error response from daemon: all predefined address pools have been fully subnetted\n. Stderr: None. ",
+        "exception_traceback": "Traceback (most recent call last):\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 351, in run\n    await self._prepare()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 385, in _prepare\n    await self._setup_agent_environment()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 1148, in _setup_agent_environment\n    await self._start_agent_environment()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 1154, in _start_agent_environment\n    await asyncio.wait_for(\n  File \"/usr/lib/python3.12/asyncio/tasks.py\", line 520, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 908, in start\n    await self._run_docker_compose_command([\"up\", \"--detach\", \"--wait\"])\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 656, in _run_docker_compose_command\n    raise RuntimeError(\nRuntimeError: Docker compose command failed for environment cancel-async-tasks. Command: docker compose --project-name cancel-async-tasks__yd7jrux__env --project-directory /home/abdur/.cache/harbor/tasks/XA6H42BiUGvKte2sPxwdAp/cancel-async-tasks/environment -f /tmp/tmpxvykkln9/cancel-async-tasks__yd7jrUX__env-docker-compose-resources.json -f /home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmp2e1va98d/docker-compose-environment.json -f /tmp/tmpa7w5p7cv/docker-compose-mounts.json up --detach --wait. Return code: 1. Stdout:  Network cancel-async-tasks__yd7jrux__env_default  Creating\n Network cancel-async-tasks__yd7jrux__env_default  Error\nfailed to create network cancel-async-tasks__yd7jrux__env_default: Error response from daemon: all predefined address pools have been fully subnetted\n. Stderr: None. \n",
+        "occurred_at": "2026-08-10T03:31:20.772285"
+    },
+    "started_at": "2026-08-09T22:01:20.427983Z",
+    "finished_at": "2026-08-09T22:01:21.543512Z",
+    "environment_setup": {
+        "started_at": "2026-08-09T22:01:20.474442Z",
+        "finished_at": "2026-08-09T22:01:20.771472Z"
+    },
+    "agent_setup": null,
+    "agent_execution": null,
+    "verifier": null,
+    "step_results": null
+}

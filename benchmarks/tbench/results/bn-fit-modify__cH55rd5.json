@@ -1,0 +1,115 @@
+{
+    "id": "e19f2882-8c0d-4a46-b32e-b97ec772295a",
+    "task_name": "terminal-bench/bn-fit-modify",
+    "trial_name": "bn-fit-modify__cH55rd5",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__07-31-12/bn-fit-modify__cH55rd5",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "bn-fit-modify"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "454bfa8137cdac00b085ad27568437e1031ecaa2456669e5632f11aeb96a5c62",
+    "config": {
+        "task": {
+            "path": "bn-fit-modify",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "bn-fit-modify__cH55rd5",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__07-31-12",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "10e7be0c-804d-4ea1-94b0-9052cb539a29"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 7965,
+        "n_cache_tokens": 156288,
+        "n_output_tokens": 9200,
+        "cost_usd": 0.0020643532,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 0.0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-08-10T02:01:13.813917Z",
+    "finished_at": "2026-08-10T02:04:55.543073Z",
+    "environment_setup": {
+        "started_at": "2026-08-10T02:01:13.871514Z",
+        "finished_at": "2026-08-10T02:01:15.838269Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-10T02:01:15.838284Z",
+        "finished_at": "2026-08-10T02:01:31.757522Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-10T02:01:31.757625Z",
+        "finished_at": "2026-08-10T02:03:48.184624Z"
+    },
+    "verifier": {
+        "started_at": "2026-08-10T02:03:48.869917Z",
+        "finished_at": "2026-08-10T02:04:42.764821Z"
+    },
+    "step_results": null
+}

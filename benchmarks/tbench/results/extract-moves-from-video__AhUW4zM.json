@@ -1,0 +1,100 @@
+{
+    "id": "653e7778-58f7-4294-b009-66ec987a5780",
+    "task_name": "terminal-bench/extract-moves-from-video",
+    "trial_name": "extract-moves-from-video__AhUW4zM",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__03-31-17/extract-moves-from-video__AhUW4zM",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "extract-moves-from-video"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "74edc17d07e02852076a4e7efe5919b98343bc87dc3181a01fd53c245b703f5b",
+    "config": {
+        "task": {
+            "path": "extract-moves-from-video",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "extract-moves-from-video__AhUW4zM",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__03-31-17",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "b6de284e-a313-49f3-941f-32d97a65ab8c"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": null,
+    "verifier_result": null,
+    "exception_info": {
+        "exception_type": "RuntimeError",
+        "exception_message": "Docker compose command failed for environment extract-moves-from-video. Command: docker compose --project-name extract-moves-from-video__ahuw4zm__env --project-directory /home/abdur/.cache/harbor/tasks/EsBjGxWeG3yUvuZDXLTGak/extract-moves-from-video/environment -f /tmp/tmpkuq10ec5/extract-moves-from-video__AhUW4zM__env-docker-compose-resources.json -f /home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpbh6tbfll/docker-compose-environment.json -f /tmp/tmp5ldsw8ak/docker-compose-mounts.json up --detach --wait. Return code: 1. Stdout:  Network extract-moves-from-video__ahuw4zm__env_default  Creating\n Network extract-moves-from-video__ahuw4zm__env_default  Error\nfailed to create network extract-moves-from-video__ahuw4zm__env_default: Error response from daemon: all predefined address pools have been fully subnetted\n. Stderr: None. ",
+        "exception_traceback": "Traceback (most recent call last):\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 351, in run\n    await self._prepare()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 385, in _prepare\n    await self._setup_agent_environment()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 1148, in _setup_agent_environment\n    await self._start_agent_environment()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 1154, in _start_agent_environment\n    await asyncio.wait_for(\n  File \"/usr/lib/python3.12/asyncio/tasks.py\", line 520, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 908, in start\n    await self._run_docker_compose_command([\"up\", \"--detach\", \"--wait\"])\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 656, in _run_docker_compose_command\n    raise RuntimeError(\nRuntimeError: Docker compose command failed for environment extract-moves-from-video. Command: docker compose --project-name extract-moves-from-video__ahuw4zm__env --project-directory /home/abdur/.cache/harbor/tasks/EsBjGxWeG3yUvuZDXLTGak/extract-moves-from-video/environment -f /tmp/tmpkuq10ec5/extract-moves-from-video__AhUW4zM__env-docker-compose-resources.json -f /home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpbh6tbfll/docker-compose-environment.json -f /tmp/tmp5ldsw8ak/docker-compose-mounts.json up --detach --wait. Return code: 1. Stdout:  Network extract-moves-from-video__ahuw4zm__env_default  Creating\n Network extract-moves-from-video__ahuw4zm__env_default  Error\nfailed to create network extract-moves-from-video__ahuw4zm__env_default: Error response from daemon: all predefined address pools have been fully subnetted\n. Stderr: None. \n",
+        "occurred_at": "2026-08-10T03:31:26.577322"
+    },
+    "started_at": "2026-08-09T22:01:26.313135Z",
+    "finished_at": "2026-08-09T22:01:27.203965Z",
+    "environment_setup": {
+        "started_at": "2026-08-09T22:01:26.314524Z",
+        "finished_at": "2026-08-09T22:01:26.576782Z"
+    },
+    "agent_setup": null,
+    "agent_execution": null,
+    "verifier": null,
+    "step_results": null
+}

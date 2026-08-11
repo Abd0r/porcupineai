@@ -1,0 +1,115 @@
+{
+    "id": "b6c947b0-9b4c-456c-900a-b2a847ab1b01",
+    "task_name": "terminal-bench/multi-source-data-merger",
+    "trial_name": "multi-source-data-merger__YoKiFJA",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__18-14-17/multi-source-data-merger__YoKiFJA",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "multi-source-data-merger"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "519d4eb971998ab2800b8a42457249550716cd158f7850d482a30fa60c2e7504",
+    "config": {
+        "task": {
+            "path": "multi-source-data-merger",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "multi-source-data-merger__YoKiFJA",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__18-14-17",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "90a18fe1-854b-4736-8150-e2b0e56cdb51"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 6528,
+        "n_cache_tokens": 71168,
+        "n_output_tokens": 7544,
+        "cost_usd": 0.0016127552,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1.0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-08-10T13:38:24.074287Z",
+    "finished_at": "2026-08-10T13:43:30.132873Z",
+    "environment_setup": {
+        "started_at": "2026-08-10T13:38:24.075069Z",
+        "finished_at": "2026-08-10T13:38:25.190001Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-10T13:38:25.190019Z",
+        "finished_at": "2026-08-10T13:38:33.042955Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-10T13:38:33.043025Z",
+        "finished_at": "2026-08-10T13:40:49.802058Z"
+    },
+    "verifier": {
+        "started_at": "2026-08-10T13:40:50.705677Z",
+        "finished_at": "2026-08-10T13:43:18.547181Z"
+    },
+    "step_results": null
+}

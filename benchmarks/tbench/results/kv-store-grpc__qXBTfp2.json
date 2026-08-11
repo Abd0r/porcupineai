@@ -1,0 +1,100 @@
+{
+    "id": "0ca81168-e0e0-4456-8e1f-b18c96ebee56",
+    "task_name": "terminal-bench/kv-store-grpc",
+    "trial_name": "kv-store-grpc__qXBTfp2",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__03-31-17/kv-store-grpc__qXBTfp2",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "kv-store-grpc"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "43642f36f81e45e9ee4b94935883d51dfc354cd79a52cb53ee50fc87d3e54eac",
+    "config": {
+        "task": {
+            "path": "kv-store-grpc",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "kv-store-grpc__qXBTfp2",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__03-31-17",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "b6de284e-a313-49f3-941f-32d97a65ab8c"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": null,
+    "verifier_result": null,
+    "exception_info": {
+        "exception_type": "RuntimeError",
+        "exception_message": "Docker compose command failed for environment kv-store-grpc. Command: docker compose --project-name kv-store-grpc__qxbtfp2__env --project-directory /home/abdur/.cache/harbor/tasks/Zfd5caUYXPN4CnSV7Bh9gd/kv-store-grpc/environment -f /tmp/tmpp224zi2j/kv-store-grpc__qXBTfp2__env-docker-compose-resources.json -f /home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpscoa70gf/docker-compose-environment.json -f /tmp/tmpgxz_ifrw/docker-compose-mounts.json up --detach --wait. Return code: 1. Stdout:  Network kv-store-grpc__qxbtfp2__env_default  Creating\n Network kv-store-grpc__qxbtfp2__env_default  Error\nfailed to create network kv-store-grpc__qxbtfp2__env_default: Error response from daemon: all predefined address pools have been fully subnetted\n. Stderr: None. ",
+        "exception_traceback": "Traceback (most recent call last):\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 351, in run\n    await self._prepare()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 385, in _prepare\n    await self._setup_agent_environment()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 1148, in _setup_agent_environment\n    await self._start_agent_environment()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 1154, in _start_agent_environment\n    await asyncio.wait_for(\n  File \"/usr/lib/python3.12/asyncio/tasks.py\", line 520, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 908, in start\n    await self._run_docker_compose_command([\"up\", \"--detach\", \"--wait\"])\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 656, in _run_docker_compose_command\n    raise RuntimeError(\nRuntimeError: Docker compose command failed for environment kv-store-grpc. Command: docker compose --project-name kv-store-grpc__qxbtfp2__env --project-directory /home/abdur/.cache/harbor/tasks/Zfd5caUYXPN4CnSV7Bh9gd/kv-store-grpc/environment -f /tmp/tmpp224zi2j/kv-store-grpc__qXBTfp2__env-docker-compose-resources.json -f /home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpscoa70gf/docker-compose-environment.json -f /tmp/tmpgxz_ifrw/docker-compose-mounts.json up --detach --wait. Return code: 1. Stdout:  Network kv-store-grpc__qxbtfp2__env_default  Creating\n Network kv-store-grpc__qxbtfp2__env_default  Error\nfailed to create network kv-store-grpc__qxbtfp2__env_default: Error response from daemon: all predefined address pools have been fully subnetted\n. Stderr: None. \n",
+        "occurred_at": "2026-08-10T03:31:33.116376"
+    },
+    "started_at": "2026-08-09T22:01:32.837843Z",
+    "finished_at": "2026-08-09T22:01:33.784375Z",
+    "environment_setup": {
+        "started_at": "2026-08-09T22:01:32.839078Z",
+        "finished_at": "2026-08-09T22:01:33.115753Z"
+    },
+    "agent_setup": null,
+    "agent_execution": null,
+    "verifier": null,
+    "step_results": null
+}

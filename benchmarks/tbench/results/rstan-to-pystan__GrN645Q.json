@@ -1,0 +1,100 @@
+{
+    "id": "93861fbc-6a88-47b6-a4df-f757e488e9c6",
+    "task_name": "terminal-bench/rstan-to-pystan",
+    "trial_name": "rstan-to-pystan__GrN645Q",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__03-31-17/rstan-to-pystan__GrN645Q",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "rstan-to-pystan"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "9f429b3c88dca6c2444ad2910ff9dbbf00d76f453b654122b0aa05e51c5bbb81",
+    "config": {
+        "task": {
+            "path": "rstan-to-pystan",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "rstan-to-pystan__GrN645Q",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__03-31-17",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "b6de284e-a313-49f3-941f-32d97a65ab8c"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": null,
+    "verifier_result": null,
+    "exception_info": {
+        "exception_type": "RuntimeError",
+        "exception_message": "Docker compose command failed for environment rstan-to-pystan. Command: docker compose --project-name rstan-to-pystan__grn645q__env --project-directory /home/abdur/.cache/harbor/tasks/JiM9vrTKpuRRcZUbbXeb4s/rstan-to-pystan/environment -f /tmp/tmpbqmxsg1z/rstan-to-pystan__GrN645Q__env-docker-compose-resources.json -f /home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpzhtfiigo/docker-compose-environment.json -f /tmp/tmphidhssn2/docker-compose-mounts.json up --detach --wait. Return code: 1. Stdout:  main Pulling \n 06dd669f68a5 Pulling fs layer \n 4f4fb700ef54 Pulling fs layer \n 5837169d98ee Pulling fs layer \n b1b0f643bd77 Pulling fs layer \n e849a34ef718 Pulling fs layer \n 368050f8abe7 Pulling fs layer \n 14dbbd13c525 Pulling fs layer \n 69af25dfa62a Pulling fs layer \n 4f4fb700ef54 Already exists \n 4f4fb700ef54 Pull complete \n 06dd669f68a5 Downloading [==>                                                ]  1.049MB/21.2MB\n 06dd669f68a5 Downloading [====>                                              ]  2.097MB/21.2MB\n 06dd669f68a5 Downloading [=========>                                         ]  4.194MB/21.2MB\n 06dd669f68a5 Downloading [==============>                                    ]  6.291MB/21.2MB\n 5837169d98ee Download complete \n 06dd669f68a5 Downloading [=================>                                 ]   7.34MB/21.2MB\n e849a34ef718 Downloading [==================================================>]  1.951kB/1.951kB\n e849a34ef718 Download complete \n 368050f8abe7 Download complete \n 14dbbd13c525 Download complete \n 69af25dfa62a Download complete \n 06dd669f68a5 Downloading [===================>                               ]  8.389MB/21.2MB\n b1b0f643bd77 Download complete \n 06dd669f68a5 Downloading [========================>                          ]  10.49MB/21.2MB\n 06dd669f68a5 Downloading [========================>                          ]  10.49MB/21.2MB\n 06dd669f68a5 Downloading [=============================>                     ]  12.58MB/21.2MB\n 06dd669f68a5 Downloading [==================================>                ]  14.68MB/21.2MB\n 06dd669f68a5 Downloading [==================================>                ]  14.68MB/21.2MB\n 06dd669f68a5 Downloading [=====================================>             ]  15.73MB/21.2MB\n 06dd669f68a5 Downloading [=======================================>           ]  16.78MB/21.2MB\n 06dd669f68a5 Downloading [==========================================>        ]  17.83MB/21.2MB\n 06dd669f68a5 Downloading [============================================>      ]  18.87MB/21.2MB\n 06dd669f68a5 Downloading [==============================================>    ]  19.92MB/21.2MB\n 06dd669f68a5 Downloading [==============================================>    ]  19.92MB/21.2MB\n 06dd669f68a5 Download complete \n 06dd669f68a5 Extracting 1 s\n 06dd669f68a5 Extracting 1 s\n 06dd669f68a5 Extracting 1 s\n 06dd669f68a5 Extracting 1 s\n 06dd669f68a5 Extracting 1 s\n 06dd669f68a5 Pull complete \n 5837169d98ee Pull complete \n e849a34ef718 Pull complete \n b1b0f643bd77 Pull complete \n 368050f8abe7 Pull complete \n 368050f8abe7 Pull complete \n 14dbbd13c525 Pull complete \n 69af25dfa62a Pull complete \n main Pulled \n Network rstan-to-pystan__grn645q__env_default  Creating\n Network rstan-to-pystan__grn645q__env_default  Error\nfailed to create network rstan-to-pystan__grn645q__env_default: Error response from daemon: all predefined address pools have been fully subnetted\n. Stderr: None. ",
+        "exception_traceback": "Traceback (most recent call last):\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 351, in run\n    await self._prepare()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 385, in _prepare\n    await self._setup_agent_environment()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 1148, in _setup_agent_environment\n    await self._start_agent_environment()\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/trial/trial.py\", line 1154, in _start_agent_environment\n    await asyncio.wait_for(\n  File \"/usr/lib/python3.12/asyncio/tasks.py\", line 520, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 908, in start\n    await self._run_docker_compose_command([\"up\", \"--detach\", \"--wait\"])\n  File \"/home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker.py\", line 656, in _run_docker_compose_command\n    raise RuntimeError(\nRuntimeError: Docker compose command failed for environment rstan-to-pystan. Command: docker compose --project-name rstan-to-pystan__grn645q__env --project-directory /home/abdur/.cache/harbor/tasks/JiM9vrTKpuRRcZUbbXeb4s/rstan-to-pystan/environment -f /tmp/tmpbqmxsg1z/rstan-to-pystan__GrN645Q__env-docker-compose-resources.json -f /home/abdur/benchenv/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpzhtfiigo/docker-compose-environment.json -f /tmp/tmphidhssn2/docker-compose-mounts.json up --detach --wait. Return code: 1. Stdout:  main Pulling \n 06dd669f68a5 Pulling fs layer \n 4f4fb700ef54 Pulling fs layer \n 5837169d98ee Pulling fs layer \n b1b0f643bd77 Pulling fs layer \n e849a34ef718 Pulling fs layer \n 368050f8abe7 Pulling fs layer \n 14dbbd13c525 Pulling fs layer \n 69af25dfa62a Pulling fs layer \n 4f4fb700ef54 Already exists \n 4f4fb700ef54 Pull complete \n 06dd669f68a5 Downloading [==>                                                ]  1.049MB/21.2MB\n 06dd669f68a5 Downloading [====>                                              ]  2.097MB/21.2MB\n 06dd669f68a5 Downloading [=========>                                         ]  4.194MB/21.2MB\n 06dd669f68a5 Downloading [==============>                                    ]  6.291MB/21.2MB\n 5837169d98ee Download complete \n 06dd669f68a5 Downloading [=================>                                 ]   7.34MB/21.2MB\n e849a34ef718 Downloading [==================================================>]  1.951kB/1.951kB\n e849a34ef718 Download complete \n 368050f8abe7 Download complete \n 14dbbd13c525 Download complete \n 69af25dfa62a Download complete \n 06dd669f68a5 Downloading [===================>                               ]  8.389MB/21.2MB\n b1b0f643bd77 Download complete \n 06dd669f68a5 Downloading [========================>                          ]  10.49MB/21.2MB\n 06dd669f68a5 Downloading [========================>                          ]  10.49MB/21.2MB\n 06dd669f68a5 Downloading [=============================>                     ]  12.58MB/21.2MB\n 06dd669f68a5 Downloading [==================================>                ]  14.68MB/21.2MB\n 06dd669f68a5 Downloading [==================================>                ]  14.68MB/21.2MB\n 06dd669f68a5 Downloading [=====================================>             ]  15.73MB/21.2MB\n 06dd669f68a5 Downloading [=======================================>           ]  16.78MB/21.2MB\n 06dd669f68a5 Downloading [==========================================>        ]  17.83MB/21.2MB\n 06dd669f68a5 Downloading [============================================>      ]  18.87MB/21.2MB\n 06dd669f68a5 Downloading [==============================================>    ]  19.92MB/21.2MB\n 06dd669f68a5 Downloading [==============================================>    ]  19.92MB/21.2MB\n 06dd669f68a5 Download complete \n 06dd669f68a5 Extracting 1 s\n 06dd669f68a5 Extracting 1 s\n 06dd669f68a5 Extracting 1 s\n 06dd669f68a5 Extracting 1 s\n 06dd669f68a5 Extracting 1 s\n 06dd669f68a5 Pull complete \n 5837169d98ee Pull complete \n e849a34ef718 Pull complete \n b1b0f643bd77 Pull complete \n 368050f8abe7 Pull complete \n 368050f8abe7 Pull complete \n 14dbbd13c525 Pull complete \n 69af25dfa62a Pull complete \n main Pulled \n Network rstan-to-pystan__grn645q__env_default  Creating\n Network rstan-to-pystan__grn645q__env_default  Error\nfailed to create network rstan-to-pystan__grn645q__env_default: Error response from daemon: all predefined address pools have been fully subnetted\n. Stderr: None. \n",
+        "occurred_at": "2026-08-10T03:32:27.725305"
+    },
+    "started_at": "2026-08-09T22:02:21.000077Z",
+    "finished_at": "2026-08-09T22:02:28.611016Z",
+    "environment_setup": {
+        "started_at": "2026-08-09T22:02:21.001277Z",
+        "finished_at": "2026-08-09T22:02:27.724567Z"
+    },
+    "agent_setup": null,
+    "agent_execution": null,
+    "verifier": null,
+    "step_results": null
+}

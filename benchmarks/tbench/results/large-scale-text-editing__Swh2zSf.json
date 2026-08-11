@@ -1,0 +1,115 @@
+{
+    "id": "659b5421-63cb-4ea2-bb8f-5507717e0e9f",
+    "task_name": "terminal-bench/large-scale-text-editing",
+    "trial_name": "large-scale-text-editing__Swh2zSf",
+    "trial_uri": "file:///home/abdur/tbench-results/2026-08-10__10-18-18/large-scale-text-editing__Swh2zSf",
+    "task_id": {
+        "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+        "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+        "path": "large-scale-text-editing"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "c02f82f532c630aeddd73cf9fd663ab77b07fb31517cbbca248450131e63ad71",
+    "config": {
+        "task": {
+            "path": "large-scale-text-editing",
+            "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+            "git_commit_id": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "large-scale-text-editing__Swh2zSf",
+        "trials_dir": "/home/abdur/tbench-results/2026-08-10__10-18-18",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 2.0,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "pi_terminal_bench:PorcupineAgent",
+            "import_path": null,
+            "model_name": "opencode-go/deepseek-v4-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "c17a0cd6-5c0b-4b3f-a208-f71f5394a00b"
+    },
+    "agent_info": {
+        "name": "porcupine",
+        "version": "unknown",
+        "model_info": {
+            "name": "deepseek-v4-flash",
+            "provider": "opencode-go"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 8053,
+        "n_cache_tokens": 135424,
+        "n_output_tokens": 11948,
+        "cost_usd": 0.0024260236,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1.0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-08-10T06:01:54.726847Z",
+    "finished_at": "2026-08-10T06:08:53.436446Z",
+    "environment_setup": {
+        "started_at": "2026-08-10T06:01:54.727702Z",
+        "finished_at": "2026-08-10T06:02:01.486190Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-10T06:02:01.486210Z",
+        "finished_at": "2026-08-10T06:02:11.627541Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-10T06:02:11.627637Z",
+        "finished_at": "2026-08-10T06:05:13.657608Z"
+    },
+    "verifier": {
+        "started_at": "2026-08-10T06:05:15.169949Z",
+        "finished_at": "2026-08-10T06:08:41.586937Z"
+    },
+    "step_results": null
+}
