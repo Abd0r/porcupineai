@@ -73,7 +73,9 @@ describe("Coding Agent Tools", () => {
 
 			const result = await readTool.execute("test-call-1", { path: testFile });
 
-			expect(getTextOutput(result)).toBe(content);
+			// Line-numbered output: every delivered line carries its 1-indexed number
+			// (matches cat -n); the edit tool strips these prefixes from oldText.
+			expect(getTextOutput(result)).toBe("1| Hello, world!\n2| Line 2\n3| Line 3");
 			// No truncation message since file fits within limits
 			expect(getTextOutput(result)).not.toContain("Use offset=");
 			expect(result.details).toBeUndefined();
