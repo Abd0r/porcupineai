@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.1.61] - 2026-08-11
+
+### Token-saving read tool (harness engineering)
+
+The read tool is the compiler that turns your filesystem into the model's context. This release applies the full set of harness-engineering lessons (learned from Command Code's read_file deep dive):
+
+- **Self-expiring dedup**: re-reading the same unchanged window returns a stub naming the recovery; consume-on-use keeps a stale hit at one wasted turn; `PORCUPINE_READ_DEDUP=0` kill-switch.
+- **Relational read/write ledger**: edits to partially-seen files are denied with an actionable message; no-loop (a full re-read unblocks); stale views allowed.
+- **Filename normalization**: NFD/NFC, narrow no-break space, curly quotes + Levenshtein-2 "did you mean", boundary-checked so a repair is never an escape hatch.
+- **Device blocklist**: /dev/zero, /dev/urandom, /proc/<pid>/fd/* refused before any I/O.
+- **Named recoveries**: EOF -> use offset=N, empty file, binary -> mime note, .pdf -> pdftotext hint, byte/line caps -> precomputed resume offsets.
+- **Line numbering**: every delivered line carries its 1-indexed number (matches cat -n); the edit tool strips the prefixes from oldText.
+- **Input repair**: path aliases + Number() coercion (never parseInt, never floor).
+- **Notebooks render as documents**: tagged cells, plots as images, huge outputs become a jq pointer.
+- **Images**: jpeg quality ladder (95->20, attach at first fit) + scale-factor disclosure ("multiply displayed coordinates by N").
+- **Hygiene**: BOM stripped, utf-8-safe truncation, trailing-newline line counts fixed (a 3-line file reports 3 lines).
+
+
 ## [0.1.60] - 2026-08-11
 
 ### Performance (optimization pass 2 — all behavior-identical, benchmarked)

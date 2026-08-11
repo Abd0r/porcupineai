@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/evals",
-	"version": "0.1.45",
+	"version": "0.1.61",
 	"private": true,
 	"type": "module",
 	"scripts": {
