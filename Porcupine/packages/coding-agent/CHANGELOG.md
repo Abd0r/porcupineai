@@ -13,6 +13,7 @@
 
 - Stabilized DeepSeek V4 effort metadata across upstream OpenCode Go API-classification changes so regenerated catalogs preserve the verified high/max contract.
 - Removed personal benchmark-rig connection defaults from the public scripts. The status checker now requires explicit environment variables and uses safer first-connection host-key handling.
+- Hardened the root npm package exclusions so local agent state, project workspaces, research notes, logs, profiles, and environment files cannot enter release tarballs.
 
 ## [0.1.62] - 2026-08-11
 

@@ -4,3 +4,16 @@ Porcupine/packages/*/node_modules/
 **/.venv/
 **/__pycache__/
 *.pyc
+
+# Local/private agent state and working artifacts must never enter the npm tarball
+.pi/
+Project/
+research/
+bug-reports/
+tui-plan.md
+docs/plans/
+.env
+**/.env
+*.log
+*.cpuprofile
+.DS_Store
