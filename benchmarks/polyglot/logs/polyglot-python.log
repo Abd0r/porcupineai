@@ -1,0 +1,36 @@
+[affine-cipher] FAIL/SKIP ?s already-recorded
+[beer-song] FAIL/SKIP ?s already-recorded
+[book-store] FAIL/SKIP ?s already-recorded
+[bottle-song] FAIL/SKIP ?s already-recorded
+[bowling] FAIL/SKIP ?s already-recorded
+[connect] FAIL/SKIP ?s already-recorded
+[dominoes] FAIL/SKIP ?s already-recorded
+[dot-dsl] FAIL/SKIP ?s already-recorded
+[food-chain] FAIL/SKIP ?s already-recorded
+[forth] PASS 107.6s 
+[go-counting] FAIL/SKIP 24.5s 
+[grade-school] FAIL/SKIP 15.2s 
+[grep] PASS 67.2s 
+[hangman] FAIL/SKIP 33.2s 
+[list-ops] PASS 51.4s 
+[paasio] PASS 408.7s 
+[phone-number] PASS 37.5s 
+[pig-latin] PASS 33.2s 
+[poker] PASS 61.9s 
+[pov] PASS 110.6s 
+[proverb] FAIL/SKIP 15.1s 
+[react] PASS 150.8s 
+[rest-api] PASS 121.8s 
+[robot-name] PASS 33.0s 
+[scale-generator] PASS 267.5s 
+[sgf-parsing] PASS 877.5s 
+[simple-linked-list] PASS 34.8s 
+[transpose] PASS 129.0s 
+[tree-building] PASS 92.0s 
+[two-bucket] PASS 165.3s 
+[variable-length-quantity] PASS 59.2s 
+[wordy] PASS 89.2s 
+[zebra-puzzle] PASS 32.0s 
+[zipper] FAIL/SKIP 47.5s 
+
+SUMMARY python: 29/34 passed (34 unique exercises)

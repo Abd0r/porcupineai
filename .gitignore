@@ -56,3 +56,7 @@ tui-plan.md
 bug-reports/
 research/
 benchmarks/
+
+# Benchmark scorecards + raw results are published (see benchmarks/)
+!benchmarks/
+!benchmarks/**

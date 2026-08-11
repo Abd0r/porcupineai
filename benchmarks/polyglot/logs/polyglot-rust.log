@@ -1,0 +1,32 @@
+[accumulate] PASS 44.4s 
+[acronym] PASS 58.3s 
+[alphametics] FAIL/SKIP 1500.1s 
+[book-store] PASS 274.8s 
+[bowling] PASS 258.2s 
+[decimal] PASS 639.3s 
+[dot-dsl] PASS 82.0s 
+[doubly-linked-list] FAIL/SKIP 1500.1s 
+[fizzy] PASS 155.7s 
+[forth] PASS 345.5s 
+[gigasecond] PASS 31.8s 
+[grade-school] PASS 33.3s 
+[grep] PASS 78.7s 
+[luhn-from] PASS 117.8s 
+[macros] PASS 76.6s 
+[nucleotide-codons] PASS 186.9s 
+[ocr-numbers] PASS 125.5s 
+[parallel-letter-frequency] PASS 49.3s 
+[pig-latin] PASS 54.2s 
+[poker] PASS 118.4s 
+[react] FAIL/SKIP 319.1s 
+[robot-name] PASS 249.2s 
+[say] PASS 68.3s 
+[scale-generator] PASS 999.7s 
+[simple-cipher] PASS 47.9s 
+[two-bucket] PASS 312.4s 
+[variable-length-quantity] PASS 44.4s 
+[word-count] PASS 50.2s 
+[wordy] PASS 114.0s 
+[xorcism] PASS 546.3s 
+
+SUMMARY rust: 27/30 passed (30 unique) cost=$0.0000

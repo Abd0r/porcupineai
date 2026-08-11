@@ -1,0 +1,28 @@
+[all-your-base] PASS 29.7s 
+[allergies] PASS 35.1s 
+[bank-account] PASS 35.5s 
+[binary-search-tree] PASS 47.2s 
+[circular-buffer] PASS 39.5s 
+[clock] PASS 44.2s 
+[complex-numbers] PASS 44.6s 
+[crypto-square] PASS 44.3s 
+[diamond] PASS 34.8s 
+[dnd-character] PASS 43.0s 
+[gigasecond] FAIL/SKIP 170.9s 
+[grade-school] PASS 34.2s 
+[kindergarten-garden] PASS 40.1s 
+[knapsack] PASS 38.5s 
+[linked-list] PASS 75.8s 
+[meetup] FAIL/SKIP 242.3s 
+[parallel-letter-frequency] PASS 95.5s 
+[perfect-numbers] PASS 35.8s 
+[phone-number] PASS 36.3s 
+[queen-attack] PASS 36.5s 
+[robot-name] PASS 88.6s 
+[space-age] PASS 35.0s 
+[spiral-matrix] PASS 32.1s 
+[sublist] PASS 35.5s 
+[yacht] PASS 42.0s 
+[zebra-puzzle] PASS 59.7s 
+
+SUMMARY cpp: 24/26 passed (26 unique) cost=$0.0000
