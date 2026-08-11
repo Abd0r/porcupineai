@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.1.62] - 2026-08-11
+
+### Added
+
+- **arXiv search** (skill `sci/arxiv-search` + tool script `scripts/arxiv-search.mjs`): structured paper search (id, title, authors, date, categories, abstract) via the free export API — no key. The skill grades results and records kept papers in the literature store.
+- **Reddit search** (skill `web/reddit-search` + tool script `scripts/reddit-search.mjs`): subreddit feeds via the public RSS — the one anonymous path that survived Reddit's 2026 403 purge. Search falls back to web_search site:reddit.com when rate-limited.
+
+
 ## [0.1.61] - 2026-08-11
 
 ### Token-saving read tool (harness engineering)
