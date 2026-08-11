@@ -3,29 +3,76 @@
 </p>
 
 <p align="center">
-  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-%E2%89%A522.19.0-339933?logo=node.js&logoColor=white" alt="Node.js 22.19+" /></a>
-  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5.9" />
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-EA9B34" alt="MIT" /></a>
+  <a href="https://github.com/Abd0r/porcupineai/actions/workflows/ci.yml"><img src="https://github.com/Abd0r/porcupineai/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://www.npmjs.com/package/@porcupineai/porcupineai"><img src="https://img.shields.io/npm/v/@porcupineai/porcupineai" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/@porcupineai/porcupineai"><img src="https://img.shields.io/npm/dt/@porcupineai/porcupineai" alt="npm downloads" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-EA9B34" alt="MIT License" /></a>
   <a href="https://github.com/Abd0r/porcupineai"><img src="https://img.shields.io/github/stars/Abd0r/porcupineai" alt="GitHub stars" /></a>
 </p>
 
-A terminal AI agent. You describe the goal; it reads your repo, runs commands, edits files, and verifies the result inside a permission mode you control.
+<h3 align="center">The open-source terminal AI agent built for safe autonomy.</h3>
 
-Built on top of [Pi](https://github.com/earendil-works/pi) (MIT).
+<p align="center">
+  Give Porcupine a goal. It reasons, routes capabilities, uses tools, delegates work, verifies the result, and keeps risky action inside the permission boundary you control.
+</p>
+
+<p align="center">
+  <a href="#start-in-60-seconds"><strong>Get started</strong></a> ·
+  <a href="#why-porcupine">Why Porcupine</a> ·
+  <a href="#what-it-can-do">Capabilities</a> ·
+  <a href="#evaluation">Evaluation</a> ·
+  <a href="#safety-boundaries">Safety</a> ·
+  <a href="#documentation">Documentation</a>
+</p>
+
+<p align="center">
+  Built on top of <a href="https://github.com/earendil-works/pi">Pi</a> (MIT).
+</p>
 
 ---
 
-## Install
+## Why Porcupine
 
-```bash
-npm install -g @porcupineai/porcupineai
-```
+Porcupine does not treat autonomy as all-or-nothing. You choose how much it may do before asking.
+
+| | Porcupine |
+|---|---|
+| **Safe autonomy** | Ask, Normal, and Auto modes let you choose the permission boundary. Normal asks on flagged actions; Auto applies a fail-closed safety gate. Hardline destructive actions remain blocked. |
+| **End-to-end work** | Porcupine reads the real project, chooses tools and skills, edits files, runs checks, recovers from failures, and reports evidence instead of stopping at a plausible answer. |
+| **Native-first** | It works on your computer with your tools and files by default. Gondolin, Docker, and OpenShell isolation remain opt-in when you want a stronger boundary. |
+| **Parallel execution** | Context-isolated sub-agents can research, inspect, implement, and review in parallel. Web of Thoughts lets them coordinate live. |
+| **One session, more surfaces** | Continue the same attended session from the terminal, Telegram, Discord, or iMessage. Use headless and server modes for scripts, CI, IDEs, and clients. |
+| **Open capability system** | Tools and skills live in 18 capability stacks. Extend Porcupine through Agent Skills, MCP, TypeScript extensions, packages, prompts, themes, and custom providers. |
+
+## Start in 60 seconds
 
 Requires **Node.js 22.19+**.
 
-Or build from source:
+```bash
+npm install -g @porcupineai/porcupineai
+porcupine
+```
+
+Then connect a provider inside the TUI:
+
+```text
+/login cline
+/model
+/guide
+```
+
+Cline provides a free API route. Select `cline/deepseek/deepseek-v4-flash` from `/model`, or connect another supported provider with `/login`.
+
+Give it a real goal:
+
+```text
+Review this repository, explain how it works, run its checks, and make the safest high-impact improvement you can verify.
+```
+
+Porcupine decides whether the turn needs a direct answer, tools, a skill, a plan, or parallel workers. It continues until the requested result is real or a genuine decision requires you.
+
+<details>
+<summary><strong>Build from source</strong></summary>
 
 ```bash
 git clone https://github.com/Abd0r/porcupineai.git
@@ -35,147 +82,160 @@ npm run build
 npm link
 ```
 
-## Quick start
+</details>
 
-```bash
-porcupine
+## How work flows
+
+```mermaid
+flowchart LR
+    G[Your goal] --> R[Reason and route]
+    R --> B{Permission and safety boundaries}
+    B --> T[Tools and skills]
+    B --> A[Parallel sub-agents]
+    T --> V[Tests and verification]
+    A --> V
+    V --> E[Evidence-backed result]
 ```
 
-Then, in the TUI:
+The model leads the work. The harness supplies the capability tree, permission boundary, durable state, recovery paths, and verification loop.
 
-```text
-/login                        # connect a provider (or set an API key)
-/guide                        # interactive onboarding
-```
+## Choose the autonomy level
 
-Try: *"Summarize this repository and tell me how to run its checks."*
+| Mode | Behavior | Best for |
+|---|---|---|
+| **Ask** | Confirms every shell command and file mutation | Unfamiliar repositories and maximum oversight |
+| **Normal** | Runs safe operations and asks on flagged actions | Everyday interactive work |
+| **Auto** | Works autonomously while flagged shell actions pass through a fail-closed safety gate | Longer goals in trusted projects |
 
-## Recommended providers
+Reasoning depth is separate from permission. `/reasoning` and `/adaptive` change thinking effort; `/modes` changes what Porcupine may do without asking.
 
-Two ways to run Porcupine, both set up in under a minute with `/login`. Same models, two routes: free or paid.
+Auto is not unrestricted. Hardline destructive actions remain blocked in every mode.
 
-### Cline API (free)
+## What it can do
 
-Free tier, no OAuth, no billing. One key unlocks DeepSeek V4 Flash and more.
+| Faculty | Capabilities |
+|---|---|
+| **Build and maintain** | Read and edit repositories, run shell commands, debug failures, use Git, build, test, review, and document changes. |
+| **Develop for the web** | Frontend and backend workflows, accessibility, responsive design, APIs, authentication, migrations, observability, browser QA, performance, SEO, and deployment readiness. |
+| **Research** | Free web-search cascade, page extraction, Reddit and arXiv search, evidence grading, durable literature tracking, and parallel deep research. |
+| **Use the web and computer** | Playwright browser tools, semantic snapshots, screenshots, responsive checks, diagnostics, and confirmation-gated native desktop interaction. |
+| **Coordinate** | Up to three parallel sub-agents by default, fresh context windows, hard step budgets, live progress, instant reports, steering, cancellation, and WoT peer messaging. |
+| **Remember and continue** | Durable sessions, branching, compaction, memory, reusable project workspaces, and cross-session history search. |
+| **Automate attended work** | Durable tasks, success and failure chains, file and script triggers, and UTC Cron schedules while the interactive session is open and idle. |
+| **Communicate** | Telegram, Discord, and iMessage bridges; email over IMAP/SMTP; free X search and reading; local drafts and compose-then-paste posting. |
+| **Integrate** | MCP tools, resources and prompts; `porcupine serve`; JSONL and RPC modes; a Node.js SDK; custom tools and providers. |
+| **Observe** | Per-turn usage, cost estimates, session evidence, task history, browser diagnostics, sub-agent activity, and a full-screen Markdown viewer. |
 
-```text
-1. Create a free account + API key at app.cline.bot (Settings > API Keys)
-2. /login cline
-3. Paste your key
-4. /model → cline/deepseek/deepseek-v4-flash   (free, reasoning-capable)
-```
+## Parallel work without losing the thread
 
-### OpenCode Go (paid)
+Porcupine can delegate self-contained work to background sub-agents. Each worker receives:
 
-Subscription key for the same DeepSeek V4 Flash (plus V4 Pro and the full model catalog), with paid-tier rate limits.
+- a fresh context window;
+- the whole tool stack minus agent-level tools, user questions, and native computer control;
+- a hard step budget, 120 by default;
+- the same working directory and permission policy;
+- instant report injection when the worker finishes.
 
-```text
-1. Get an API key at opencode.ai/auth
-2. /login opencode-go
-3. Paste your key
-4. /model → opencode-go/deepseek-v4-flash:high
-```
+Give workers the same `peerGroup` to enable **Web of Thoughts**. They can exchange findings live while the main agent remains the gatekeeper. The main agent can steer a worker with `send_to_subagent` or stop it when it goes off track.
 
-You can switch providers any time with `/model`; bring your own key, no lock-in.
+See [Sub-agents](Porcupine/packages/coding-agent/docs/subagents.md).
 
-## Interaction modes
+## One agent, more than one surface
 
-| Mode | Behavior |
-| --- | --- |
-| **Ask** | Confirms every command and file change |
-| **Normal** | Runs safe operations; asks on flagged ones |
-| **Auto** | Runs autonomously with a fail-closed safety gate for dangerous commands |
+| Surface | Use |
+|---|---|
+| **Terminal TUI** | The full interactive experience, including permission dialogs, session tree, Markdown viewer, usage, cost, and live activity. |
+| **Telegram, Discord, iMessage** | Message the same attended session from another device. Confirmation buttons and reactions race the TUI; first response wins. |
+| **HTTP server** | `porcupine serve` exposes sessions, asynchronous prompts, SSE events, and programmatic approval for IDEs and clients. |
+| **Headless mode** | `porcupine --headless "task"` runs a CI-friendly task and exits `0` on success or `1` on failure or abort. |
+| **RPC and JSONL** | Embed Porcupine in scripts and applications through structured process protocols. |
 
-Reasoning depth is separate from permission: `/reasoning` and `/adaptive` tune thinking effort without changing what the agent is allowed to do.
+Remote bridges are allowlist-gated and attended. They drive the shared session; they are not unattended daemons.
 
-## Benchmarks
+## Extensible by design
 
-Porcupine as the harness, DeepSeek V4 Flash (latest release) as the model,
-official benchmark suites. Same model, same benchmark, different harness.
+| Extension point | What it adds |
+|---|---|
+| **Stacks** | One discoverable hierarchy for filesystem, shell, web, web development, VCS, build, debugging, safety, data, ML, research, computer use, and orchestration capabilities. |
+| **Agent Skills** | On-demand procedures in portable `SKILL.md` packages. Porcupine can extract skills from documents or craft them from research. |
+| **MCP** | Connect stdio and Streamable HTTP servers. Their tools, resources, and prompts become first-class capabilities. |
+| **TypeScript extensions** | Add tools, commands, event handlers, UI, providers, and lifecycle behavior. |
+| **Packages** | Bundle and share extensions, skills, prompts, and themes. |
+| **SDK and protocols** | Embed the agent loop through the Node.js SDK, RPC, JSONL, or the HTTP server. |
 
-| Benchmark | DSV4F published | **Porcupine harness** | Status |
-|---|---|---|---|
-| **Aider Polyglot** (225) | 71.6% · 74.1% (⚠️ unverified refs) | **86.2% (194/225)** | ✅ complete |
-| Terminal-Bench 2.1 (89) | 82.7% (official card) | **45/89 · 83.3% clean-pass rate** (35 infra-unscored) | ✅ complete |
-| SWE-bench Verified (500) | 79.0% | not started | ⏳ |
+Explore the [18-stack capability tree](Porcupine/packages/coding-agent/docs/stacks.md), [skills](Porcupine/packages/coding-agent/docs/skills.md), [MCP](Porcupine/packages/coding-agent/docs/mcp.md), and [extensions](Porcupine/packages/coding-agent/docs/extensions.md).
 
-Aider Polyglot methodology, per-language scores, citations, and raw logs:
-[`benchmarks/polyglot/`](benchmarks/polyglot/).
+## Providers
 
-Terminal-Bench 2.1: 45 of 89 tasks pass clean (83.3% pass rate on the 54
-scored runs) vs 82.7% on the official card — 35 tasks never got a fair run
-(three cycles lost to sandbox/disk failures on the benchmark rig; every
-infra fix is documented in [`benchmarks/rig/`](benchmarks/rig/)). Scoring
-script + raw results: [`benchmarks/rig/score-tbench.py`](benchmarks/rig/score-tbench.py).
+Porcupine separates the agent from the model route. Use a free path, a subscription, your own API key, or a local router.
 
-## What's inside
+| Route | Setup |
+|---|---|
+| **Cline API** | Create a free key at [app.cline.bot](https://app.cline.bot), run `/login cline`, then choose `cline/deepseek/deepseek-v4-flash` from `/model`. |
+| **OpenCode Go** | Run `/login opencode-go`, then choose an available model and reasoning level from `/model`. |
+| **Built-in providers** | Connect supported API-key and subscription providers with `/login` or provider environment variables. |
+| **Local models** | Route supported local models through llama.cpp. |
 
-- **Sub-agents** — up to 3 parallel workers with the whole tool stack (minus
-  agent-level tools), 120-step budgets, and their own model. Reports are
-  injected instantly; the agent can stop workers with `stop_subagent`; Escape
-  cancels all. Live activity animates in the footer beside the thread counter:
-  `🤖(📄 Extracting, 🌐 Searching) • 🧵 0/3 • (opencode-go) …`.
-- **WoT (Web of Thoughts)** — sub-agents sharing a `peerGroup` message each
-  other and you live; `send_to_subagent` steers any running worker.
-- **MCP client** — connect MCP servers (stdio + Streamable HTTP); tools, resources (`mcp_resources`) and prompts (`/mcpp:`) become first-class. Fail-closed security gate, browser OAuth, OS-keyring tokens.
-- **Autonomous learning** — the agent improves its own skills and memory from real use: evidence-graded proposals, snapshots + auto-rollback, a live feed (`/learning feed`), and a refiner for weak skills.
-- **64 skills across 18 stacks** — including a production Web Development stack for frontend, APIs, accessibility, responsive design, browser QA, performance, data migrations, observability, SEO, and deployment; `deep-research` orchestrates parallel research with evidence grading.
-- **Dynamic task graph** — the footer tracker animates on every multi-step turn.
-- **Voice** — `/voice on`, push-to-talk with Space.
-- **Tasks & Cron** — durable task templates with attended schedules (`/task`, `/cron`), task chaining (`next`/`nextOnFail`), event triggers (`file` content-change, `script` exit-code), and completion notifications to your chat bridges (`notifyOnTaskCompletion`).
-- **Projects** — `Project/<name>/` workspaces with README + STATUS.
-- **Markdown viewer** — the agent presents plans/reports in a full-screen rendered viewer (`show_markdown` tool); `/view <path>` opens any file.
-- **Observability** — `/usage` (per-turn tokens) and `/cost` (estimated cost) in the session.
-- **Memory** — `/memory` shows what the agent learned about you; `/init` generates a project `AGENTS.md` that never clobbers your edits.
-- **Remote bridges** — drive the same session from your phone or chat:
-  Telegram (`PORCUPINE_TELEGRAM_TOKEN`), Discord (`PORCUPINE_DISCORD_TOKEN`), or
-  iMessage (macOS, `PORCUPINE_IMESSAGE_ALLOW`). Confirmations race the TUI with
-  buttons/reactions — first response wins. Owner `!` commands (`!status`,
-  `!tasks`, `!run <taskId>`, `!help`) control the session remotely.
-- **Email** — read inbox/drafts/sent, save drafts, and send over IMAP/SMTP
-  (app password; `/email` + `email_*` tools).
-- **X (Twitter), free** — search (web cascade), read tweets (public
-  syndication, no key), local drafts, compose-then-paste posting (X has no
-  free API tier anymore; `/x` + `x_*` tools).
-- **Native browser** — Playwright-powered `browser_*` tools: navigate, semantic
-  ARIA snapshot, click/type, wait, extract, resize, diagnostics, screenshot, and
-  evaluate (headless by default).
-- **`porcupine serve`** — headless HTTP API (sessions, async prompts, SSE
-  events, programmatic approval) for IDE plugins, web/mobile clients, scripts.
-- **`/sandbox`** — one command routes built-in tools into a Gondolin micro-VM
-  (`on` installs + hot-reloads; `status` checks Node/QEMU/VM state).
-- **`--headless`** — CI-friendly task mode: run a prompt to completion, print
-  the report, exit 0 on success / 1 on error.
-- **Updates & sync** — startup check (npm/GitHub, 24h cache) shows
-  `🆕 vX.Y.Z available` beside the version; `/update` and `porcupine update
-  [--yes]` install it; `porcupine sync [--force]` refreshes the shipped
-  agent-home files without clobbering your edits.
+See [Providers](Porcupine/packages/coding-agent/docs/providers.md) and [llama.cpp](Porcupine/packages/coding-agent/docs/llama-cpp.md).
 
-## Safety
+## Evaluation
 
-Porcupine runs with the permissions of the account that launches it. Project trust controls which project-local resources load — it is not a sandbox. For untrusted or unattended work, use a real isolation boundary (container, VM, micro-VM).
+Porcupine publishes its harness results with methodology, raw records, failures, and caveats.
 
-Read [Security](Porcupine/packages/coding-agent/docs/security.md) and [Containerization](Porcupine/packages/coding-agent/docs/containerization.md).
+| Suite | Porcupine result | Evidence |
+|---|---:|---|
+| **Aider Polyglot** | **194/225, 86.2%** | Six languages, hidden tests restored after the agent run. [Methodology and raw results](benchmarks/polyglot/README.md). |
+| **Terminal-Bench 2.1** | **45 clean passes** | 45/54 cleanly scored tasks passed; 35 of 89 tasks remained unscored after benchmark-rig failures. [Scoring and raw results](benchmarks/tbench/README.md). |
+
+Both runs used DeepSeek V4 Flash through the Porcupine harness. These results measure the exact model and harness combination, not every model, provider, workload, or commercial agent.
+
+## Safety boundaries
+
+Porcupine is native-first. By default, it runs with the permissions of the account that launches it.
+
+- **Project trust is not a sandbox.** It controls project-local resource loading, not operating-system permissions.
+- **Interaction modes are the autonomy dial.** Ask, Normal, and Auto control approvals; reasoning settings do not grant permission.
+- **Auto fails closed on flagged shell actions.** Hardline destructive actions remain blocked in every mode.
+- **Native computer input is confirmation-gated.** The workflow starts with observation, treats screen text as untrusted, takes one approved action, then verifies the visible result.
+- **Isolation is optional.** `/sandbox on` routes built-in tools into a Gondolin micro-VM. Docker and OpenShell workflows are also documented.
+- **Extensions and skills are trusted code and instructions.** Review them before loading them, and use trusted repositories.
+
+Read [Security](Porcupine/packages/coding-agent/docs/security.md) and [Containerization](Porcupine/packages/coding-agent/docs/containerization.md) before using Porcupine on untrusted work.
 
 ## Documentation
 
-- [Full index](Porcupine/packages/coding-agent/docs/index.md)
-- [Quickstart](Porcupine/packages/coding-agent/docs/quickstart.md) · [Usage](Porcupine/packages/coding-agent/docs/usage.md) · [Settings](Porcupine/packages/coding-agent/docs/settings.md)
-- [Stacks](Porcupine/packages/coding-agent/docs/stacks.md) · [Web Development](Porcupine/packages/coding-agent/docs/web-development.md) · [Sub-agents](Porcupine/packages/coding-agent/docs/subagents.md)
-- [MCP](Porcupine/packages/coding-agent/docs/mcp.md) · [Skills](Porcupine/packages/coding-agent/docs/skills.md) · [Extensions](Porcupine/packages/coding-agent/docs/extensions.md)
-- [Sessions](Porcupine/packages/coding-agent/docs/sessions.md) · [Server API](Porcupine/packages/coding-agent/docs/server.md)
-- [Email](Porcupine/packages/coding-agent/docs/email.md) · [X (Twitter)](Porcupine/packages/coding-agent/docs/x.md) · [Browser use](Porcupine/packages/coding-agent/docs/browser.md)
+| Start | Operate | Extend | Integrate |
+|---|---|---|---|
+| [Quickstart](Porcupine/packages/coding-agent/docs/quickstart.md) | [Usage](Porcupine/packages/coding-agent/docs/usage.md) | [Stacks](Porcupine/packages/coding-agent/docs/stacks.md) | [MCP](Porcupine/packages/coding-agent/docs/mcp.md) |
+| [Providers](Porcupine/packages/coding-agent/docs/providers.md) | [Sessions](Porcupine/packages/coding-agent/docs/sessions.md) | [Skills](Porcupine/packages/coding-agent/docs/skills.md) | [Server API](Porcupine/packages/coding-agent/docs/server.md) |
+| [Web Development](Porcupine/packages/coding-agent/docs/web-development.md) | [Settings](Porcupine/packages/coding-agent/docs/settings.md) | [Extensions](Porcupine/packages/coding-agent/docs/extensions.md) | [SDK](Porcupine/packages/coding-agent/docs/sdk.md) |
+| [Browser use](Porcupine/packages/coding-agent/docs/browser.md) | [Tasks and Cron](Porcupine/packages/coding-agent/docs/usage.md#tasks-and-cron-routines) | [Prompt templates](Porcupine/packages/coding-agent/docs/prompt-templates.md) | [RPC](Porcupine/packages/coding-agent/docs/rpc.md) |
+| [Sub-agents](Porcupine/packages/coding-agent/docs/subagents.md) | [Environment variables](Porcupine/packages/coding-agent/docs/environment-variables.md) | [Themes](Porcupine/packages/coding-agent/docs/themes.md) | [JSON event stream](Porcupine/packages/coding-agent/docs/json.md) |
+| [Full documentation index](Porcupine/packages/coding-agent/docs/index.md) | [Keybindings](Porcupine/packages/coding-agent/docs/keybindings.md) | [Custom providers](Porcupine/packages/coding-agent/docs/custom-provider.md) | [Email](Porcupine/packages/coding-agent/docs/email.md) and [X](Porcupine/packages/coding-agent/docs/x.md) |
 
-## License
+## Contributing
 
-[MIT](LICENSE).
+Contributions are welcome. Keep changes focused, test behavior changes, and update documentation when the user-facing contract moves.
 
-_If Porcupine helps you get real work done, a <a href="https://github.com/Abd0r/porcupineai">star</a> means a lot._
+- Read [CONTRIBUTING.md](CONTRIBUTING.md).
+- Browse or open [issues](https://github.com/Abd0r/porcupineai/issues).
+- Report security problems according to [SECURITY.md](SECURITY.md). Never include credentials in a report.
+
+## License and foundation
+
+Porcupine is released under the [MIT License](LICENSE).
+
+Porcupine is its own product, built on top of [Pi](https://github.com/earendil-works/pi) and its MIT-licensed foundations. Required attribution is preserved.
 
 ---
 
 <p align="center">
+  <strong>If Porcupine helps you do real work, a <a href="https://github.com/Abd0r/porcupineai">GitHub star</a> helps more people find it.</strong>
+</p>
+
+<p align="center">
   <a href="https://github.com/Abd0r/porcupineai">GitHub</a> ·
   <a href="https://www.npmjs.com/package/@porcupineai/porcupineai">npm</a> ·
+  <a href="https://github.com/Abd0r/porcupineai/releases">Releases</a> ·
   <a href="LICENSE">MIT License</a>
 </p>
