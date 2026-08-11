@@ -121,7 +121,7 @@ script + raw results: [`benchmarks/rig/score-tbench.py`](benchmarks/rig/score-tb
   other and you live; `send_to_subagent` steers any running worker.
 - **MCP client** — connect MCP servers (stdio + Streamable HTTP); tools, resources (`mcp_resources`) and prompts (`/mcpp:`) become first-class. Fail-closed security gate, browser OAuth, OS-keyring tokens.
 - **Autonomous learning** — the agent improves its own skills and memory from real use: evidence-graded proposals, snapshots + auto-rollback, a live feed (`/learning feed`), and a refiner for weak skills.
-- **50 skills across 17 stacks** — from `problem-solving` to `secure-coding`, `root-cause-analysis`, and `autonomous-delegation`; a `deep-research` skill orchestrates parallel sub-agent research with evidence grading.
+- **64 skills across 18 stacks** — including a production Web Development stack for frontend, APIs, accessibility, responsive design, browser QA, performance, data migrations, observability, SEO, and deployment; `deep-research` orchestrates parallel research with evidence grading.
 - **Dynamic task graph** — the footer tracker animates on every multi-step turn.
 - **Voice** — `/voice on`, push-to-talk with Space.
 - **Tasks & Cron** — durable task templates with attended schedules (`/task`, `/cron`), task chaining (`next`/`nextOnFail`), event triggers (`file` content-change, `script` exit-code), and completion notifications to your chat bridges (`notifyOnTaskCompletion`).
@@ -139,8 +139,9 @@ script + raw results: [`benchmarks/rig/score-tbench.py`](benchmarks/rig/score-tb
 - **X (Twitter), free** — search (web cascade), read tweets (public
   syndication, no key), local drafts, compose-then-paste posting (X has no
   free API tier anymore; `/x` + `x_*` tools).
-- **Native browser** — Playwright-powered `browser_*` tools: navigate, click,
-  type, extract, screenshot, evaluate (headless by default).
+- **Native browser** — Playwright-powered `browser_*` tools: navigate, semantic
+  ARIA snapshot, click/type, wait, extract, resize, diagnostics, screenshot, and
+  evaluate (headless by default).
 - **`porcupine serve`** — headless HTTP API (sessions, async prompts, SSE
   events, programmatic approval) for IDE plugins, web/mobile clients, scripts.
 - **`/sandbox`** — one command routes built-in tools into a Gondolin micro-VM
@@ -162,7 +163,7 @@ Read [Security](Porcupine/packages/coding-agent/docs/security.md) and [Container
 
 - [Full index](Porcupine/packages/coding-agent/docs/index.md)
 - [Quickstart](Porcupine/packages/coding-agent/docs/quickstart.md) · [Usage](Porcupine/packages/coding-agent/docs/usage.md) · [Settings](Porcupine/packages/coding-agent/docs/settings.md)
-- [Stacks](Porcupine/packages/coding-agent/docs/stacks.md) · [Sub-agents](Porcupine/packages/coding-agent/docs/subagents.md)
+- [Stacks](Porcupine/packages/coding-agent/docs/stacks.md) · [Web Development](Porcupine/packages/coding-agent/docs/web-development.md) · [Sub-agents](Porcupine/packages/coding-agent/docs/subagents.md)
 - [MCP](Porcupine/packages/coding-agent/docs/mcp.md) · [Skills](Porcupine/packages/coding-agent/docs/skills.md) · [Extensions](Porcupine/packages/coding-agent/docs/extensions.md)
 - [Sessions](Porcupine/packages/coding-agent/docs/sessions.md) · [Server API](Porcupine/packages/coding-agent/docs/server.md)
 - [Email](Porcupine/packages/coding-agent/docs/email.md) · [X (Twitter)](Porcupine/packages/coding-agent/docs/x.md) · [Browser use](Porcupine/packages/coding-agent/docs/browser.md)

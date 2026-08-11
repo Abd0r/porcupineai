@@ -5,18 +5,29 @@ const _pageCtrls: { [k in string]: ReturnType<typeof vi.fn> } = {} as never;
 
 vi.mock("playwright", () => {
 	const makePage = () => {
+		const listeners = new Map<string, Array<(value: unknown) => void>>();
 		const page = {
 			setDefaultTimeout: vi.fn(),
 			setDefaultNavigationTimeout: vi.fn(),
+			setViewportSize: vi.fn().mockResolvedValue(undefined),
 			url: vi.fn().mockReturnValue("https://example.com"),
 			title: vi.fn().mockResolvedValue("Example"),
 			goto: vi.fn().mockResolvedValue(null),
 			click: vi.fn().mockResolvedValue(undefined),
 			fill: vi.fn().mockResolvedValue(undefined),
+			waitForSelector: vi.fn().mockResolvedValue(undefined),
 			textContent: vi.fn().mockResolvedValue("Hello page"),
 			locator: vi.fn().mockReturnValue({ innerText: vi.fn().mockResolvedValue("Body text") }),
+			ariaSnapshot: vi.fn().mockResolvedValue('- heading "Example" [level=1] [ref=e1]'),
 			screenshot: vi.fn().mockResolvedValue(Buffer.from("png")),
 			evaluate: vi.fn().mockImplementation(async (expr: string) => ({ expr })),
+			on: vi.fn((event: string, listener: (value: unknown) => void) => {
+				listeners.set(event, [...(listeners.get(event) ?? []), listener]);
+				return page;
+			}),
+			emit: (event: string, value: unknown) => {
+				for (const listener of listeners.get(event) ?? []) listener(value);
+			},
 			close: vi.fn().mockResolvedValue(undefined),
 		};
 		return page;
@@ -40,11 +51,15 @@ vi.mock("playwright", () => {
 import * as playwright from "playwright";
 import {
 	createBrowserClickToolDefinition,
+	createBrowserDiagnosticsToolDefinition,
 	createBrowserEvaluateToolDefinition,
 	createBrowserExtractToolDefinition,
 	createBrowserNavigateToolDefinition,
+	createBrowserResizeToolDefinition,
 	createBrowserScreenshotToolDefinition,
+	createBrowserSnapshotToolDefinition,
 	createBrowserTypeToolDefinition,
+	createBrowserWaitToolDefinition,
 } from "../src/core/tools/browser.ts";
 import { BrowserSession, getBrowserSession, resetBrowserSession } from "../src/porcupine/browser.ts";
 
@@ -57,13 +72,17 @@ function accessibleKeys(obj: unknown): string[] {
 }
 
 describe("browser tool definitions", () => {
-	it("has the six browser tools with correct names", () => {
+	it("has the ten browser tools with correct names", () => {
 		expect(createBrowserNavigateToolDefinition().name).toBe("browser_navigate");
 		expect(createBrowserClickToolDefinition().name).toBe("browser_click");
 		expect(createBrowserTypeToolDefinition().name).toBe("browser_type");
 		expect(createBrowserExtractToolDefinition().name).toBe("browser_extract");
 		expect(createBrowserScreenshotToolDefinition().name).toBe("browser_screenshot");
 		expect(createBrowserEvaluateToolDefinition().name).toBe("browser_evaluate");
+		expect(createBrowserSnapshotToolDefinition().name).toBe("browser_snapshot");
+		expect(createBrowserResizeToolDefinition().name).toBe("browser_resize");
+		expect(createBrowserWaitToolDefinition().name).toBe("browser_wait");
+		expect(createBrowserDiagnosticsToolDefinition().name).toBe("browser_diagnostics");
 	});
 
 	it("navigate schema requires url", () => {
@@ -96,6 +115,15 @@ describe("browser tool definitions", () => {
 	it("evaluate schema requires expression", () => {
 		const schema = createBrowserEvaluateToolDefinition().parameters as { required?: string[] };
 		expect(schema.required).toContain("expression");
+	});
+
+	it("web-development browser schemas expose bounded inspection controls", () => {
+		const snapshot = createBrowserSnapshotToolDefinition().parameters as { properties: object };
+		expect(accessibleKeys(snapshot.properties)).toEqual(expect.arrayContaining(["depth", "boxes"]));
+		const resize = createBrowserResizeToolDefinition().parameters as { required?: string[] };
+		expect(resize.required).toEqual(["width", "height"]);
+		const wait = createBrowserWaitToolDefinition().parameters as { required?: string[] };
+		expect(wait.required).toContain("selector");
 	});
 });
 
@@ -194,6 +222,46 @@ describe("BrowserSession wrapper", () => {
 		const { session } = await openSession();
 		const out = await session.evaluate("() => 1 + 1");
 		expect(out).toContain("Evaluated result");
+		await session.close();
+	});
+
+	it("captures an AI-oriented ARIA snapshot", async () => {
+		const { session, mocks } = await openSession();
+		const out = await session.snapshot({ depth: 8, boxes: true });
+		expect(out).toContain("heading");
+		expect(mocks.page.ariaSnapshot).toHaveBeenCalledWith({ mode: "ai", depth: 8, boxes: true });
+		await session.close();
+	});
+
+	it("resizes the viewport and waits for a selector", async () => {
+		const { session, mocks } = await openSession();
+		expect(await session.resize(390, 844)).toContain("390x844");
+		expect(mocks.page.setViewportSize).toHaveBeenCalledWith({ width: 390, height: 844 });
+		expect(await session.waitFor("[data-ready]", "visible", 750)).toContain("[data-ready]");
+		expect(mocks.page.waitForSelector).toHaveBeenCalledWith("[data-ready]", { state: "visible", timeout: 750 });
+		await session.close();
+	});
+
+	it("reports bounded console, page, and failed-request diagnostics", async () => {
+		const { session, mocks } = await openSession();
+		mocks.page.emit("console", { type: () => "error", text: () => "boom" });
+		mocks.page.emit("pageerror", new Error("render failed"));
+		mocks.page.emit("requestfailed", {
+			method: () => "GET",
+			url: () => "https://example.com/api/items?token=redacted",
+			failure: () => ({ errorText: "net::ERR_FAILED" }),
+		});
+		mocks.page.emit("response", {
+			status: () => 503,
+			url: () => "https://example.com/api/health?secret=redacted",
+			request: () => ({ method: () => "GET" }),
+		});
+		const out = await session.diagnostics();
+		expect(out).toContain("console.error: boom");
+		expect(out).toContain("pageerror: render failed");
+		expect(out).toContain("GET https://example.com/api/items");
+		expect(out).toContain("http 503: GET https://example.com/api/health");
+		expect(out).not.toMatch(/token=|secret=/);
 		await session.close();
 	});
 

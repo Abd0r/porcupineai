@@ -24,12 +24,12 @@ For example:
 - `stacks/safety/auto-mode` — the Auto Mode skill
 - `stacks/meta/subagent` — the sub-agent tool
 
-`stack` is one of 17 top-level capability domains, `lane` is a sub-category
+`stack` is one of 18 top-level capability domains, `lane` is a sub-category
 (tool / skill / playbook / …), and `name` is the individual capability. The
 path is provider-independent: the same tree works whether you run Porcupine
 with Anthropic, OpenAI, DeepSeek, or a local Ollama model.
 
-## The 17 stacks
+## The 18 stacks
 
 | Stack | Focus |
 | --- | --- |
@@ -38,6 +38,7 @@ with Anthropic, OpenAI, DeepSeek, or a local Ollama model.
 | `coding` | plan, implement, test, review |
 | `shell` | shell/bash, builds, git, package managers |
 | `web` | internet search + page extraction |
+| `webdev` | build, inspect, test, secure, and ship web applications |
 | `computer` | observe and operate the local GUI |
 | `vcs` | git workflows, branches, diffs, PRs |
 | `build` | compile, test, lint, typecheck, CI loops |
@@ -53,7 +54,8 @@ with Anthropic, OpenAI, DeepSeek, or a local Ollama model.
 
 Each stack has an id, label, description, tags, and an ordering. The full
 definition lives in `src/porcupine/stacks.ts`; the tree builder is
-`src/porcupine/session-bridge.ts`.
+`src/porcupine/session-bridge.ts`. `web` is for researching the public internet;
+`webdev` is for engineering and validating web applications.
 
 ## How it reaches the model
 
@@ -84,7 +86,7 @@ definition lives in `src/porcupine/stacks.ts`; the tree builder is
 
 ## Working with stacks
 
-- `/stacks` — show the tree or search it: `/stacks stack:web`, `/stacks git`.
+- `/stacks` — show the tree or search it: `/stacks stack:webdev`, `/stacks git`.
 - `capability_search` — the agent-facing catalog (action `list` / `search` /
   `view`; filter `kind` `tool` | `skill` | `all`).
 - Skill frontmatter may declare an explicit stack (`stack: vcs`); otherwise the

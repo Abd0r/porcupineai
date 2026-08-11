@@ -29,9 +29,9 @@ route is unclear. Prefer `web_search` before `web_extract` for internet lookups.
   the settings `email` block, `docs/email.md`), free X (Twitter) (`/x` +
   `x_search`/`x_read`/`x_draft`/`x_post`/`x_reply`; search/read/drafts need no
   credentials, posting is compose-then-paste, `docs/x.md`), and native browser
-  use via Playwright (`browser_navigate`/`click`/`type`/`extract`/
-  `screenshot`/`evaluate`; headless Chromium, one-time `npx playwright install
-  chromium`, `docs/browser.md`).
+  use via Playwright (`browser_navigate`/`snapshot`/`click`/`type`/`wait`/
+  `extract`/`resize`/`diagnostics`/`screenshot`/`evaluate`; headless Chromium,
+  one-time `npx playwright install chromium`, `docs/browser.md`).
 - Providers: ~40 BYOK plus a **free DeepSeek V4 Flash path via Cline**
   (`cline/deepseek/deepseek-v4-flash`, key from app.cline.bot, `docs/providers.md`).
 - Self-authored skills/tools: `/extract-stack` + `/craft-stack` (and the

@@ -144,8 +144,11 @@ data, ML, documentation, orchestration, and meta-work.
   search and reads are free and need no credentials, and posting is
   compose-then-paste (X has no free posting API) — copy the composed text for
   the user, never post automatically. Web interaction uses the `browser_*`
-  tools (Playwright): headless by default, lazy-launched, timeouts on every
-  call; keep the session scoped to the task and close it when done.
+  tools (Playwright): inspect with `browser_snapshot`, prefer returned ARIA refs
+  over brittle CSS, use `browser_wait` instead of sleeps, verify responsive work
+  with `browser_resize`, and check `browser_diagnostics` before completion.
+  Browsing is headless by default, lazy-launched, and timeout-bounded; keep the
+  session scoped to the task and close it when done.
 - Authoring skills/tools: use `craft_skill`/`extract_skill` (or
   `/extract-stack`/`/craft-stack`) to distill a document or research into a
   SKILL.md or a persisted user tool.

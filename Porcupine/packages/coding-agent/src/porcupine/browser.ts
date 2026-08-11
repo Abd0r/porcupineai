@@ -2,8 +2,9 @@
  * Native browser-use module for Porcupine, built on the Playwright OSS engine.
  *
  * This file is a thin, typed wrapper around `playwright` that the agent can use
- * to navigate, click, type, extract text, screenshot, and evaluate JavaScript on
- * live pages. Every public method returns a clean result string and turns
+ * to navigate, inspect ARIA semantics, interact, wait, extract text, resize,
+ * diagnose runtime failures, screenshot, and evaluate JavaScript on live pages.
+ * Every public method returns a clean result string and turns
  * failures (bad URLs, missing elements, timeouts) into readable error messages
  * rather than stack dumps.
  *
@@ -35,6 +36,18 @@ export interface BrowserLaunchOptions {
 	timeoutMs?: number;
 }
 
+export interface BrowserSnapshotOptions {
+	/** Maximum ARIA tree depth. Defaults to Playwright's full snapshot. */
+	depth?: number;
+	/** Include viewport-relative element boxes. */
+	boxes?: boolean;
+}
+
+export type BrowserWaitState = "attached" | "detached" | "visible" | "hidden";
+
+const MAX_DIAGNOSTIC_ENTRIES = 100;
+const MAX_BROWSER_OUTPUT_CHARS = 50_000;
+
 /** The browser session the agent tools and the /browser command operate on. */
 export class BrowserSession {
 	private browser: Browser | null = null;
@@ -42,6 +55,9 @@ export class BrowserSession {
 	private page: Page | null = null;
 	private readonly cwd: string;
 	private timeoutMs: number;
+	private consoleEntries: string[] = [];
+	private pageErrors: string[] = [];
+	private failedRequests: string[] = [];
 
 	/** Current page URL, or null when no page is open. */
 	currentUrlValue: string | null = null;
@@ -91,6 +107,7 @@ export class BrowserSession {
 			this.page = await this.context.newPage();
 			this.page.setDefaultTimeout(timeoutMs);
 			this.page.setDefaultNavigationTimeout(timeoutMs);
+			this.attachDiagnostics(this.page);
 			this.timeoutMs = timeoutMs;
 			return `Browser launched (${headless ? "headless" : "headed"}). ${this.status()}`;
 		} catch (err) {
@@ -121,6 +138,7 @@ export class BrowserSession {
 			return `Could not navigate: ${internalErr}`;
 		}
 		try {
+			this.clearDiagnostics();
 			await this.page.goto(target, { timeout: timeoutMs ?? this.timeoutMs, waitUntil: "load" });
 			return await this.captureState();
 		} catch (err) {
@@ -197,6 +215,67 @@ export class BrowserSession {
 		}
 	}
 
+	/** Capture a compact ARIA snapshot optimized for AI inspection and stable refs. */
+	async snapshot(options: BrowserSnapshotOptions = {}): Promise<string> {
+		if (!this.page) {
+			return noSessionError("snapshot");
+		}
+		const depth = options.depth;
+		if (depth !== undefined && (!Number.isInteger(depth) || depth < 1 || depth > 50)) {
+			return "Could not snapshot page: depth must be an integer from 1 to 50";
+		}
+		try {
+			const snapshot = await this.page.ariaSnapshot({ mode: "ai", depth, boxes: options.boxes ?? false });
+			return `ARIA snapshot:\n${limitBrowserOutput(snapshot)}`;
+		} catch (err) {
+			return `Could not snapshot page: ${errorMessage(err)}`;
+		}
+	}
+
+	/** Resize the page viewport for responsive-layout verification. */
+	async resize(width: number, height: number): Promise<string> {
+		if (!this.page) {
+			return noSessionError("resize");
+		}
+		if (!validViewportDimension(width, 240, 7680) || !validViewportDimension(height, 240, 4320)) {
+			return "Could not resize viewport: width must be 240-7680 and height must be 240-4320 CSS pixels";
+		}
+		try {
+			await this.page.setViewportSize({ width, height });
+			return `Viewport resized to ${width}x${height}.`;
+		} catch (err) {
+			return `Could not resize viewport: ${errorMessage(err)}`;
+		}
+	}
+
+	/** Wait for a selector to reach a specific state. */
+	async waitFor(selector: string, state: BrowserWaitState = "visible", timeoutMs?: number): Promise<string> {
+		if (!this.page) {
+			return noSessionError("wait");
+		}
+		const timeout = timeoutMs ?? this.timeoutMs;
+		if (!Number.isFinite(timeout) || timeout < 1 || timeout > 60_000) {
+			return "Could not wait for selector: timeoutMs must be between 1 and 60000";
+		}
+		try {
+			await this.page.waitForSelector(selector, { state, timeout });
+			return `Selector "${selector}" reached state "${state}".`;
+		} catch (err) {
+			return `Could not wait for "${selector}" to become ${state}: ${errorMessage(err)}`;
+		}
+	}
+
+	/** Return console errors, uncaught page errors, and failed requests since navigation. */
+	async diagnostics(): Promise<string> {
+		if (!this.page) {
+			return noSessionError("inspect diagnostics");
+		}
+		const lines = [...this.consoleEntries, ...this.pageErrors, ...this.failedRequests];
+		return lines.length === 0
+			? "Browser diagnostics: no console messages, page errors, or failed requests since navigation."
+			: `Browser diagnostics:\n${limitBrowserOutput(lines.join("\n"))}`;
+	}
+
 	/** The current page URL as a string (empty when no page is open). */
 	currentUrl(): string {
 		return this.currentUrlValue ?? "";
@@ -216,7 +295,37 @@ export class BrowserSession {
 		this.browser = null;
 		this.currentUrlValue = null;
 		this.currentTitleValue = null;
+		this.clearDiagnostics();
 		return "Browser session closed.";
+	}
+
+	private attachDiagnostics(page: Page): void {
+		page.on("console", (message) => {
+			pushBounded(this.consoleEntries, `console.${message.type()}: ${message.text()}`);
+		});
+		page.on("pageerror", (error) => {
+			pushBounded(this.pageErrors, `pageerror: ${errorMessage(error)}`);
+		});
+		page.on("requestfailed", (request) => {
+			const failure = request.failure()?.errorText ?? "request failed";
+			pushBounded(
+				this.failedRequests,
+				`requestfailed: ${request.method()} ${safeDiagnosticUrl(request.url())} — ${failure}`,
+			);
+		});
+		page.on("response", (response) => {
+			if (response.status() < 400) return;
+			pushBounded(
+				this.failedRequests,
+				`http ${response.status()}: ${response.request().method()} ${safeDiagnosticUrl(response.url())}`,
+			);
+		});
+	}
+
+	private clearDiagnostics(): void {
+		this.consoleEntries = [];
+		this.pageErrors = [];
+		this.failedRequests = [];
 	}
 
 	private async captureState(): Promise<string> {
@@ -335,6 +444,33 @@ function resolveWithinCwd(path: string, cwd: string): string {
 		return abs;
 	}
 	return resolve(cwd, path);
+}
+
+function pushBounded(entries: string[], value: string): void {
+	entries.push(value);
+	if (entries.length > MAX_DIAGNOSTIC_ENTRIES) entries.shift();
+}
+
+function safeDiagnosticUrl(raw: string): string {
+	try {
+		const url = new URL(raw);
+		url.username = "";
+		url.password = "";
+		url.search = "";
+		url.hash = "";
+		return url.toString();
+	} catch {
+		return "(unparseable URL)";
+	}
+}
+
+function validViewportDimension(value: number, min: number, max: number): boolean {
+	return Number.isInteger(value) && value >= min && value <= max;
+}
+
+function limitBrowserOutput(value: string): string {
+	if (value.length <= MAX_BROWSER_OUTPUT_CHARS) return value;
+	return `${value.slice(0, MAX_BROWSER_OUTPUT_CHARS)}\n… [truncated]`;
 }
 
 function stringifyResult(value: unknown): string {

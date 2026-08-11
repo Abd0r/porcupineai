@@ -70,6 +70,26 @@ export const PORCUPINE_STACKS: readonly StackDefinition[] = [
 		order: 40,
 	},
 	{
+		id: "webdev",
+		label: "Web Development",
+		description: "Build, inspect, test, secure, and ship production web applications.",
+		tags: [
+			"webdev",
+			"frontend",
+			"backend",
+			"fullstack",
+			"html",
+			"css",
+			"javascript",
+			"typescript",
+			"api",
+			"accessibility",
+			"responsive",
+			"browser",
+		],
+		order: 43,
+	},
+	{
 		id: "computer",
 		label: "Computer Use",
 		description: "Observe and operate the local macOS GUI with explicit approval.",
@@ -187,6 +207,56 @@ export const TOOL_STACK_MAP: Readonly<Record<string, ToolStackPlacement>> = {
 		lane: ["fetch"],
 		tags: ["extract", "fetch", "url", "page", "html", "scrape"],
 	},
+	browser_navigate: {
+		stack: "webdev",
+		lane: ["browser", "navigate"],
+		tags: ["browser", "playwright", "page", "open", "url"],
+	},
+	browser_click: {
+		stack: "webdev",
+		lane: ["browser", "interact"],
+		tags: ["browser", "playwright", "click", "selector", "aria-ref"],
+	},
+	browser_type: {
+		stack: "webdev",
+		lane: ["browser", "interact"],
+		tags: ["browser", "playwright", "type", "fill", "form", "input"],
+	},
+	browser_extract: {
+		stack: "webdev",
+		lane: ["browser", "inspect"],
+		tags: ["browser", "playwright", "text", "dom", "extract"],
+	},
+	browser_screenshot: {
+		stack: "webdev",
+		lane: ["browser", "visual"],
+		tags: ["browser", "playwright", "screenshot", "visual", "responsive"],
+	},
+	browser_evaluate: {
+		stack: "webdev",
+		lane: ["browser", "script"],
+		tags: ["browser", "playwright", "javascript", "evaluate", "dom"],
+	},
+	browser_snapshot: {
+		stack: "webdev",
+		lane: ["browser", "semantic"],
+		tags: ["browser", "playwright", "aria", "accessibility", "snapshot", "role", "semantic"],
+	},
+	browser_resize: {
+		stack: "webdev",
+		lane: ["browser", "responsive"],
+		tags: ["browser", "playwright", "viewport", "mobile", "tablet", "desktop", "responsive"],
+	},
+	browser_wait: {
+		stack: "webdev",
+		lane: ["browser", "sync"],
+		tags: ["browser", "playwright", "wait", "selector", "async", "state"],
+	},
+	browser_diagnostics: {
+		stack: "webdev",
+		lane: ["browser", "diagnostics"],
+		tags: ["browser", "playwright", "console", "pageerror", "network", "request", "diagnostics"],
+	},
 	computer_use: {
 		stack: "computer",
 		lane: ["native", "desktop"],
@@ -220,6 +290,12 @@ export const TOOL_STACK_MAP: Readonly<Record<string, ToolStackPlacement>> = {
 
 /** Keyword → preferred stack for skill classification. */
 const SKILL_STACK_RULES: Array<{ stack: string; lane: string; pattern: RegExp }> = [
+	{
+		stack: "webdev",
+		lane: "playbook",
+		pattern:
+			/\b(web.?dev|frontend|backend|full.?stack|html|css|responsive|design.?system|accessibility|wcag|aria|http.?api|openapi|seo|lighthouse|web.?vitals)\b/i,
+	},
 	{
 		stack: "computer",
 		lane: "playbook",

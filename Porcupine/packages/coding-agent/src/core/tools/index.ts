@@ -18,16 +18,24 @@ export {
 export {
 	createBrowserClickTool,
 	createBrowserClickToolDefinition,
+	createBrowserDiagnosticsTool,
+	createBrowserDiagnosticsToolDefinition,
 	createBrowserEvaluateTool,
 	createBrowserEvaluateToolDefinition,
 	createBrowserExtractTool,
 	createBrowserExtractToolDefinition,
 	createBrowserNavigateTool,
 	createBrowserNavigateToolDefinition,
+	createBrowserResizeTool,
+	createBrowserResizeToolDefinition,
 	createBrowserScreenshotTool,
 	createBrowserScreenshotToolDefinition,
+	createBrowserSnapshotTool,
+	createBrowserSnapshotToolDefinition,
 	createBrowserTypeTool,
 	createBrowserTypeToolDefinition,
+	createBrowserWaitTool,
+	createBrowserWaitToolDefinition,
 } from "./browser.ts";
 export {
 	type CapabilityCatalogTool,
@@ -200,16 +208,24 @@ import { type BashToolOptions, createBashTool, createBashToolDefinition } from "
 import {
 	createBrowserClickTool,
 	createBrowserClickToolDefinition,
+	createBrowserDiagnosticsTool,
+	createBrowserDiagnosticsToolDefinition,
 	createBrowserEvaluateTool,
 	createBrowserEvaluateToolDefinition,
 	createBrowserExtractTool,
 	createBrowserExtractToolDefinition,
 	createBrowserNavigateTool,
 	createBrowserNavigateToolDefinition,
+	createBrowserResizeTool,
+	createBrowserResizeToolDefinition,
 	createBrowserScreenshotTool,
 	createBrowserScreenshotToolDefinition,
+	createBrowserSnapshotTool,
+	createBrowserSnapshotToolDefinition,
 	createBrowserTypeTool,
 	createBrowserTypeToolDefinition,
+	createBrowserWaitTool,
+	createBrowserWaitToolDefinition,
 } from "./browser.ts";
 import {
 	type CapabilitySearchToolOptions,
@@ -329,6 +345,10 @@ export type ToolName =
 	| "browser_extract"
 	| "browser_screenshot"
 	| "browser_evaluate"
+	| "browser_snapshot"
+	| "browser_resize"
+	| "browser_wait"
+	| "browser_diagnostics"
 	| "extract_skill"
 	| "craft_skill";
 export const allToolNames: Set<ToolName> = new Set([
@@ -369,6 +389,10 @@ export const allToolNames: Set<ToolName> = new Set([
 	"browser_extract",
 	"browser_screenshot",
 	"browser_evaluate",
+	"browser_snapshot",
+	"browser_resize",
+	"browser_wait",
+	"browser_diagnostics",
 	"extract_skill",
 	"craft_skill",
 ]);
@@ -522,6 +546,10 @@ export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): R
 		browser_extract: createBrowserExtractToolDefinition(),
 		browser_screenshot: createBrowserScreenshotToolDefinition(),
 		browser_evaluate: createBrowserEvaluateToolDefinition(),
+		browser_snapshot: createBrowserSnapshotToolDefinition(),
+		browser_resize: createBrowserResizeToolDefinition(),
+		browser_wait: createBrowserWaitToolDefinition(),
+		browser_diagnostics: createBrowserDiagnosticsToolDefinition(),
 		extract_skill: createExtractSkillToolDefinition(),
 		craft_skill: createCraftSkillToolDefinition(),
 	};
@@ -632,6 +660,10 @@ export function createAllTools(cwd: string, options?: ToolsOptions): Record<Tool
 		browser_extract: createBrowserExtractTool(),
 		browser_screenshot: createBrowserScreenshotTool(),
 		browser_evaluate: createBrowserEvaluateTool(),
+		browser_snapshot: createBrowserSnapshotTool(),
+		browser_resize: createBrowserResizeTool(),
+		browser_wait: createBrowserWaitTool(),
+		browser_diagnostics: createBrowserDiagnosticsTool(),
 		extract_skill: createExtractSkillTool(),
 		craft_skill: createCraftSkillTool(),
 	};

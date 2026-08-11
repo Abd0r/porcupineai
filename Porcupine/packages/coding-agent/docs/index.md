@@ -38,6 +38,7 @@ For the full first-run flow, see [Quickstart](quickstart.md).
 - [Quickstart](quickstart.md) - install, authenticate, and run a first session.
 - [Using Porcupine](usage.md) - interactive mode, slash commands, context files, and CLI reference.
 - [Stacks](stacks.md) - the capability tree: how every tool and skill is organized and discovered.
+- [Web Development](web-development.md) - frontend, backend, browser QA, accessibility, performance, and production workflows.
 - [Sub-agents](subagents.md) - parallel isolated workers, WoT coordination, and instant report injection.
 - [MCP](mcp.md) - Model Context Protocol client: connect MCP servers, tools/resources/prompts, OAuth, security.
 - [Providers](providers.md) - subscription and API-key setup for built-in providers.
@@ -51,7 +52,7 @@ For the full first-run flow, see [Quickstart](quickstart.md).
 - [Compaction](compaction.md) - context compaction and branch summarization.
 - [X (Twitter)](x.md) - free X integration: search, read tweets, drafts, and compose-then-paste posting.
 - [Email (IMAP/SMTP)](email.md) - read inbox/drafts/sent, save drafts, send via app password.
-- [Browser use](browser.md) - native Chromium control via Playwright: navigate, click, type, extract, screenshot.
+- [Browser use](browser.md) - Playwright browser control: semantic snapshots, interaction, responsive checks, diagnostics, and screenshots.
 
 ## Customization
 

@@ -34,6 +34,27 @@ describe("tools/skills stacks", () => {
 		}
 	});
 
+	it("registers the webdev stack and places every browser tool under it", () => {
+		const webdev = listStacks().find((stack) => stack.id === "webdev");
+		expect(webdev?.label).toBe("Web Development");
+		const browserTools = [
+			"browser_navigate",
+			"browser_snapshot",
+			"browser_click",
+			"browser_type",
+			"browser_wait",
+			"browser_extract",
+			"browser_resize",
+			"browser_diagnostics",
+			"browser_screenshot",
+			"browser_evaluate",
+		];
+		for (const name of browserTools) {
+			expect(resolveToolPlacement(name).stack, name).toBe("webdev");
+			expect(toolCapabilityPath(name).slice(0, 3), name).toEqual(["stacks", "webdev", "browser"]);
+		}
+	});
+
 	it("searchStacks finds web tools", () => {
 		const tree = buildCapabilityTreeFromSession({
 			tools: [
@@ -86,6 +107,13 @@ describe("tools/skills stacks", () => {
 		expect(learned.lane[0]).toBe("learned");
 	});
 
+	it("loads all shipped webdev skills into the webdev stack", () => {
+		const result = loadSkillsFromDir({ dir: join(process.cwd(), "skills", "webdev"), source: "package" });
+		expect(result.diagnostics.filter((diagnostic) => diagnostic.type === "error")).toEqual([]);
+		expect(result.skills).toHaveLength(12);
+		expect(new Set(result.skills.map((skill) => skill.stack))).toEqual(new Set(["webdev"]));
+	});
+
 	it("loads nested stack skills with stack field", () => {
 		const dir = mkdtempSync(join(tmpdir(), "porcupine-skills-"));
 		const skillDir = join(dir, "debug", "repro-fix");
@@ -132,6 +160,7 @@ stack: debug
 		expect(prompt).toContain("<porcupine_stacks>");
 		expect(prompt).toContain("stacks/<stack>/<lane>/<name>");
 		expect(formatStacksCompact()).toContain("web:");
+		expect(formatStacksCompact()).toContain("webdev:");
 	});
 
 	it("registers /stacks builtin slash command", () => {

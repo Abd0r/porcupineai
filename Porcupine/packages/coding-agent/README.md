@@ -50,9 +50,10 @@ control (**Ask** confirms everything, **Normal** asks on flagged commands,
   real usage: evidence-graded proposals, snapshots + auto-rollback, a live
   activity feed (`/learning feed`), a refiner for weak skills, and a reviewed
   `tools.porcupine.json` registry for composed tools.
-- **50 skills across all 17 stacks** — research-grounded, agentskills.io
-  compliant, from `problem-solving` (the universal loop) to `secure-coding`,
-  `shell-craft`, and `autonomous-delegation`.
+- **64 skills across all 18 stacks** — research-grounded and agentskills.io
+  compliant, including a dedicated Web Development stack for frontend, APIs,
+  accessibility, responsive design, browser QA, performance, data migrations,
+  observability, SEO, and deployment.
 - **Dynamic task graph** — footer tracker + chat graph animate on every
   multi-step turn: `/plan` gets a pre-routed capability graph; ordinary
   model-led turns build one live from actual tool calls.
@@ -75,8 +76,9 @@ control (**Ask** confirms everything, **Normal** asks on flagged commands,
 - **X (Twitter), free** — search (web cascade), read tweets (public
   syndication, no key), local drafts, compose-then-paste posting (X has no
   free API tier anymore).
-- **Native browser** — Playwright-powered `browser_*` tools: navigate, click,
-  type, extract, screenshot, evaluate (headless by default).
+- **Native browser** — Playwright-powered `browser_*` tools: navigate, semantic
+  ARIA snapshot, click/type, wait, extract, resize, diagnostics, screenshot, and
+  evaluate (headless by default).
 - **Projects** — `Project/<name>/` workspaces with `README.md` + `STATUS.md`.
 - **Telegram bridge** — message the same session from your phone
   (`PORCUPINE_TELEGRAM_TOKEN` in `~/.porcupine/agent/.env`); confirmations and
@@ -106,9 +108,9 @@ control (**Ask** confirms everything, **Normal** asks on flagged commands,
 
 ## Docs
 
-- [Full guide](docs/index.md) · [MCP](docs/mcp.md) · [Settings](docs/settings.md) ·
-  [Skills](docs/skills.md) · [Security](docs/security.md) · [Extensions](docs/extensions.md) ·
-  [Sessions](docs/sessions.md)
+- [Full guide](docs/index.md) · [Web Development](docs/web-development.md) · [MCP](docs/mcp.md) ·
+  [Settings](docs/settings.md) · [Skills](docs/skills.md) · [Security](docs/security.md) ·
+  [Extensions](docs/extensions.md) · [Sessions](docs/sessions.md)
 
 ## License
 

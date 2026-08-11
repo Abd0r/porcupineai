@@ -1,8 +1,9 @@
 #!/bin/bash
 # Porcupine benchmark rig status — one-shot snapshot
 # Usage: bash check-status.sh
-SSHPASS='Hello1123'
-HOST='abdur@192.168.0.213'
+: "${RIG_SSH_HOST:?Set RIG_SSH_HOST to user@host}"
+: "${RIG_SSH_PASSWORD:?Set RIG_SSH_PASSWORD}"
+HOST="$RIG_SSH_HOST"
 REMOTE_SCRIPT=$(cat <<'EOF'
 echo "=== uptime: $(uptime -p)"
 echo "=== harbor procs: $(ps aux | grep -c '[h]arbor')"
@@ -46,4 +47,4 @@ echo "=== mem: $(free -h | grep Mem | awk '{print $3"/"$2}') swap: $(free -h | g
 echo "=== top mem: $(ps aux --sort=-%mem | sed -n 2p | awk '{print $4"% "$11" "$12}')"
 EOF
 )
-sshpass -p "$SSHPASS" ssh -o StrictHostKeyChecking=no "$HOST" "bash -s" <<< "$REMOTE_SCRIPT"
+SSHPASS="$RIG_SSH_PASSWORD" sshpass -e ssh -o StrictHostKeyChecking=accept-new "$HOST" "bash -s" <<< "$REMOTE_SCRIPT"

@@ -1,11 +1,11 @@
 /**
  * Native browser-use tools for Porcupine, built on the Playwright wrapper in
- * src/porcupine/browser.ts. These let the agent navigate, click, type, extract,
- * screenshot, and evaluate live pages through a single shared browser session.
+ * src/porcupine/browser.ts. These provide semantic inspection, interaction,
+ * responsive checks, diagnostics, screenshots, and evaluation through one
+ * shared browser session.
  *
- * NOTE: These tools are defined here but NOT registered in tools/index.ts. The
- * main agent adds them to the runtime at integration time (which also wires the
- * lazy dependency on the optional `playwright` package).
+ * The definitions are registered in tools/index.ts; Playwright itself remains
+ * lazy and is imported only when the shared browser session launches.
  */
 
 import type { AgentTool, AgentToolResult } from "@porcupineai/agent-core";
@@ -22,11 +22,11 @@ const browserNavigateSchema = Type.Object({
 });
 
 const browserClickSchema = Type.Object({
-	selector: Type.String({ description: "CSS selector of the element to click" }),
+	selector: Type.String({ description: "CSS or Playwright selector of the element to click" }),
 });
 
 const browserTypeSchema = Type.Object({
-	selector: Type.String({ description: "CSS selector of the input field" }),
+	selector: Type.String({ description: "CSS or Playwright selector of the input field" }),
 	text: Type.String({ description: "Text to type into the field" }),
 });
 
@@ -37,12 +37,37 @@ const browserExtractSchema = Type.Object({
 });
 
 const browserScreenshotSchema = Type.Object({
-	path: Type.Optional(Type.String({ description: "File path to save the screenshot to (defaults to a temp PNG)" })),
+	path: Type.Optional(
+		Type.String({ description: "Path inside the working directory (defaults to a timestamped PNG)" }),
+	),
 });
 
 const browserEvaluateSchema = Type.Object({
 	expression: Type.String({ description: "JavaScript expression to evaluate in the page" }),
 });
+
+const browserSnapshotSchema = Type.Object({
+	depth: Type.Optional(Type.Integer({ minimum: 1, maximum: 50, description: "Maximum ARIA tree depth (1-50)" })),
+	boxes: Type.Optional(Type.Boolean({ description: "Include viewport-relative element bounding boxes" })),
+});
+
+const browserResizeSchema = Type.Object({
+	width: Type.Integer({ minimum: 240, maximum: 7680, description: "Viewport width in CSS pixels" }),
+	height: Type.Integer({ minimum: 240, maximum: 4320, description: "Viewport height in CSS pixels" }),
+});
+
+const browserWaitSchema = Type.Object({
+	selector: Type.String({ description: "CSS or Playwright selector to wait for" }),
+	state: Type.Optional(
+		Type.Union(
+			[Type.Literal("visible"), Type.Literal("hidden"), Type.Literal("attached"), Type.Literal("detached")],
+			{ description: "Required selector state (default visible)" },
+		),
+	),
+	timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 60_000, description: "Timeout in milliseconds" })),
+});
+
+const browserDiagnosticsSchema = Type.Object({});
 
 export type BrowserNavigateToolInput = Static<typeof browserNavigateSchema>;
 export type BrowserClickToolInput = Static<typeof browserClickSchema>;
@@ -50,6 +75,10 @@ export type BrowserTypeToolInput = Static<typeof browserTypeSchema>;
 export type BrowserExtractToolInput = Static<typeof browserExtractSchema>;
 export type BrowserScreenshotToolInput = Static<typeof browserScreenshotSchema>;
 export type BrowserEvaluateToolInput = Static<typeof browserEvaluateSchema>;
+export type BrowserSnapshotToolInput = Static<typeof browserSnapshotSchema>;
+export type BrowserResizeToolInput = Static<typeof browserResizeSchema>;
+export type BrowserWaitToolInput = Static<typeof browserWaitSchema>;
+export type BrowserDiagnosticsToolInput = Static<typeof browserDiagnosticsSchema>;
 
 interface BrowserToolDetails {
 	action: string;
@@ -83,7 +112,7 @@ export function createBrowserNavigateToolDefinition(): ToolDefinition<
 			"Open a URL in the shared browser session. Launches a headless Chromium on first use and returns the page URL and title. Use other browser_* tools to operate on the open page.",
 		promptSnippet: "Open a web page in the browser",
 		promptGuidelines: [
-			"Use browser_navigate to open a page, then browser_click / browser_type / browser_extract to work with it. The session stays open across calls.",
+			"Use browser_navigate to open a page, inspect with browser_snapshot, interact with browser_click/browser_type, wait on meaningful state, then verify with extract/diagnostics/screenshot. The session stays open across calls.",
 		],
 		parameters: browserNavigateSchema,
 		async execute(_toolCallId, { url, timeoutMs }) {
@@ -118,7 +147,7 @@ export function createBrowserClickToolDefinition(): ToolDefinition<
 	return {
 		name: "browser_click",
 		label: "browser_click",
-		description: "Click the first element matching a CSS selector in the open browser page.",
+		description: "Click the first element matching a CSS or Playwright selector in the open browser page.",
 		promptSnippet: "Click an element on the page",
 		promptGuidelines: ["Use browser_click on an element visible in the current browser_navigate page."],
 		parameters: browserClickSchema,
@@ -140,7 +169,7 @@ export function createBrowserTypeToolDefinition(): ToolDefinition<
 	return {
 		name: "browser_type",
 		label: "browser_type",
-		description: "Type text into an input field matching a CSS selector in the open browser page.",
+		description: "Type text into an input field matching a CSS or Playwright selector in the open browser page.",
 		promptSnippet: "Type text into a field",
 		promptGuidelines: ["Use browser_type to fill a form input after navigating to the page."],
 		parameters: browserTypeSchema,
@@ -186,7 +215,7 @@ export function createBrowserScreenshotToolDefinition(): ToolDefinition<
 		name: "browser_screenshot",
 		label: "browser_screenshot",
 		description:
-			"Take a full-page screenshot of the open browser page and save it to a PNG file. Returns the saved file path. Defaults to a timestamped temp file when no path is given.",
+			"Take a full-page screenshot and save it inside the working directory. Returns the path and defaults to a timestamped PNG when omitted.",
 		promptSnippet: "Screenshot the current page",
 		promptGuidelines: ["Use browser_screenshot to capture visual state of the open page."],
 		parameters: browserScreenshotSchema,
@@ -219,6 +248,98 @@ export function createBrowserEvaluateToolDefinition(): ToolDefinition<
 		},
 		renderCall(args) {
 			return renderCall("browser_evaluate", String(args?.expression ?? "..."));
+		},
+		renderResult,
+	};
+}
+
+export function createBrowserSnapshotToolDefinition(): ToolDefinition<
+	typeof browserSnapshotSchema,
+	BrowserToolDetails | undefined
+> {
+	return {
+		name: "browser_snapshot",
+		label: "browser_snapshot",
+		description:
+			"Capture an AI-oriented ARIA snapshot of the current page. Returns semantic roles, accessible names, and stable refs such as aria-ref=e2 for resilient browser inspection and interaction.",
+		promptSnippet: "Inspect the page's semantic accessibility tree",
+		promptGuidelines: [
+			"Prefer browser_snapshot before browser_click/browser_type. Use returned refs with selectors such as aria-ref=e2 instead of brittle CSS when possible.",
+		],
+		parameters: browserSnapshotSchema,
+		async execute(_toolCallId, { depth, boxes }) {
+			return ackResult("browser_snapshot", await getBrowserSession().snapshot({ depth, boxes }));
+		},
+		renderCall(args) {
+			return renderCall("browser_snapshot", `depth=${String(args?.depth ?? "all")}`);
+		},
+		renderResult,
+	};
+}
+
+export function createBrowserResizeToolDefinition(): ToolDefinition<
+	typeof browserResizeSchema,
+	BrowserToolDetails | undefined
+> {
+	return {
+		name: "browser_resize",
+		label: "browser_resize",
+		description: "Resize the browser viewport to verify responsive layouts at an exact CSS-pixel width and height.",
+		promptSnippet: "Resize the browser viewport",
+		promptGuidelines: [
+			"Use browser_resize before screenshots or snapshots at mobile, tablet, and desktop breakpoints.",
+		],
+		parameters: browserResizeSchema,
+		async execute(_toolCallId, { width, height }) {
+			return ackResult("browser_resize", await getBrowserSession().resize(width, height));
+		},
+		renderCall(args) {
+			return renderCall("browser_resize", `${String(args?.width ?? "?")}x${String(args?.height ?? "?")}`);
+		},
+		renderResult,
+	};
+}
+
+export function createBrowserWaitToolDefinition(): ToolDefinition<
+	typeof browserWaitSchema,
+	BrowserToolDetails | undefined
+> {
+	return {
+		name: "browser_wait",
+		label: "browser_wait",
+		description: "Wait for a page selector to become visible, hidden, attached, or detached with a bounded timeout.",
+		promptSnippet: "Wait for asynchronous page state",
+		promptGuidelines: ["Wait on a meaningful selector or state transition, never add arbitrary sleeps."],
+		parameters: browserWaitSchema,
+		async execute(_toolCallId, { selector, state, timeoutMs }) {
+			return ackResult("browser_wait", await getBrowserSession().waitFor(selector, state, timeoutMs));
+		},
+		renderCall(args) {
+			return renderCall("browser_wait", `${String(args?.selector ?? "...")} → ${String(args?.state ?? "visible")}`);
+		},
+		renderResult,
+	};
+}
+
+export function createBrowserDiagnosticsToolDefinition(): ToolDefinition<
+	typeof browserDiagnosticsSchema,
+	BrowserToolDetails | undefined
+> {
+	return {
+		name: "browser_diagnostics",
+		label: "browser_diagnostics",
+		description:
+			"Report bounded console messages, uncaught page errors, failed requests, and HTTP 4xx/5xx responses since navigation. Request URL credentials, queries, and fragments are omitted.",
+		promptSnippet: "Inspect runtime browser errors and failed requests",
+		promptGuidelines: [
+			"Use browser_diagnostics after exercising a page; do not declare UI work complete with unexplained errors.",
+		],
+		parameters: browserDiagnosticsSchema,
+		async execute() {
+			return ackResult("browser_diagnostics", await getBrowserSession().diagnostics());
+		},
+		renderCall() {
+			return renderCall("browser_diagnostics", "since navigation");
 		},
 		renderResult,
 	};
@@ -283,4 +404,20 @@ export function createBrowserScreenshotTool(): AgentTool<typeof browserScreensho
 
 export function createBrowserEvaluateTool(): AgentTool<typeof browserEvaluateSchema> {
 	return wrapToolDefinition(createBrowserEvaluateToolDefinition());
+}
+
+export function createBrowserSnapshotTool(): AgentTool<typeof browserSnapshotSchema> {
+	return wrapToolDefinition(createBrowserSnapshotToolDefinition());
+}
+
+export function createBrowserResizeTool(): AgentTool<typeof browserResizeSchema> {
+	return wrapToolDefinition(createBrowserResizeToolDefinition());
+}
+
+export function createBrowserWaitTool(): AgentTool<typeof browserWaitSchema> {
+	return wrapToolDefinition(createBrowserWaitToolDefinition());
+}
+
+export function createBrowserDiagnosticsTool(): AgentTool<typeof browserDiagnosticsSchema> {
+	return wrapToolDefinition(createBrowserDiagnosticsToolDefinition());
 }

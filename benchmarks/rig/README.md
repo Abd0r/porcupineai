@@ -1,7 +1,7 @@
 # Porcupine Benchmark Rig — Scaffolding (v1)
 
 The top-4 agent benchmarks, Porcupine as harness, DeepSeek V4 Flash via OpenCode Go.
-Rig machine: `abdur@192.168.0.213` (Ubuntu 24.04, 24 cores, RTX 4050, docker).
+Rig machine: set `RIG_SSH_HOST=user@rig-host` (Ubuntu 24.04, 24 cores, RTX 4050, docker).
 
 ## The four benchmarks
 
@@ -64,7 +64,7 @@ nohup ~/benchenv/bin/harbor run -d terminal-bench@2.0 \
 **Known edge (P1-2):** `winning-avg-corewars` exceeds even 1800s (adapter timeout) —
 accept the timeout or skip that task; it is a guaranteed max-length burn.
 Sandbox install flow (adapter `install()`): node from nodejs.org tarball (file-based check, not `command -v`),
-slim Porcupine (`http://192.168.0.213:8123/porcupine-slim.tgz`, 158MB) + auth/settings from the same server.
+slim Porcupine (`http://rig-host:8123/porcupine-slim.tgz`, 158MB) + auth/settings from the same server.
 Run: `pi` shim → `--print --mode json --session … --provider opencode-go --model deepseek-v4-flash "<task>"`,
 token accounting parsed from `pi-output.jsonl` (`message_end` usage events).
 

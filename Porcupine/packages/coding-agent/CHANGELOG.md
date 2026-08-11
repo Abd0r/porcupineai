@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.1.63] - 2026-08-11
+
+### Added
+
+- **Web Development stack**: a dedicated 18th capability stack with 12 framework-neutral skills spanning frontend structure, design systems, responsive UI, WCAG accessibility, HTTP APIs, request validation, authentication/sessions, database migrations, observability, real-browser QA, performance, SEO, and deployment readiness.
+- **Production browser inspection tools**: `browser_snapshot` returns Playwright's AI-oriented ARIA tree with stable refs, `browser_resize` verifies responsive viewports, `browser_wait` synchronizes on page state, and `browser_diagnostics` reports bounded console/page/request/HTTP failures while stripping URL credentials and query strings. All ten browser tools now route under `stacks/webdev/browser/...`.
+
+### Fixed
+
+- Removed personal benchmark-rig connection defaults from the public scripts. The status checker now requires explicit environment variables and uses safer first-connection host-key handling.
+
 ## [0.1.62] - 2026-08-11
 
 ### Added

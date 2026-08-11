@@ -1,10 +1,11 @@
 # Browser use
 
 Porcupine ships a native browser-use module built on **Playwright** (the OSS
-automation engine). The agent can open a real Chromium page, navigate, click,
-type, extract text, take screenshots, and run JavaScript against it — useful for
-reading rendered SPAs, checking live state, filling forms, or capturing visual
-proof before taking an action.
+automation engine). The agent can open a real Chromium page, inspect its ARIA
+semantics, navigate, click, type, wait for page state, resize the viewport,
+extract text, capture diagnostics and screenshots, and run JavaScript against
+it. This supports rendered-SPA inspection, responsive and accessibility checks,
+form workflows, and visual proof.
 
 ## Setup (one-time)
 
@@ -50,14 +51,18 @@ Agent-controlled browsing is scoped to be conservative by default:
 All tools operate on a single shared browser session. Call `browser_navigate`
 first to open a page; everything else acts on that open page.
 
-| Tool                 | Arguments                                    | Description                                                    |
-| -------------------- | -------------------------------------------- | -------------------------------------------------------------- |
-| `browser_navigate`   | `url`, optional `timeoutMs`                  | Open a URL; launches headless Chromium on first use. Returns URL + title. |
-| `browser_click`      | `selector`                                   | Click the first element matching a CSS selector.                |
-| `browser_type`       | `selector`, `text`                           | Type text into an input field matching a CSS selector.          |
-| `browser_extract`    | optional `selector`                          | Extract visible text from a selector, or the whole page body.   |
-| `browser_screenshot` | optional `path`                              | Save a full-page PNG; returns the saved file path.              |
-| `browser_evaluate`   | `expression`                                 | Evaluate a JavaScript expression and return the result.         |
+| Tool | Arguments | Description |
+| --- | --- | --- |
+| `browser_navigate` | `url`, optional `timeoutMs` | Open a URL; launches Chromium on first use and returns URL + title. |
+| `browser_snapshot` | optional `depth`, `boxes` | Capture an AI-oriented ARIA snapshot with roles, names, states, and stable refs. |
+| `browser_click` | `selector` | Click a CSS or Playwright selector. Prefer an `aria-ref` from a snapshot when available. |
+| `browser_type` | `selector`, `text` | Fill an input selected by CSS or an ARIA ref. |
+| `browser_wait` | `selector`, optional `state`, `timeoutMs` | Wait for visible/hidden/attached/detached state without arbitrary sleeps. |
+| `browser_extract` | optional `selector` | Extract rendered text from a selector or the whole body. |
+| `browser_resize` | `width`, `height` | Set an exact CSS-pixel viewport for responsive verification. |
+| `browser_diagnostics` | none | Report bounded console messages, page errors, failed requests, and HTTP failures since navigation. |
+| `browser_screenshot` | optional `path` | Save a full-page PNG inside the working directory. |
+| `browser_evaluate` | `expression` | Evaluate JavaScript and return a stringified result. |
 
 Failures — badly formed URLs, missing elements, and timeouts — come back as
 readable messages, never bare stack dumps.
@@ -87,8 +92,25 @@ browser_navigate { "url": "https://example.com/data" }
 browser_evaluate { "expression": "document.querySelectorAll('tr').length" }
 ```
 
-Capture a screenshot before reporting a finding:
+Inspect semantics, interact by stable ref, and check runtime health:
 
 ```
-browser_screenshot { "path": "report-overview.png" }
+browser_snapshot { "depth": 12 }
+browser_click { "selector": "aria-ref=e7" }
+browser_wait { "selector": "[data-state=ready]", "state": "visible" }
+browser_diagnostics {}
 ```
+
+Verify mobile and desktop layouts before reporting completion:
+
+```
+browser_resize { "width": 390, "height": 844 }
+browser_screenshot { "path": "mobile.png" }
+browser_resize { "width": 1440, "height": 900 }
+browser_screenshot { "path": "desktop.png" }
+```
+
+For local development servers, the default SSRF guard blocks loopback/private
+hosts. Only in a trusted project, start Porcupine with
+`PORCUPINE_BROWSER_ALLOW_INTERNAL=1`; this disables that protection for the
+session, so never combine it with untrusted URLs or content.
