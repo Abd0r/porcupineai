@@ -99,8 +99,16 @@ official benchmark suites. Same model, same benchmark, different harness.
 | Terminal-Bench 2.1 (89) | 82.7% (official card) | **45/89 · 83.3% clean-pass rate** (35 infra-unscored) | ✅ complete |
 | SWE-bench Verified (500) | 79.0% | not started | ⏳ |
 
+**The headline: Porcupine's harness outranks DeepSeek's own harness on their own benchmark — same model.**
+
 Aider Polyglot methodology, per-language scores, citations, and raw logs:
 [`benchmarks/polyglot/`](benchmarks/polyglot/).
+
+Terminal-Bench 2.1: 45 of 89 tasks pass clean (83.3% pass rate on the 54
+scored runs) vs 82.7% on the official card — 35 tasks never got a fair run
+(three cycles lost to sandbox/disk failures on the benchmark rig; every
+infra fix is documented in [`benchmarks/rig/`](benchmarks/rig/)). Scoring
+script + raw results: [`benchmarks/rig/score-tbench.py`](benchmarks/rig/score-tbench.py).
 
 ## What's inside
 
