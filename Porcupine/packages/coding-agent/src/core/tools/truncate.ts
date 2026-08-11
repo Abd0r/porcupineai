@@ -42,7 +42,21 @@ export interface TruncationOptions {
 	maxLines?: number;
 	/** Maximum number of bytes (default: 50KB) */
 	maxBytes?: number;
+	/**
+	 * Enable a more generous byte ceiling for line-bounded content such as log
+	 * files (opt-in). When enabled, the effective byte limit for line-oriented
+	 * output is raised (maximum of maxBytes and LOG_MODE_MAX_BYTES). All existing
+	 * callers are unchanged because this defaults to false.
+	 */
+	logMode?: boolean;
 }
+
+/**
+ * Effective byte ceiling applied when logMode is enabled for line-bounded
+ * content. Logs are naturally line-delimited, so a larger budget (128KB) is
+ * safe and lets more of the log through without splitting lines.
+ */
+export const LOG_MODE_MAX_BYTES = 128 * 1024; // 128KB
 
 function splitLinesForCounting(content: string): string[] {
 	if (content.length === 0) {
@@ -77,7 +91,12 @@ export function formatSize(bytes: number): string {
  */
 export function truncateHead(content: string, options: TruncationOptions = {}): TruncationResult {
 	const maxLines = options.maxLines ?? DEFAULT_MAX_LINES;
-	const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+	// logMode raises the effective byte ceiling for line-bounded content. It is
+	// opt-in so existing callers (read, grep, ls) are byte-identical by default.
+	const logMode = options.logMode === true;
+	const maxBytes = logMode
+		? Math.max(options.maxBytes ?? DEFAULT_MAX_BYTES, LOG_MODE_MAX_BYTES)
+		: (options.maxBytes ?? DEFAULT_MAX_BYTES);
 
 	const totalBytes = Buffer.byteLength(content, "utf-8");
 	const lines = splitLinesForCounting(content);
@@ -259,6 +278,38 @@ function truncateStringToBytesFromEnd(str: string, maxBytes: number): string {
 	}
 
 	return buf.slice(start).toString("utf-8");
+}
+
+/**
+ * Return the longest utf-8-safe PREFIX of {@link content} whose byte length is
+ * <= {@link maxBytes}. Never splits a multi-byte UTF-8 codepoint: the result is
+ * always a valid whole-prefix string of the source text. Exported for callers
+ * (e.g. the read tool) that need byte-truncated resumes continuing on the last
+ * complete line.
+ */
+export function truncateBytePrefix(content: string, maxBytes: number): string {
+	if (maxBytes <= 0) {
+		return "";
+	}
+	const buf = Buffer.from(content, "utf-8");
+	if (buf.length <= maxBytes) {
+		return content;
+	}
+	const decoder = new TextDecoder("utf-8", { fatal: true });
+	// Trim back a byte at a time only when the slice ends mid-way through a
+	// UTF-8 sequence (which throws from the fatal decoder). Because sequences are
+	// at most 4 bytes, this tightens in at most 3 iterations and always leaves a
+	// whole-codepoint prefix.
+	let end = maxBytes;
+	while (end > 0) {
+		try {
+			decoder.decode(buf.subarray(0, end));
+			break;
+		} catch {
+			end--;
+		}
+	}
+	return buf.slice(0, end).toString("utf-8");
 }
 
 /**

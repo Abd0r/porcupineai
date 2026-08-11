@@ -203,6 +203,17 @@ export interface AppliedEditsResult {
  * fuzzy-normalized version of the content (trailing whitespace stripped,
  * Unicode quotes/dashes normalized to ASCII).
  */
+/** Strip a leading "  N| " line-number prefix (added by the read tool's line
+ * numbering) from each line of an edit oldText. Only strips lines that actually
+ * carry the prefix, and only when at least one line does — a literal "12|" in
+ * real code is never mangled.
+ */
+export function stripLineNumberPrefixes(text: string): string {
+	const lines = text.split("\n");
+	const stripped = lines.map((l) => l.replace(/^\s*\d{1,6}\|\s?/, ""));
+	return stripped.some((s, i) => s !== lines[i]) ? stripped.join("\n") : text;
+}
+
 export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResult {
 	// Try exact match first
 	const exactIndex = content.indexOf(oldText);
@@ -306,10 +317,17 @@ export function applyEditsToNormalizedContent(
 	edits: Edit[],
 	path: string,
 ): AppliedEditsResult {
-	const normalizedEdits = edits.map((edit) => ({
-		oldText: normalizeToLF(edit.oldText),
-		newText: normalizeToLF(edit.newText),
-	}));
+	const normalizedEdits = edits.map((edit) => {
+		const oldText = normalizeToLF(edit.oldText);
+		return {
+			oldText,
+			// The model may copy lines verbatim from a line-numbered read output
+			// (" 12| text") — the stripped form is tried as a fallback when the
+			// exact oldText does not match.
+			prefixStrippedOldText: stripLineNumberPrefixes(oldText),
+			newText: normalizeToLF(edit.newText),
+		};
+	});
 
 	for (let i = 0; i < normalizedEdits.length; i++) {
 		if (normalizedEdits[i].oldText.length === 0) {
@@ -324,12 +342,18 @@ export function applyEditsToNormalizedContent(
 	const matchedEdits: MatchedEdit[] = [];
 	for (let i = 0; i < normalizedEdits.length; i++) {
 		const edit = normalizedEdits[i];
-		const matchResult = fuzzyFindText(replacementBaseContent, edit.oldText);
+		let matchResult = fuzzyFindText(replacementBaseContent, edit.oldText);
+		let matchedOldText = edit.oldText;
+		if (!matchResult.found && edit.prefixStrippedOldText !== edit.oldText) {
+			// Fallback: the model copied a line-numbered line (" 12| text").
+			matchResult = fuzzyFindText(replacementBaseContent, edit.prefixStrippedOldText);
+			matchedOldText = edit.prefixStrippedOldText;
+		}
 		if (!matchResult.found) {
 			throw getNotFoundError(path, i, normalizedEdits.length);
 		}
 
-		const occurrences = countOccurrences(replacementBaseContent, edit.oldText);
+		const occurrences = countOccurrences(replacementBaseContent, matchedOldText);
 		if (occurrences > 1) {
 			throw getDuplicateError(path, i, normalizedEdits.length, occurrences);
 		}

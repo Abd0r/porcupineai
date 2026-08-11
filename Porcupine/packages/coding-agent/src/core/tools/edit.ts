@@ -1,7 +1,7 @@
 import type { AgentTool } from "@porcupineai/agent-core";
 import { Box, Container, Spacer, Text } from "@porcupineai/tui";
 import { constants } from "fs";
-import { access as fsAccess, readFile as fsReadFile, writeFile as fsWriteFile } from "fs/promises";
+import { access as fsAccess, readFile as fsReadFile, stat as fsStat, writeFile as fsWriteFile } from "fs/promises";
 import { type Static, Type } from "typebox";
 import { renderDiff } from "../../modes/interactive/components/diff.ts";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
@@ -22,6 +22,7 @@ import {
 } from "./edit-diff.ts";
 import { withFileMutationQueue } from "./file-mutation-queue.ts";
 import { resolveToCwd } from "./path-utils.ts";
+import { type CanEditResult, getReadLedger } from "./read-ledger.ts";
 import { renderToolPath, str } from "./render-utils.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
@@ -83,12 +84,22 @@ export interface EditOperations {
 	writeFile: (absolutePath: string, content: string) => Promise<void>;
 	/** Check if file is readable and writable (throw if not) */
 	access: (absolutePath: string) => Promise<void>;
+	/**
+	 * Stat a file to obtain its current mtime/size. Optional: when absent, or when it
+	 * throws, the read/write ledger is not consulted and edits proceed exactly as
+	 * before (backward compat for remote/overridden backends).
+	 */
+	stat?: (absolutePath: string) => Promise<{ mtimeMs: number; size: number }>;
 }
 
 const defaultEditOperations: EditOperations = {
 	readFile: (path) => fsReadFile(path),
 	writeFile: (path, content) => fsWriteFile(path, content, "utf-8"),
 	access: (path) => fsAccess(path, constants.R_OK | constants.W_OK),
+	stat: async (path) => {
+		const stats = await fsStat(path);
+		return { mtimeMs: stats.mtimeMs, size: stats.size };
+	},
 };
 
 export interface EditToolOptions {
@@ -355,6 +366,31 @@ export function createEditToolDefinition(
 					throw new Error(`Could not edit file: ${path}. ${errorMessage}.`);
 				}
 				throwIfAborted();
+
+				// Consult the read ledger: refuse to overwrite a file the model has only
+				// partially seen (writing would silently destroy the unseen part). A stale
+				// view (file changed since the read) or a fully-seen file proceeds.
+				// A stat that is unavailable or throws must NOT change existing behavior —
+				// the edit proceeds exactly as before (backward compat).
+				if (typeof ops.stat === "function") {
+					let verdict: CanEditResult;
+					try {
+						const current = await ops.stat(absolutePath);
+						throwIfAborted();
+						verdict = getReadLedger().canEdit(absolutePath, current);
+					} catch (error: unknown) {
+						if (error instanceof Error && error.message.startsWith("Operation aborted")) {
+							throw error;
+						}
+						// stat/lookup failed — fall through and edit as before.
+						verdict = { allowed: true };
+					}
+					if (!verdict.allowed) {
+						throw new Error(
+							`[Edit not applied: you have only seen lines ${verdict.seenLines} of this file (${verdict.totalLines} total). Read the full file first, then retry.]`,
+						);
+					}
+				}
 
 				// Read the file.
 				const buffer = await ops.readFile(absolutePath);
