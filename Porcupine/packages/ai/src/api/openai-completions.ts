@@ -281,7 +281,18 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 			const toolCallBlocksById = new Map<string, StreamingToolCallBlock>();
 			const pendingReasoningDetailsByToolCallId = new Map<string, string>();
 			const blocks = output.content as StreamingBlock[];
-			const getContentIndex = (block: StreamingBlock) => blocks.indexOf(block);
+			// Blocks are only ever appended to `output.content` and never reordered or
+			// removed during a stream, so each block's array position is stable once it
+			// exists. Track that position at push time so contentIndex lookup is O(1)
+			// instead of a linear `blocks.indexOf(block)` scan on every delta event
+			// (a busy interleaved thinking/text/toolCall stream can emit ~90k chunks).
+			const blockIndexes = new Map<StreamingBlock, number>();
+			const appendBlock = (block: StreamingBlock): StreamingBlock => {
+				blockIndexes.set(block, blocks.length);
+				blocks.push(block);
+				return block;
+			};
+			const getContentIndex = (block: StreamingBlock): number => blockIndexes.get(block) ?? -1;
 			const getCustomToolCallInput = (block: StreamingToolCallBlock): string => {
 				const property = block.customInput?.property;
 				if (property === undefined) return "";
@@ -353,7 +364,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 			const ensureTextBlock = () => {
 				if (!textBlock) {
 					textBlock = { type: "text", text: "" };
-					blocks.push(textBlock);
+					appendBlock(textBlock);
 					stream.push({ type: "text_start", contentIndex: getContentIndex(textBlock), partial: output });
 				}
 				return textBlock;
@@ -365,7 +376,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 						thinking: "",
 						thinkingSignature,
 					};
-					blocks.push(thinkingBlock);
+					appendBlock(thinkingBlock);
 					stream.push({ type: "thinking_start", contentIndex: getContentIndex(thinkingBlock), partial: output });
 				}
 				return thinkingBlock;
@@ -410,7 +421,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 					if (toolCall.id) {
 						toolCallBlocksById.set(toolCall.id, block);
 					}
-					blocks.push(block);
+					appendBlock(block);
 					stream.push({
 						type: "toolcall_start",
 						contentIndex: getContentIndex(block),

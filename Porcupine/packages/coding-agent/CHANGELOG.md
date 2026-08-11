@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Performance
+
+- Reduced streaming content-block indexing from repeated linear scans to stable O(1) lookups across Anthropic, Bedrock, and OpenAI Completions streams.
+- Removed redundant no-handler context-hook cloning and dispatch, repeated session-history scans, persistence timer churn, and duplicate Safe Autonomy plan formatting.
+- Reduced Safe Autonomy task-graph copying to the affected step and added a zero-allocation continuation path for an already-active tool.
+- Improved TUI hot paths with cached truncation, single-pass Box and Container child rendering, in-place trailing trim, and zero terminal cursor writes on unchanged frames.
+
+### Fixed
+
+- Restricted incremental transcript conversion to the proven element-local built-in converter so custom context-dependent converters always receive the full transcript.
+- Preserved event-listener and abort-controller snapshot semantics with deterministic regression coverage.
+
 ## [0.1.63] - 2026-08-11
 
 ### Added

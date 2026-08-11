@@ -910,6 +910,16 @@ export class SessionManager {
 	private cwd: string;
 	private persist: boolean;
 	private flushed: boolean = false;
+	/**
+	 * Incremental cache for "does this session contain an assistant message?".
+	 * Cached in _appendEntry/_buildIndex/newSession so the hot _persist path never
+	 * rescans the entire fileEntries array per append (kept O(n) over a stream,
+	 * not O(n^2)). The array scan is O(n); long agent/sub-agent streams append
+	 * thousands of transient entries (model changes, thinking level changes,
+	 * labels) after the first assistant message, and a full scan on each one is
+	 * pure CPU pressure with no semantic value once the state is known.
+	 */
+	private _hasAssistantEntry: boolean = false;
 	private fileEntries: FileEntry[] = [];
 	private byId: Map<string, SessionEntry> = new Map();
 	/** Pending JSONL lines for batched appends (debounced — see _schedulePersistFlush). */
@@ -1007,6 +1017,7 @@ export class SessionManager {
 		this.labelTimestampsById.clear();
 		this.leafId = null;
 		this.flushed = false;
+		this._hasAssistantEntry = false;
 
 		if (this.persist) {
 			const fileTimestamp = timestamp.replace(/[:.]/g, "-");
@@ -1020,11 +1031,15 @@ export class SessionManager {
 		this.labelsById.clear();
 		this.labelTimestampsById.clear();
 		this.leafId = null;
+		this._hasAssistantEntry = false;
 		for (const entry of this.fileEntries) {
 			if (entry.type === "session" || entry.type === "subagent") continue;
 			const typed = entry as SessionEntry;
 			this.byId.set(typed.id, typed);
 			this.leafId = typed.id;
+			if (typed.type === "message" && typed.message.role === "assistant") {
+				this._hasAssistantEntry = true;
+			}
 			if (typed.type === "label") {
 				if (typed.label) {
 					this.labelsById.set(typed.targetId, typed.label);
@@ -1133,10 +1148,10 @@ export class SessionManager {
 		this.persistTimer.unref?.();
 	}
 
-	_persist(entry: SessionEntry): void {
+	_persist(entry: SessionEntry, opts?: { immediate?: boolean }): void {
 		if (!this.persist || !this.sessionFile) return;
 
-		const hasAssistant = this.fileEntries.some((e) => e.type === "message" && e.message.role === "assistant");
+		const hasAssistant = this._hasAssistantEntry;
 		if (!hasAssistant) {
 			if (this.flushed) {
 				appendFileSync(this.sessionFile, `${JSON.stringify(entry)}\n`);
@@ -1161,6 +1176,12 @@ export class SessionManager {
 				closeSync(fd);
 			}
 			this.flushed = true;
+		} else if (opts?.immediate) {
+			// Read-critical append: write now so a reader sees the entry immediately,
+			// but avoid the pointless schedule-then-cancel timer dance that a fresh
+			// debounce would impose on every message/compaction/branch-summary append.
+			this.persistBuffer.push(`${JSON.stringify(entry)}\n`);
+			this._flushPersistBuffer();
 		} else {
 			// Batch appends: same content, same order — one disk write per batch
 			// instead of one syscall per event (large headless/agent sessions
@@ -1174,15 +1195,18 @@ export class SessionManager {
 		this.fileEntries.push(entry);
 		this.byId.set(entry.id, entry);
 		this.leafId = entry.id;
+		// Cache the assistant-presence fact incrementally so the hot _persist path
+		// never rescans the whole fileEntries array per append.
+		if (entry.type === "message" && entry.message.role === "assistant") {
+			this._hasAssistantEntry = true;
+		}
 		// Read-critical entries (reloads, forking, session info and the tests read
 		// the file right after appending) must write synchronously: messages,
 		// compactions and branch summaries. Only the true transient entries
 		// (thinking level/model changes, labels) batch into the debounced flush.
 		if (entry.type === "message" || entry.type === "compaction" || entry.type === "branch_summary") {
-			// Persist (which buffers for the batched path) then flush synchronously
-			// so the entry is on disk before any reader looks.
-			this._persist(entry);
-			this._flushPersistBuffer();
+			// Persist with immediate flush so the entry is on disk before any reader looks.
+			this._persist(entry, { immediate: true });
 		} else {
 			this._persist(entry);
 		}

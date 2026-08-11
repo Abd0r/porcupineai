@@ -216,6 +216,12 @@ export class Container implements Component {
 	private cachedLines: string[] | undefined = undefined;
 	private lastWidth = -1;
 	private lastChildRefs: Array<string[] | undefined> = [];
+	// Reusable scratch buffer holding the CURRENT frame's child outputs, sized
+	// lazily and reused across renders. It is distinct from lastChildRefs (the
+	// previous frame's baseline) so the identity comparison stays valid, and it
+	// avoids re-allocating an array on every render — including all-stable
+	// cache hits, which stay allocation-free.
+	private scanBuffer: Array<string[] | undefined> = [];
 
 	addChild(component: Component): void {
 		this.children.push(component);
@@ -243,31 +249,53 @@ export class Container implements Component {
 	}
 
 	render(width: number): string[] {
-		// Fast path: same width and every child returned the same cached array
-		// instance as last render — the composite is unchanged, return it.
-		if (width === this.lastWidth && this.lastChildRefs.length === this.children.length) {
-			let stable = true;
-			for (let i = 0; i < this.children.length; i++) {
-				const lines = this.children[i]!.render(width);
-				if (lines !== this.lastChildRefs[i]) {
-					stable = false;
-					break;
+		const sameShape = width === this.lastWidth && this.lastChildRefs.length === this.children.length;
+		const n = this.children.length;
+		if (this.scanBuffer.length !== n) {
+			this.scanBuffer = new Array<string[] | undefined>(n);
+		}
+		const refs = this.scanBuffer;
+
+		// Fast path: same shape as last render. Probe each child EXACTLY once and
+		// compare by identity to the previous frame. If every child repays its
+		// cached array, the composite is unchanged — return the cached instance
+		// by reference (zero re-materialization, zero allocation). If a child
+		// turns out unstable, the probe results for indexes 0..i are already the
+		// fresh correct lines: the stable children reused their cached arrays and
+		// the unstable one has its new content. Only children i+1..n-1 still need
+		// a render, so no child ever renders twice on a changed frame.
+		if (sameShape && this.cachedLines !== undefined) {
+			for (let i = 0; i < n; i++) {
+				const childLines = this.children[i]!.render(width);
+				refs[i] = childLines;
+				if (childLines !== this.lastChildRefs[i]) {
+					// Changed frame: reuse probe results for 0..i, render the rest once.
+					const lines: string[] = [];
+					for (let j = 0; j <= i; j++) {
+						for (const line of refs[j]!) lines.push(line);
+					}
+					for (let j = i + 1; j < n; j++) {
+						refs[j] = this.children[j]!.render(width);
+						for (const line of refs[j]!) lines.push(line);
+					}
+					this.lastWidth = width;
+					this.lastChildRefs = [...refs];
+					this.cachedLines = lines;
+					return lines;
 				}
 			}
-			if (stable && this.cachedLines !== undefined) {
-				return this.cachedLines;
-			}
+			// All children stable — return the cached instance untouched.
+			return this.cachedLines;
 		}
+
+		// Structural change (width or child-count) — single full pass.
 		this.lastWidth = width;
 		const lines: string[] = [];
-		this.lastChildRefs = new Array<string[] | undefined>(this.children.length);
-		for (let i = 0; i < this.children.length; i++) {
-			const childLines = this.children[i]!.render(width);
-			this.lastChildRefs[i] = childLines;
-			for (const line of childLines) {
-				lines.push(line);
-			}
+		for (let i = 0; i < n; i++) {
+			refs[i] = this.children[i]!.render(width);
+			for (const line of refs[i]!) lines.push(line);
 		}
+		this.lastChildRefs = [...refs];
 		this.cachedLines = lines;
 		return lines;
 	}

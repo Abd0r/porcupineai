@@ -55,6 +55,10 @@ export class TuiMainScreen extends TuiBase implements TUI {
 	private previousHeight = 0;
 	private cursorRow = 0;
 	private hardwareCursorRow = 0;
+	/** Last absolute column the hardware cursor was placed at (-1 = unknown/never). */
+	private hardwareCursorCol = -1;
+	/** Last cursor visibility actually emitted to the terminal (null = unknown). */
+	private cursorVisibilityEmitted: boolean | null = null;
 	private maxLinesRendered = 0;
 	private previousViewportTop = 0;
 
@@ -70,6 +74,8 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		this.previousHeight = -1;
 		this.cursorRow = 0;
 		this.hardwareCursorRow = 0;
+		this.hardwareCursorCol = -1;
+		this.cursorVisibilityEmitted = null;
 		this.maxLinesRendered = 0;
 		this.previousViewportTop = 0;
 	}
@@ -246,6 +252,9 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			}
 			const bufferLength = Math.max(height, newLines.length);
 			this.previousViewportTop = Math.max(0, bufferLength - height);
+			// A rendered buffer may have left the screen column anywhere, so the
+			// tracked column cache is stale — force a fresh absolute-column move.
+			this.hardwareCursorCol = -1;
 			this.positionHardwareCursor(cursorPos, newLines.length);
 			this.previousLines = newLines;
 			this.previousKittyImageIds = this.collectKittyImageIds(newLines);
@@ -398,6 +407,8 @@ export class TuiMainScreen extends TuiBase implements TUI {
 				this.cursorRow = targetRow;
 				this.hardwareCursorRow = targetRow;
 			}
+			// The clear buffer may have left the column anywhere — force column move.
+			this.hardwareCursorCol = -1;
 			this.positionHardwareCursor(cursorPos, newLines.length);
 			this.previousLines = newLines;
 			this.previousKittyImageIds = this.collectKittyImageIds(newLines);
@@ -569,7 +580,9 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		this.maxLinesRendered = Math.max(this.maxLinesRendered, newLines.length);
 		this.previousViewportTop = Math.max(prevViewportTop, finalCursorRow - height + 1);
 
-		// Position hardware cursor for IME
+		// Position hardware cursor for IME. The diff buffer just rendered may
+		// have left the column anywhere, so force a fresh absolute-column move.
+		this.hardwareCursorCol = -1;
 		this.positionHardwareCursor(cursorPos, newLines.length);
 
 		this.previousLines = newLines;
@@ -585,7 +598,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
 	 */
 	private positionHardwareCursor(cursorPos: { row: number; col: number } | null, totalLines: number): void {
 		if (!cursorPos || totalLines <= 0) {
-			this.terminal.hideCursor();
+			this.emitCursorVisibility(false);
 			return;
 		}
 
@@ -593,23 +606,33 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		const targetRow = Math.max(0, Math.min(cursorPos.row, totalLines - 1));
 		const targetCol = Math.max(0, cursorPos.col);
 
-		// Move cursor from current position to target
-		const rowDelta = targetRow - this.hardwareCursorRow;
+		// Move cursor from current position to target, only emitting movement when
+		// it actually changed. Redundant column moves and Row/Col unchanged frames
+		// emit nothing — eliminating per-frame writes on idle (no-op) renders.
 		let buffer = "";
+		const rowDelta = targetRow - this.hardwareCursorRow;
 		if (rowDelta > 0) {
 			buffer += `\x1b[${rowDelta}B`; // Move down
 		} else if (rowDelta < 0) {
 			buffer += `\x1b[${-rowDelta}A`; // Move up
 		}
-		// Move to absolute column (1-indexed)
-		buffer += `\x1b[${targetCol + 1}G`;
-
-		if (buffer) {
-			this.terminal.write(buffer);
+		if (targetCol !== this.hardwareCursorCol) {
+			buffer += `\x1b[${targetCol + 1}G`; // Absolute column (1-indexed)
 		}
 
 		this.hardwareCursorRow = targetRow;
-		if (this.getShowHardwareCursor()) {
+		this.hardwareCursorCol = targetCol;
+		if (buffer) {
+			this.terminal.write(buffer);
+		}
+		this.emitCursorVisibility(this.getShowHardwareCursor());
+	}
+
+	/** Show/hide the hardware cursor, skipping the write when visibility is unchanged. */
+	private emitCursorVisibility(visible: boolean): void {
+		if (this.cursorVisibilityEmitted === visible) return;
+		this.cursorVisibilityEmitted = visible;
+		if (visible) {
 			this.terminal.showCursor();
 		} else {
 			this.terminal.hideCursor();

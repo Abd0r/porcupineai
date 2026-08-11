@@ -11,6 +11,7 @@ import {
 	type ToolResultMessage,
 	validateToolArguments,
 } from "@porcupineai/ai";
+import { convertToLlm as builtInConvertToLlm } from "./harness/messages.ts";
 import { getDefaultStreamFn } from "./stream-fn.ts";
 import type {
 	AgentContext,
@@ -33,12 +34,38 @@ export type AgentEventSink = (event: AgentEvent) => Promise<void> | void;
  * every assistant turn was O(n^2) in message count. This converter converts
  * only the new tail (or re-converts just the last message when only it
  * changed) and returns the same array instance when nothing changed.
+ *
+ * SAFETY PRECONDITION (concatenation-homomorphism): the cache is only sound
+ * when `config.convertToLlm` is element-local and composable — i.e. for a
+ * split at every index k,
+ *   convertToLlm(full) === convertToLlm(full[0..k)) ++ convertToLlm(full[k..n)).
+ * That requires the converter to have NO cross-message behavior (no dedup, no
+ * rewriting based on neighbours, no merge across boundaries, no global state).
+ * AgentLoopConfig.convertToLlm is NOT contractually guaranteed to satisfy
+ * this, so callers must only use incremental conversion with a converter they
+ * can prove is homomorphic (the harness passes the built-in element-local
+ * messages.ts:convertToLlm). The current invalidation contract is
+ * intentionally conservative: any change in array INSTANCE or any shrink in
+ * length forces a full re-conversion, never a stale diff.
  */
 export interface IncrementalConverter {
 	convert(messages: AgentMessage[]): Promise<Message[]>;
 }
 
 export function createIncrementalConverter(config: AgentLoopConfig): IncrementalConverter {
+	// Gate the incremental cache on the exact built-in converter. AgentLoopConfig
+	// allows any custom `convertToLlm`, which is NOT provably element-local or
+	// concatenation-homomorphic (it may dedup, merge across boundaries, or
+	// rewrite based on neighbours/global context). Only the built-in
+	// messages.ts:convertToLlm is proven safe to compose incrementally, so any
+	// other converter falls back to a full, non-caching conversion every call.
+	if (config.convertToLlm !== builtInConvertToLlm) {
+		return {
+			async convert(messages: AgentMessage[]): Promise<Message[]> {
+				return await config.convertToLlm(messages);
+			},
+		};
+	}
 	let cachedArray: AgentMessage[] | null = null;
 	let converted: Message[] = [];
 	let convertedCount = 0;

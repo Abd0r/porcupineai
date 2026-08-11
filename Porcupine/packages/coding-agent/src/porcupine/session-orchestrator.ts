@@ -213,19 +213,25 @@ export class PorcupineSessionOrchestrator {
 		this.taskGraph = graphFromPrepare(prepare);
 		this.explicitPlan = true;
 
+		// Build the plan context block once and reuse it for both the exposed
+		// contextBlock and the augmented prompt (augmentPromptWithPlan would
+		// otherwise re-format the entire block a second time per turn).
+		const contextBlock = formatPlanContextBlock(prepare);
+
 		return {
 			prepare,
-			contextBlock: formatPlanContextBlock(prepare),
-			augmentedPrompt: augmentPromptWithPlan(prompt, prepare),
+			contextBlock,
+			augmentedPrompt: `${contextBlock}\n\nUser request:\n${prompt}`,
 			taskGraph: this.getTaskGraph(),
 		};
 	}
 
 	markStep(stepId: string, status: TaskGraphStepStatus): void {
-		this.taskGraph = {
-			...this.taskGraph,
-			steps: this.taskGraph.steps.map((step) => (step.id === stepId ? { ...step, status } : step)),
-		};
+		const idx = this.taskGraph.steps.findIndex((step) => step.id === stepId);
+		if (idx < 0) return;
+		const steps = this.taskGraph.steps.slice();
+		steps[idx] = { ...steps[idx]!, status };
+		this.taskGraph = { ...this.taskGraph, steps };
 	}
 
 	setGraphStatus(status: TaskGraphView["status"]): void {
@@ -259,29 +265,42 @@ export class PorcupineSessionOrchestrator {
 	ensureDynamicStep(toolName: string): void {
 		if (this.explicitPlan) return;
 		const needle = toolName.toLowerCase();
-		const steps = this.taskGraph.steps.map((step) => ({ ...step, capabilityIds: step.capabilityIds.slice() }));
-		const last = steps[steps.length - 1];
+		const existing = this.taskGraph.steps;
+		const last = existing[existing.length - 1];
+
+		// Same tool as the last phase and already active is a true no-op: the
+		// only branch that would run would re-set the same step to "active", so
+		// early-return before any allocation. Preserves the observable graph.
+		if (last && last.status === "active" && last.capabilityIds.some((id) => id === `tool:${needle}`)) {
+			return;
+		}
+
+		// Copy-on-write the *tail only*: reuse the unchanged prefix step references.
+		// Step objects are never mutated in place (every mutable path spreads into a
+		// new object) and getTaskGraph() deep-clones, so sharing references across
+		// internal graph snapshots is safe and produces the same observable graph
+		// while turning the per-call O(n) full-array clone into O(1) allocations.
+		const prefix = existing.slice(0, -1);
+		let steps: TaskGraphStepView[];
 
 		if (last?.capabilityIds.some((id) => id === `tool:${needle}`)) {
 			// Same tool as the last phase — reactivate it (a continuation).
-			steps[steps.length - 1] = { ...last, status: "active" };
-		} else if (steps.length < MAX_DYNAMIC_STEPS) {
-			steps.push({
-				id: `dyn-${steps.length + 1}`,
-				objective: needle,
-				capabilityIds: [`tool:${needle}`],
-				status: "active",
-			});
+			steps = [...prefix, { ...last, status: "active" }];
+		} else if (existing.length < MAX_DYNAMIC_STEPS) {
+			steps = [
+				...existing,
+				{
+					id: `dyn-${existing.length + 1}`,
+					objective: needle,
+					capabilityIds: [`tool:${needle}`],
+					status: "active",
+				},
+			];
 		} else {
 			// Cap reached: the last step already belongs to a different tool. Repoint
 			// it to the current tool so the live graph is not factually wrong about
 			// which capability is active (still keeps the graph compact at the cap).
-			steps[steps.length - 1] = {
-				...steps[steps.length - 1]!,
-				objective: needle,
-				capabilityIds: [`tool:${needle}`],
-				status: "active",
-			};
+			steps = [...prefix, { ...last!, objective: needle, capabilityIds: [`tool:${needle}`], status: "active" }];
 		}
 
 		this.taskGraph = {
@@ -298,21 +317,27 @@ export class PorcupineSessionOrchestrator {
 	 */
 	markStepForTool(toolName: string): void {
 		const needle = toolName.toLowerCase();
-		const steps = this.taskGraph.steps.map((step) => ({ ...step, capabilityIds: step.capabilityIds.slice() }));
+		const steps = this.taskGraph.steps;
 		const idx = steps.findIndex(
 			(step) => step.status === "pending" && step.capabilityIds.some((id) => capabilityMatches(id, needle)),
 		);
-		if (idx >= 0) {
-			steps[idx] = { ...steps[idx], status: "active" };
+		if (idx < 0) {
+			// No pending step references this tool: the steps are untouched and we
+			// only flip the graph status to running (same observable result as
+			// copying the array and re-assigning it).
+			this.taskGraph = { ...this.taskGraph, status: "running" };
+			return;
 		}
-		this.taskGraph = { ...this.taskGraph, status: "running", steps };
+		const stepsCopy = steps.slice();
+		stepsCopy[idx] = { ...stepsCopy[idx]!, status: "active" };
+		this.taskGraph = { ...this.taskGraph, status: "running", steps: stepsCopy };
 	}
 
 	/** Complete the active (or matching pending) step for a finished tool call. */
 	markToolFinished(toolName: string, isError: boolean): void {
 		const needle = toolName.toLowerCase();
 		const status: TaskGraphStepStatus = isError ? "failed" : "done";
-		const steps = this.taskGraph.steps.map((step) => ({ ...step, capabilityIds: step.capabilityIds.slice() }));
+		const steps = this.taskGraph.steps;
 		const idx = steps.findIndex(
 			(step) => step.status === "active" && step.capabilityIds.some((id) => capabilityMatches(id, needle)),
 		);
@@ -321,15 +346,14 @@ export class PorcupineSessionOrchestrator {
 			// Leaving the graph unchanged is less wrong than advancing the wrong step.
 			return;
 		}
-		if (idx >= 0) {
-			steps[idx] = { ...steps[idx], status };
-		}
+		const stepsCopy = steps.slice();
+		stepsCopy[idx] = { ...stepsCopy[idx]!, status };
 		const graphStatus = isError
 			? "failed"
-			: steps.every((s) => s.status === "done" || s.status === "skipped")
+			: stepsCopy.every((s) => s.status === "done" || s.status === "skipped")
 				? "done"
 				: "running";
-		this.taskGraph = { ...this.taskGraph, status: graphStatus, steps };
+		this.taskGraph = { ...this.taskGraph, status: graphStatus, steps: stepsCopy };
 	}
 
 	/** Finish the turn; remaining pending steps become skipped on success. */

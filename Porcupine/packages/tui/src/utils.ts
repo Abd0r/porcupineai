@@ -908,8 +908,20 @@ function wrapSingleLine(line: string, width: number): string[] {
 		wrapped.push(currentLine);
 	}
 
-	// Trailing whitespace can cause lines to exceed the requested width
-	return wrapped.length > 0 ? wrapped.map((line) => line.trimEnd()) : [""];
+	// Trailing whitespace can cause lines to exceed the requested width.
+	// Trim in place (no-op returns the same string for clean lines) so we do
+	// not allocate a second array via `.map(...)` on every wrap.
+	if (wrapped.length > 0) {
+		for (let i = 0; i < wrapped.length; i++) {
+			const line = wrapped[i]!;
+			const trimmed = line.trimEnd();
+			if (trimmed !== line) {
+				wrapped[i] = trimmed;
+			}
+		}
+		return wrapped;
+	}
+	return [""];
 }
 
 export const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/;

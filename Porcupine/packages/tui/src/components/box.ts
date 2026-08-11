@@ -25,6 +25,10 @@ export class Box implements Component {
 	private lastRenderWidth = -1;
 	private lastBgSample: string | undefined = undefined;
 	private lastChildRefs: Array<string[] | undefined> = [];
+	// Scratch buffer, reused across renders to hold the CURRENT frame's child
+	// outputs without re-allocating. It is distinct from lastChildRefs (the
+	// previous frame's baseline) so the identity comparison stays valid.
+	private scanBuffer: Array<string[] | undefined> = [];
 
 	constructor(paddingX = 1, paddingY = 1, bgFn?: (text: string) => string) {
 		this.paddingX = paddingX;
@@ -84,40 +88,50 @@ export class Box implements Component {
 
 		const contentWidth = Math.max(1, width - this.paddingX * 2);
 		const bgSample = this.bgFn ? this.bgFn("test") : undefined;
+		const n = this.children.length;
 
-		// Fast path: same width, same bg sample, and every child returned the
-		// SAME cached array instance as the previous render — the child lines
-		// are identical, so the cached result is valid without rebuilding the
-		// padded line list or comparing it element-wise. Children whose renders
-		// are instance-stable (Text/Markdown/Box caches) make this the common
-		// case; any child that returns a fresh array falls through to the slow
-		// path, so behavior never changes.
-		if (width === this.lastRenderWidth && bgSample === this.lastBgSample && this.cache) {
-			let stable = this.lastChildRefs.length === this.children.length;
-			if (stable) {
-				for (let i = 0; i < this.children.length; i++) {
-					const lines = this.children[i]!.render(contentWidth);
-					if (lines !== this.lastChildRefs[i]) {
-						stable = false;
-						break;
-					}
-				}
+		// Render every child exactly ONCE into the reusable scan buffer.
+		// Children whose renders are instance-stable (Text/Markdown/Box caches)
+		// return their cached arrays here, so the scan is cheap for the common
+		// all-stable case; a child that returns a fresh array marks the frame
+		// as changed. Collecting all outputs in one pass means the rebuild below
+		// reuses this frame's outputs instead of re-rendering children a second
+		// time (the previous code re-rendered every child on a changed frame,
+		// and double-rendered the first unstable child during identity probing).
+		if (this.scanBuffer.length !== n) {
+			this.scanBuffer = new Array<string[] | undefined>(n);
+		}
+		const scanned = this.scanBuffer;
+		let stable = this.cache !== undefined && width === this.lastRenderWidth && bgSample === this.lastBgSample;
+		for (let i = 0; i < n; i++) {
+			const lines = this.children[i]!.render(contentWidth);
+			scanned[i] = lines;
+			if (lines !== this.lastChildRefs[i]) {
+				stable = false;
 			}
-			if (stable) {
-				return this.cache.lines;
-			}
+		}
+
+		// Fully stable, same width + bg: the cached output is still valid.
+		// Return it by reference (zero rebuild).
+		if (stable) {
+			return this.cache!.lines;
 		}
 		this.lastRenderWidth = width;
 		this.lastBgSample = bgSample;
+		// Promote this frame's outputs as the next render's identity baseline.
+		if (this.lastChildRefs.length !== n) {
+			this.lastChildRefs = new Array<string[] | undefined>(n);
+		}
+		for (let i = 0; i < n; i++) {
+			this.lastChildRefs[i] = scanned[i];
+		}
 
 		const leftPad = " ".repeat(this.paddingX);
 
-		// Render all children
+		// Build padded child lines from the already-rendered scan buffer.
 		const childLines: string[] = [];
-		this.lastChildRefs = new Array<string[] | undefined>(this.children.length);
-		for (let i = 0; i < this.children.length; i++) {
-			const lines = this.children[i]!.render(contentWidth);
-			this.lastChildRefs[i] = lines;
+		for (let i = 0; i < n; i++) {
+			const lines = scanned[i]!;
 			for (const line of lines) {
 				childLines.push(leftPad + line);
 			}

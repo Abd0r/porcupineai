@@ -11,7 +11,7 @@
   <a href="https://github.com/Abd0r/porcupineai"><img src="https://img.shields.io/github/stars/Abd0r/porcupineai" alt="GitHub stars" /></a>
 </p>
 
-A terminal coding agent. You describe the goal; it reads your repo, runs commands, edits files, and verifies the result — inside a permission mode you control.
+A terminal AI agent. You describe the goal; it reads your repo, runs commands, edits files, and verifies the result inside a permission mode you control.
 
 Built on top of [Pi](https://github.com/earendil-works/pi) (MIT).
 

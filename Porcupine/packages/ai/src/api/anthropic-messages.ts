@@ -570,6 +570,15 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 
 			type Block = (ThinkingContent | TextContent | (ToolCall & { partialJson: string })) & { index: number };
 			const blocks = output.content as Block[];
+			// Map of Anthropic event block index -> array position in `output.content`.
+			// Content blocks are only ever appended (never reordered) during a stream, so
+			// an event index maps stably to one array position — O(1) lookup per delta
+			// replaces the previous linear `blocks.findIndex` on every event.
+			const blockIndexByEventIndex = new Map<number, number>();
+			const blockAtEventIndex = (eventIndex: number): [number, Block | undefined] => {
+				const pos = blockIndexByEventIndex.get(eventIndex);
+				return pos === undefined ? [-1, undefined] : [pos, blocks[pos]];
+			};
 
 			for await (const event of iterateAnthropicEvents(response, options?.signal)) {
 				if (event.type === "message_start") {
@@ -593,6 +602,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 							index: event.index,
 						};
 						output.content.push(block);
+						blockIndexByEventIndex.set(event.index, output.content.length - 1);
 						stream.push({ type: "text_start", contentIndex: output.content.length - 1, partial: output });
 					} else if (event.content_block.type === "thinking") {
 						const block: Block = {
@@ -602,6 +612,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 							index: event.index,
 						};
 						output.content.push(block);
+						blockIndexByEventIndex.set(event.index, output.content.length - 1);
 						stream.push({ type: "thinking_start", contentIndex: output.content.length - 1, partial: output });
 					} else if (event.content_block.type === "redacted_thinking") {
 						const block: Block = {
@@ -612,6 +623,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 							index: event.index,
 						};
 						output.content.push(block);
+						blockIndexByEventIndex.set(event.index, output.content.length - 1);
 						stream.push({ type: "thinking_start", contentIndex: output.content.length - 1, partial: output });
 					} else if (event.content_block.type === "tool_use") {
 						const block: Block = {
@@ -625,12 +637,12 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 							index: event.index,
 						};
 						output.content.push(block);
+						blockIndexByEventIndex.set(event.index, output.content.length - 1);
 						stream.push({ type: "toolcall_start", contentIndex: output.content.length - 1, partial: output });
 					}
 				} else if (event.type === "content_block_delta") {
 					if (event.delta.type === "text_delta") {
-						const index = blocks.findIndex((b) => b.index === event.index);
-						const block = blocks[index];
+						const [index, block] = blockAtEventIndex(event.index);
 						if (block && block.type === "text") {
 							block.text += event.delta.text;
 							stream.push({
@@ -641,8 +653,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 							});
 						}
 					} else if (event.delta.type === "thinking_delta") {
-						const index = blocks.findIndex((b) => b.index === event.index);
-						const block = blocks[index];
+						const [index, block] = blockAtEventIndex(event.index);
 						if (block && block.type === "thinking") {
 							block.thinking += event.delta.thinking;
 							stream.push({
@@ -653,8 +664,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 							});
 						}
 					} else if (event.delta.type === "input_json_delta") {
-						const index = blocks.findIndex((b) => b.index === event.index);
-						const block = blocks[index];
+						const [index, block] = blockAtEventIndex(event.index);
 						if (block && block.type === "toolCall") {
 							block.partialJson += event.delta.partial_json;
 							block.arguments = parseStreamingJsonThrottled(block.partialJson);
@@ -666,16 +676,15 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 							});
 						}
 					} else if (event.delta.type === "signature_delta") {
-						const index = blocks.findIndex((b) => b.index === event.index);
-						const block = blocks[index];
+						const [, block] = blockAtEventIndex(event.index);
 						if (block && block.type === "thinking") {
 							block.thinkingSignature = block.thinkingSignature || "";
 							block.thinkingSignature += event.delta.signature;
 						}
 					}
 				} else if (event.type === "content_block_stop") {
-					const index = blocks.findIndex((b) => b.index === event.index);
-					const block = blocks[index];
+					const [index, block] = blockAtEventIndex(event.index);
+					blockIndexByEventIndex.delete(event.index);
 					if (block) {
 						delete (block as any).index;
 						if (block.type === "text") {

@@ -132,6 +132,11 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
 		};
 
 		const blocks = output.content as Block[];
+		// Map of Bedrock content-block index -> array position in `output.content`.
+		// Content blocks are only ever appended (never reordered) during a stream, so
+		// a block index maps stably to one array position — O(1) lookup per delta
+		// replaces the previous linear `blocks.findIndex` on every event.
+		const blockIndexMap = new Map<number, number>();
 
 		// A profile explicitly configured through porcupine's auth flow (the `profile`
 		// option or scoped `AWS_PROFILE` on the stored credential's env) must win
@@ -268,11 +273,11 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
 					}
 					stream.push({ type: "start", partial: output });
 				} else if (item.contentBlockStart) {
-					handleContentBlockStart(item.contentBlockStart, blocks, output, stream);
+					handleContentBlockStart(item.contentBlockStart, blocks, blockIndexMap, output, stream);
 				} else if (item.contentBlockDelta) {
-					handleContentBlockDelta(item.contentBlockDelta, blocks, output, stream);
+					handleContentBlockDelta(item.contentBlockDelta, blocks, blockIndexMap, output, stream);
 				} else if (item.contentBlockStop) {
-					handleContentBlockStop(item.contentBlockStop, blocks, output, stream);
+					handleContentBlockStop(item.contentBlockStop, blocks, blockIndexMap, output, stream);
 				} else if (item.messageStop) {
 					output.rawStopReason = item.messageStop.stopReason;
 					const { stopReason, errorMessage } = mapStopReason(item.messageStop.stopReason);
@@ -509,6 +514,7 @@ export const streamSimple: StreamFunction<"bedrock-converse-stream", SimpleStrea
 function handleContentBlockStart(
 	event: ContentBlockStartEvent,
 	blocks: Block[],
+	blockIndexMap: Map<number, number>,
 	output: AssistantMessage,
 	stream: AssistantMessageEventStream,
 ): void {
@@ -525,6 +531,7 @@ function handleContentBlockStart(
 			index,
 		};
 		output.content.push(block);
+		blockIndexMap.set(index, blocks.length - 1);
 		stream.push({ type: "toolcall_start", contentIndex: blocks.length - 1, partial: output });
 	}
 }
@@ -532,13 +539,15 @@ function handleContentBlockStart(
 function handleContentBlockDelta(
 	event: ContentBlockDeltaEvent,
 	blocks: Block[],
+	blockIndexMap: Map<number, number>,
 	output: AssistantMessage,
 	stream: AssistantMessageEventStream,
 ): void {
 	const contentBlockIndex = event.contentBlockIndex!;
 	const delta = event.delta;
-	let index = blocks.findIndex((b) => b.index === contentBlockIndex);
-	let block = blocks[index];
+	const mapped = blockIndexMap.get(contentBlockIndex);
+	let index = mapped === undefined ? -1 : mapped;
+	let block = index === -1 ? undefined : blocks[index];
 
 	if (delta?.text !== undefined) {
 		// If no text block exists yet, create one, as `handleContentBlockStart` is not sent for text blocks
@@ -547,6 +556,7 @@ function handleContentBlockDelta(
 			output.content.push(newBlock);
 			index = blocks.length - 1;
 			block = blocks[index];
+			blockIndexMap.set(contentBlockIndex, index);
 			stream.push({ type: "text_start", contentIndex: index, partial: output });
 		}
 		if (block.type === "text") {
@@ -566,6 +576,7 @@ function handleContentBlockDelta(
 			output.content.push(newBlock);
 			thinkingIndex = blocks.length - 1;
 			thinkingBlock = blocks[thinkingIndex];
+			blockIndexMap.set(contentBlockIndex, thinkingIndex);
 			stream.push({ type: "thinking_start", contentIndex: thinkingIndex, partial: output });
 		}
 
@@ -605,11 +616,15 @@ function handleMetadata(
 function handleContentBlockStop(
 	event: ContentBlockStopEvent,
 	blocks: Block[],
+	blockIndexMap: Map<number, number>,
 	output: AssistantMessage,
 	stream: AssistantMessageEventStream,
 ): void {
-	const index = blocks.findIndex((b) => b.index === event.contentBlockIndex);
-	const block = blocks[index];
+	const contentBlockIndex = event.contentBlockIndex!;
+	const mapped = blockIndexMap.get(contentBlockIndex);
+	const index = mapped === undefined ? -1 : mapped;
+	const block = index === -1 ? undefined : blocks[index];
+	blockIndexMap.delete(contentBlockIndex);
 	if (!block) return;
 	delete (block as Block).index;
 

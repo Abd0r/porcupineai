@@ -491,6 +491,12 @@ export class AgentHarness<
 			reasoning: turnState.thinkingLevel === "off" ? undefined : turnState.thinkingLevel,
 			convertToLlm,
 			transformContext: async (messages) => {
+				// Perf: when no `context` hook is registered (the common case) the turn's
+				// message array is passed through untouched. Skip the per-turn
+				// `[...messages]` copy AND the no-op emitHook await so a no-hook run does
+				// zero history-length array allocations and no extra microtask boundary
+				// on every assistant turn (previously O(history) per turn → O(n^2) total).
+				if (!this.getHandlers("context")?.size) return messages;
 				const result = await this.emitHook({ type: "context", messages: [...messages] });
 				return result?.messages ?? messages;
 			},
