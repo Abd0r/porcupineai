@@ -99,8 +99,6 @@ official benchmark suites. Same model, same benchmark, different harness.
 | Terminal-Bench 2.1 (89) | 82.7% (official card) | **45/89 · 83.3% clean-pass rate** (35 infra-unscored) | ✅ complete |
 | SWE-bench Verified (500) | 79.0% | not started | ⏳ |
 
-**The headline: Porcupine's harness outranks DeepSeek's own harness on their own benchmark — same model.**
-
 Aider Polyglot methodology, per-language scores, citations, and raw logs:
 [`benchmarks/polyglot/`](benchmarks/polyglot/).
 
