@@ -1,6 +1,6 @@
 name: Contribution Proposal
 description: Propose a change or feature before submitting a PR
-labels: []
+labels: ["enhancement", "status/needs-triage"]
 body:
   - type: markdown
     attributes:
@@ -27,9 +27,29 @@ body:
       label: Area
       multiple: true
       options:
-        - Core agent loop / tools
-        - MCP client / security
-        - Learning / refiner / skills
-        - UI / TUI
-        - Docs / prompts
-        - Packaging / install
+        - Agent loop / orchestration
+        - AI providers / streaming
+        - TUI / interaction
+        - Tools / skills / extensions
+        - Safety / permissions / sandboxing
+        - MCP
+        - Browser / Web Development
+        - Integrations / bridges / computer use
+        - Tasks / automation
+        - Sessions / memory / projects
+        - SDK / server / protocols
+        - Documentation
+        - Build / install / release
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Proposed approach
+      description: Describe the smallest implementation you think would solve the problem. Leave blank if you want help scoping it.
+  - type: textarea
+    id: verification
+    attributes:
+      label: How should we verify it?
+      description: Tests, commands, or observable behavior that would prove the change works.

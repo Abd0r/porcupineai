@@ -5,7 +5,7 @@ just asking a question — contributions are welcome.
 
 ## The short version
 
-1. Open an issue or discussion for anything non-trivial before writing code.
+1. Open a contribution proposal for anything non-trivial before writing code.
 2. Keep changes focused: one logical change per PR.
 3. Run the checks locally before opening the PR.
 4. Be kind. That's it.
@@ -82,6 +82,20 @@ Conventional commits are appreciated: `feat(scope): ...`, `fix(scope): ...`,
 `docs: ...`, `test(scope): ...`, `chore(scope): ...`. One logical change per
 commit. The `CHANGELOG.md` is maintained by the maintainer — no need to edit it.
 
+## Labels and triage
+
+Issues and PRs use a small structured taxonomy:
+
+| Group | Purpose | Examples |
+|---|---|---|
+| Work type | What kind of change it is | `bug`, `enhancement`, `documentation`, `performance`, `security`, `tests` |
+| Area | Which product surface owns it | `area/agent`, `area/tui`, `area/safety`, `area/mcp`, `area/browser-webdev` |
+| Status | What needs to happen next | `status/needs-triage`, `status/needs-reproduction`, `status/blocked`, `status/ready` |
+| Priority | Maintainer scheduling and impact | `priority/critical`, `priority/high`, `priority/medium`, `priority/low` |
+| Platform | Only when platform-specific | `platform/macos`, `platform/linux`, `platform/windows` |
+
+Maintainers apply and update labels during triage. Priority labels express impact and scheduling, not contributor importance.
+
 ## PR checklist
 
 - [ ] The change does what the PR says
@@ -103,5 +117,5 @@ security-related) and avoid including credentials or tokens in the report.
 
 ## Questions?
 
-Open a discussion or comment on an issue. No question is too basic — Porcupine
+Open an issue using the most relevant template. No question is too basic; Porcupine
 is a friendly project.

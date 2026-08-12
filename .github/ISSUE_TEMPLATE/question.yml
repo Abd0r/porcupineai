@@ -1,0 +1,40 @@
+name: Question or Help
+description: Ask about setup, behavior, configuration, or using Porcupine
+title: "[Question]: "
+labels: ["question", "status/needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read the [documentation](../../Porcupine/packages/coding-agent/docs/index.md) first and do not include API keys, tokens, credentials, or private session content.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to understand or accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: Include relevant commands, documentation, or configuration without secrets.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Installation / first run
+        - Models / providers
+        - Agent behavior / tools
+        - TUI / interaction
+        - Safety / permissions / sandboxing
+        - MCP / extensions / skills
+        - Browser / Web Development
+        - Tasks / automation
+        - Sessions / memory / projects
+        - Integrations / bridges
+        - SDK / server / protocols
+        - Not sure
+    validations:
+      required: true
