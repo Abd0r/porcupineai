@@ -17,7 +17,6 @@ const allowedLinkDeps = new Set(["@ricky0123/vad-web"]);
 const allowedInstallScriptPackages = new Map([
 	["@google/genai@1.52.0", "preinstall is a no-op in the published package"],
 	["protobufjs@7.6.5", "postinstall only warns about protobufjs version scheme mismatches"],
-	["sharp@0.34.5", "prebuilt binaries; install script only validates the platform binary"],
 	["onnxruntime-node@1.21.0", "prebuilt native binary; needed only for voice (lazy-loaded)"],
 	["fsevents@2.3.2", "macOS-only file watcher (transitive via playwright); optional dep with no network fetch"],
 ]);
