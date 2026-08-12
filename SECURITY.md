@@ -10,9 +10,13 @@ Security fixes are made against the latest release and `main`. Before reporting 
 
 **Do not open a public Issue for a suspected vulnerability.**
 
-Use GitHub's private vulnerability reporting form:
+Use any of these private contact routes:
 
-**[Report a vulnerability privately](https://github.com/Abd0r/porcupineai/security/advisories/new)**
+- **GitHub:** [Private vulnerability report](https://github.com/Abd0r/porcupineai/security/advisories/new)
+- **Email:** [ra2157218@gmail.com](mailto:ra2157218@gmail.com)
+- **X:** DM [@SyedAbdurR2hman](https://x.com/SyedAbdurR2hman)
+
+GitHub's private reporting form is preferred because it keeps the report, discussion, and advisory workflow together.
 
 Include:
 
@@ -22,7 +26,7 @@ Include:
 - relevant logs with credentials and personal information removed;
 - known mitigations, if any.
 
-Never include API keys, tokens, passwords, private session content, or other secrets. A maintainer will review the report and continue the discussion privately through GitHub.
+Never include API keys, tokens, passwords, private session content, or other secrets. A maintainer will review the report and continue the discussion privately through the channel you used, moving it to GitHub's private advisory workflow when appropriate.
 
 ## Security model
 
