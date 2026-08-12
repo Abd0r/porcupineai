@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/porcupineai",
-	"version": "0.1.64",
+	"version": "0.1.65",
 	"description": "Porcupine \u2014 a terminal AI agent that plans, acts inside explicit permission modes, and verifies its work. The whole Porcupine codebase ships as one package.",
 	"license": "MIT",
 	"keywords": [
@@ -51,7 +51,12 @@
 		"openai": "6.26.0",
 		"partial-json": "0.1.7",
 		"get-east-asian-width": "1.6.0",
-		"marked": "18.0.5"
+		"marked": "18.0.5",
+		"@porcupineai/ai": "^0.1.65",
+		"@porcupineai/agent-core": "^0.1.65",
+		"@porcupineai/client": "^0.1.65",
+		"@porcupineai/protocol": "^0.1.65",
+		"@porcupineai/tui": "^0.1.65"
 	},
 	"bundleDependencies": [
 		"@porcupineai/ai",
@@ -59,5 +64,14 @@
 		"@porcupineai/client",
 		"@porcupineai/protocol",
 		"@porcupineai/tui"
+	],
+	"files": [
+		"Porcupine/packages/coding-agent/dist",
+		"Porcupine/packages/coding-agent/package.json",
+		"Porcupine/packages/coding-agent/skills",
+		"Porcupine/packages/coding-agent/agent-home",
+		"LICENSE",
+		"SECURITY.md",
+		"CONTRIBUTING.md"
 	]
 }
