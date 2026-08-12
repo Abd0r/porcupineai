@@ -1,83 +1,95 @@
 # Security Policy
 
-This document should guide you about understanding the security concept behind
-Porcupine and also where the boundaries are.
+Porcupine is a native-first terminal AI agent. By default, it runs with the permissions of the user account that starts it and treats files writable by that account as part of the same local trust boundary.
 
-In general Porcupine is a coding agent that runs locally within the security boundary
-of the user that is running it.  It's the responsibiltiy of the user to monitor
-its operations or to contain it within a container, virtual machine or other
-Sandbox solution.
+## Supported versions
 
-Porcupine treats the local user account and files writable by that account as inside
-the same trust boundary as the Porcupine process itself.  If an attacker can modify files
-under the user's home directory, workspace, shell startup files, environment, or
-Porcupine configuration, they can generally influence Porcupine or other local developer tools.
-Reports that depend on such prior local write access are not security
-vulnerabilities unless they demonstrate how Porcupine grants that write access or crosses
-an operating-system privilege boundary.
+Security fixes are made against the latest release and `main`. Before reporting a vulnerability, reproduce it on the latest available version when practical.
 
-Porcupine relies on users installing trustworthy extensions and loading trustworthy
-skills and only to use porcupine within trusted repositories.  This is because files
-like `AGENTS.md` or instructions in comments can be used to prompt inject the
-coding agent trivially and this cannot be protected against.
+## Report a vulnerability privately
 
-## Reporting a Vulnerability
+**Do not open a public Issue for a suspected vulnerability.**
 
-If you believe you found a security vulnerability in Porcupine, please report it
-by **opening a GitHub issue** on this repository:
+Use GitHub's private vulnerability reporting form:
 
-- Use the bug report template and mark it as security-related.
-- Include a description of the issue and its impact.
-- Include steps to reproduce, proof of concept, or relevant logs.
-- Include the affected package, version, commit, or configuration.
-- Include any known mitigations.
+**[Report a vulnerability privately](https://github.com/Abd0r/porcupineai/security/advisories/new)**
 
-Do not share credentials, tokens, or secrets in the report body — describe the
-issue without sensitive values, and a maintainer will follow up privately.
+Include:
 
-## Scope
+- the affected version, commit, package, platform, and configuration;
+- a concise description of the impact and security boundary crossed;
+- minimal reproduction steps or a proof of concept;
+- relevant logs with credentials and personal information removed;
+- known mitigations, if any.
 
-Security issues in the distributed packages, command-line tools, APIs, and
-repository code are in scope as well as earendil operated infrastricture
-on `porcupine.dev`.
+Never include API keys, tokens, passwords, private session content, or other secrets. A maintainer will review the report and continue the discussion privately through GitHub.
 
-## Out Of Scope
+## Security model
 
-- Local code execution or sandboxing behavior (the Porcupine intentionally does not have a sandbox)
-- Behavior of porcupine extensions or skills installed by the user
-- Risks from working in untrusted repositories
-- Risks from installing untrusted extensions, skills, packages, or tools
-- Isuses caused by non trustworthy MITM proxies
-- Public internet exposure of a Porcupine installation
-- Prompt injection attacks
-- Exposed secrets that are third-party/user-controlled credentials
-- Reports requiring the ability to create, modify, delete, or replace files,
-  directories, symlinks, environment variables, shell configuration, or other
-  user-controlled local state on the target machine. This includes `~/.pi`,
-  `~/.porcupine/agent/models.json`, workspace files, `AGENTS.md`, skills, extensions,
-  extension configuration, dotfiles, and files synchronized through NFS, roaming
-  profiles, or dotfile managers, unless the report shows how Porcupine itself grants
-  that access.
-- Issues caused by intentionally weakened user configuration.
-- Resource/DOS claims that require trusted local input/config against the porcupine.
-- Reports about malicious model output.
-- User-approved or user-initiated local actions presented as vulnerabilities.
+### Local permissions
 
-## Notes for Reporters
+Porcupine's built-in tools and TypeScript extensions run with the permissions of the Porcupine process. Shell commands, package managers, language servers, test commands, and other developer tools behave like ordinary local processes.
 
-The most useful reports show a current, reproducible security boundary bypass
-with demonstrated impact.  Reports that only show expected local-agent behavior,
-prompt injection, or a malicious trusted extension/skill are not security
-vulnerabilities under this model.
+### Project trust
 
-For example, a report showing that malicious contents written to a trusted Porcupine
-configuration file cause Porcupine to execute commands, load attacker-controlled tools,
-send credentials to an attacker-controlled endpoint, or otherwise change behavior
-is out of scope.
+Project trust controls whether project-local settings, packages, extensions, skills, prompts, themes, and related resources may load. It is an input-loading guard, not an operating-system sandbox.
 
-When possible, include the exact affected path, package version or commit SHA,
-configuration, and a proof of concept against the latest release or latest
-`main`.  For dependency reports, include evidence that the shipped dependency is
-affected and that the issue is reachable through Porcupine.  For exposed-secret reports,
-include evidence that the credential is owned by Earendil or grants access to
-Earendil-operated infrastructure or services.
+Repository files and generated output can contain prompt injection. Use trusted repositories, review project instructions, and treat third-party skills, extensions, MCP servers, and packages as untrusted until reviewed.
+
+### Interaction modes
+
+Ask, Normal, and Auto define Porcupine's approval boundary:
+
+- **Ask** confirms every shell command and file mutation.
+- **Normal** permits safe operations and confirms flagged operations.
+- **Auto** permits safe operations while flagged shell actions pass through a fail-closed safety gate.
+
+Hardline destructive actions remain blocked in every mode. Reasoning depth does not grant additional permissions.
+
+### Native computer interaction
+
+Native computer input is confirmation-gated. Porcupine observes before acting, treats screen content as untrusted, performs one approved input action, and observes again. Publishing, sending, buying, deleting, changing credentials or security settings, and accepting legal terms require fresh explicit approval.
+
+### Optional isolation
+
+Porcupine is native-first and does not claim that project trust is a sandbox. When stronger isolation is required, use an operating-system or virtualization boundary:
+
+- `/sandbox on` routes built-in tools into a Gondolin micro-VM;
+- run Porcupine or the target workload in Docker, a VM, or OpenShell;
+- expose only the required workspace paths, network access, and credentials.
+
+A writable bind mount still allows the isolated process to modify the mounted host files.
+
+### Remote and programmatic access
+
+Telegram, Discord, and iMessage bridges are allowlist-gated and run inside the shared attended session. `porcupine serve`, RPC, and JSONL modes can expose powerful agent operations; bind and authorize them according to their documentation and do not expose them publicly without an appropriate security boundary.
+
+## In scope
+
+Reports are generally in scope when they demonstrate a reproducible vulnerability in the current Porcupine release or `main`, including:
+
+- bypassing an approval, hardline-denial, allowlist, trust, or authentication boundary;
+- gaining access beyond the permissions and inputs intentionally provided by the user;
+- leaking Porcupine-managed credentials or private data without user approval;
+- remotely invoking tools or controlling a session without authorization;
+- exploitable vulnerabilities in distributed packages, CLI behavior, APIs, or repository code;
+- dependency vulnerabilities that are reachable through shipped Porcupine functionality.
+
+## Generally out of scope
+
+Unless a report demonstrates that Porcupine itself crosses a documented boundary, these are generally out of scope:
+
+- actions explicitly approved or initiated by the user;
+- behavior that requires prior write access to the user's home directory, workspace, shell startup files, environment, or Porcupine configuration;
+- malicious behavior from user-installed extensions, skills, packages, tools, or MCP servers;
+- prompt injection or malicious model output without a separate boundary bypass;
+- risks inherent in running untrusted repositories or generated code without isolation;
+- intentionally weakened configuration or publicly exposed local services;
+- denial-of-service claims requiring trusted local input or configuration;
+- third-party credentials or infrastructure not owned or controlled by Porcupine.
+
+The most useful reports identify the exact boundary that was expected to hold and show how current Porcupine code bypasses it.
+
+## Additional guidance
+
+Read the detailed [security documentation](Porcupine/packages/coding-agent/docs/security.md) and [containerization guide](Porcupine/packages/coding-agent/docs/containerization.md) for operational guidance.

@@ -1,6 +1,6 @@
 # Security
 
-Porcupine is a local coding agent. It runs with the permissions of the user account that starts it, and it treats files writable by that user as inside the same local trust boundary.
+Porcupine is a native-first terminal AI agent. It runs with the permissions of the user account that starts it, and it treats files writable by that user as inside the same local trust boundary.
 
 ## Project Trust
 
@@ -28,9 +28,9 @@ Declining trust skips protected resources. `AGENTS.md` and `CLAUDE.md` context f
 
 Non-interactive modes (`-p`, `--mode json`, and `--mode rpc`) do not show a trust prompt. Without an applicable saved trust decision, `defaultProjectTrust: "ask"` and `"never"` ignore such resources, while `"always"` trusts them. Use `--approve`/`-a` or `--no-approve`/`-na` to override project trust for one run.
 
-## No Built-in Sandbox
+## Native Access and Optional Isolation
 
-Porcupine does not include a built-in sandbox. Built-in tools can read files, write files, edit files, and run shell commands with the permissions of the porcupine process. Extensions are TypeScript modules that run with the same permissions. Package installs, shell commands, language servers, test commands, and other developer tools behave as ordinary local processes.
+Porcupine is native-first. Without optional isolation, built-in tools can read files, write files, edit files, and run shell commands with the permissions of the porcupine process. Extensions are TypeScript modules that run with the same permissions. Package installs, shell commands, language servers, test commands, and other developer tools behave as ordinary local processes.
 
 This is intentional. Porcupine is designed to operate on local source trees, invoke project toolchains, and integrate with the user's existing development environment. A partial in-process sandbox would be easy to misunderstand as a security boundary while still depending on the host shell, filesystem, package managers, credentials, and extension code. Real isolation needs to come from the operating system or a virtualization/container boundary.
 
@@ -92,6 +92,6 @@ If you bind-mount a host workspace read/write, writes from inside the container 
 
 ## Reporting Security Issues
 
-To report a security issue, follow the repository [Security Policy](https://github.com/Abd0r/porcupine/blob/main/Porcupine/SECURITY.md). Do not open a public issue for security-sensitive reports.
+To report a security issue, follow the repository [Security Policy](https://github.com/Abd0r/porcupineai/security/policy) and use [private vulnerability reporting](https://github.com/Abd0r/porcupineai/security/advisories/new). Do not open a public issue for security-sensitive reports.
 
-Expected local-agent behavior, lack of a built-in sandbox, prompt injection from untrusted content, and behavior of user-installed extensions or skills are generally outside the security boundary unless the report demonstrates a real privilege-boundary bypass or shows how porcupine grants access that the local user did not already have.
+Expected native local-agent behavior, use without optional isolation, prompt injection from untrusted content, and behavior of user-installed extensions or skills are generally outside the security boundary unless the report demonstrates a real privilege-boundary bypass or shows how porcupine grants access that the local user did not already have.
