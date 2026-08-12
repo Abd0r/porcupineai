@@ -82,11 +82,14 @@ control (**Ask** confirms everything, **Normal** asks on flagged commands,
 - **Projects** — `Project/<name>/` workspaces with `README.md` + `STATUS.md`.
 - **Telegram bridge** — message the same session from your phone
   (`PORCUPINE_TELEGRAM_TOKEN` in `~/.porcupine/agent/.env`); confirmations and
-  `ask_question` arrive as buttons.
+  `ask_question` arrive as buttons. Private chats authenticate their sender;
+  groups require an explicit user allowlist.
 - **Discord + iMessage bridges** — the same session contract over Discord
-  channels (`PORCUPINE_DISCORD_TOKEN`/`_ALLOW`) and the macOS Messages app
-  (`PORCUPINE_IMESSAGE_ALLOW`). Zero-dependency Discord gateway, AppleScript
-  iMessage polling; all three race the TUI for confirmations. Owner `!`
+  channels (channel + user allowlists) and the macOS Messages app (direct-chat
+  identity or explicit group senders). Discord provides real Gateway resume,
+  heartbeat recovery, typing indicators, and native `MEDIA:` attachments;
+  iMessage uses native AppleScript polling where macOS permits it. All three
+  bind confirmations to the authorized actor whose turn started. Owner `!`
   commands (`!status`, `!tasks`, `!run`, `!help`) control the session remotely.
 - **`/sandbox`** — one command to route built-in tools into a Gondolin
   micro-VM (`/sandbox on` installs, registers, and hot-reloads the extension;
@@ -108,7 +111,7 @@ control (**Ask** confirms everything, **Normal** asks on flagged commands,
 
 ## Docs
 
-- [Full guide](docs/index.md) · [Web Development](docs/web-development.md) · [MCP](docs/mcp.md) ·
+- [Full guide](docs/index.md) · [Web Development](docs/web-development.md) · [Messaging](docs/messaging.md) · [MCP](docs/mcp.md) ·
   [Settings](docs/settings.md) · [Skills](docs/skills.md) · [Security](docs/security.md) ·
   [Extensions](docs/extensions.md) · [Sessions](docs/sessions.md)
 

@@ -26,8 +26,14 @@ import { type BridgeCommandContext, handleBridgeCommand, parseBridgeCommand } fr
 export interface TelegramBridgeOptions {
 	/** Bot token from @BotFather. */
 	token: string;
-	/** Allowed chat ids (private DMs). Empty allowlist = only /start works. */
+	/** Allowed chat ids. Empty allowlist = only /start works. */
 	allowlist: number[];
+	/**
+	 * Users allowed inside group chats. Private chats authenticate by requiring
+	 * the sender id to equal the allowed chat id. Groups fail closed unless this
+	 * list explicitly authorizes the sender.
+	 */
+	userAllowlist?: number[];
 	/** Inject a user message into the shared session (session.prompt). */
 	prompt: (text: string, options?: { streamingBehavior?: "steer" | "followUp" }) => void | Promise<void>;
 	/** The TUI confirmation dialog, used when the phone is not the decider. */
@@ -45,6 +51,7 @@ export interface TelegramBridgeOptions {
 interface TelegramMessage {
 	message_id: number;
 	chat: { id: number; type: string };
+	from?: { id: number };
 	text?: string;
 }
 
@@ -53,6 +60,7 @@ interface TelegramUpdate {
 	message?: TelegramMessage;
 	callback_query?: {
 		id: string;
+		from?: { id: number };
 		message?: { chat: { id: number } };
 		data?: string;
 	};
@@ -151,14 +159,28 @@ export class TelegramBridge {
 	 * matched against the ending turn's last user message so a follow-up queued
 	 * behind a TUI turn never forwards the wrong response.
 	 */
-	private pendingTelegram: Array<{ chatId: number; text: string }> = [];
-	/** Most recent chat that sent a prompt; confirmations go there. */
+	private pendingTelegram: Array<{ chatId: number; userId?: number; text: string }> = [];
+	/** Most recent authorized actor that sent a prompt; confirmations go only to that actor. */
 	private activeChatId: number | undefined;
-	private confirmWaiters = new Map<string, (ok: boolean) => void>();
-	/** ask_question option selections waiting for a button tap (by request id). */
-	private pendingSelects = new Map<string, { options: string[]; resolve: (value: string | undefined) => void }>();
-	/** ask_question free-text answer waiting for a reply message. */
-	private pendingTextRequest: { chatId: number; resolve: (value: string | undefined) => void } | undefined;
+	private activeUserId: number | undefined;
+	private confirmWaiters = new Map<
+		string,
+		{ chatId: number; userId: number; resolve: (ok: boolean) => void; timer: ReturnType<typeof setTimeout> }
+	>();
+	/** ask_question option selections waiting for a button tap (by request id and actor). */
+	private pendingSelects = new Map<
+		string,
+		{
+			chatId: number;
+			userId: number;
+			options: string[];
+			resolve: (value: string | undefined) => void;
+		}
+	>();
+	/** ask_question free-text answer waiting for a reply from one authorized actor. */
+	private pendingTextRequest:
+		| { chatId: number; userId: number; resolve: (value: string | undefined) => void }
+		| undefined;
 	private pollPromise: Promise<void> | undefined;
 	/** Consecutive update-handling failures; after a cap an update is dead-lettered so one stuck update can't stall the poll. */
 	private consecutiveFailures = 0;
@@ -182,15 +204,30 @@ export class TelegramBridge {
 		return this.startedAt === undefined ? undefined : (Date.now() - this.startedAt) / 1000;
 	}
 
-	private api(method: string, params: Record<string, string>): Promise<unknown> {
+	private async api(method: string, params: Record<string, string>, attempt = 0): Promise<unknown> {
 		const url = `${API}${this.options.token}/${method}`;
 		const body = new URLSearchParams(params);
-		return (this.options.fetchImpl ?? fetch)(url, {
+		const response = await (this.options.fetchImpl ?? fetch)(url, {
 			method: "POST",
 			body,
 			headers: { "content-type": "application/x-www-form-urlencoded" },
 			signal: AbortSignal.timeout(45_000),
-		}).then((response) => response.json() as Promise<unknown>);
+		});
+		const payload = (await response.json().catch(() => undefined)) as
+			| { ok?: boolean; description?: string; parameters?: { retry_after?: number } }
+			| undefined;
+		if ((response.status === 429 || payload?.parameters?.retry_after) && attempt < 3) {
+			const retrySeconds = Math.max(0.25, Math.min(30, payload?.parameters?.retry_after ?? 1));
+			await new Promise((resolve) => setTimeout(resolve, retrySeconds * 1000));
+			return this.api(method, params, attempt + 1);
+		}
+		if (response.ok === false || payload?.ok === false) {
+			throw new Error(`Telegram API ${method} failed: ${payload?.description ?? `HTTP ${response.status}`}`);
+		}
+		if (payload === undefined) {
+			throw new Error(`Telegram API ${method} failed: invalid JSON response`);
+		}
+		return payload;
 	}
 
 	async sendText(chatId: number, text: string): Promise<void> {
@@ -216,10 +253,11 @@ export class TelegramBridge {
 		const form = new FormData();
 		form.append("chat_id", String(chatId));
 		form.append("document", new Blob([buffer]), basename(resolved));
-		await (this.options.fetchImpl ?? fetch)(`${API}${this.options.token}/sendDocument`, {
+		const response = await (this.options.fetchImpl ?? fetch)(`${API}${this.options.token}/sendDocument`, {
 			method: "POST",
 			body: form,
 		});
+		if (response.ok === false) throw new Error(`Telegram API sendDocument failed: HTTP ${response.status}`);
 	}
 
 	/** Combined confirmation: Telegram Approve/Deny buttons race the TUI dialog. */
@@ -230,7 +268,7 @@ export class TelegramBridge {
 		const decisions: Promise<boolean>[] = [];
 		if (tui) decisions.push(tui(title, message));
 		if (chatId !== undefined) {
-			decisions.push(this.telegramConfirm(chatId, title, message));
+			decisions.push(this.telegramConfirm(chatId, this.activeUserId ?? chatId, title, message));
 		}
 		if (decisions.length === 0) return false;
 		return Promise.race(decisions);
@@ -240,7 +278,7 @@ export class TelegramBridge {
 	remoteConfirm(title: string, message: string): Promise<boolean> | undefined {
 		const chatId = this.activeChatId;
 		if (chatId === undefined) return undefined;
-		return this.telegramConfirm(chatId, title, message);
+		return this.telegramConfirm(chatId, this.activeUserId ?? chatId, title, message);
 	}
 
 	/** Point the session's confirm callback at the combined TUI+Telegram flow. */
@@ -262,8 +300,9 @@ export class TelegramBridge {
 		opts?: { signal?: AbortSignal },
 	): Promise<string | undefined> {
 		const chatId = this.activeChatId;
+		const userId = this.activeUserId ?? chatId;
 		const tuiPromise = tui(title, options);
-		if (chatId === undefined || options.length === 0) return tuiPromise;
+		if (chatId === undefined || userId === undefined || options.length === 0) return tuiPromise;
 
 		const requestId = randomUUID();
 		const rows = chunk(
@@ -273,13 +312,9 @@ export class TelegramBridge {
 			})),
 			2,
 		);
-		await this.api("sendMessage", {
-			chat_id: String(chatId),
-			text: `❓ ${title}`,
-			reply_markup: JSON.stringify({ inline_keyboard: rows }),
-		}).catch(() => {});
-
-		return new Promise<string | undefined>((resolve) => {
+		// Register before sending. The polling loop can receive an immediate tap
+		// as soon as Telegram accepts the button message.
+		const selection = new Promise<string | undefined>((resolve) => {
 			let settled = false;
 			const finish = (value: string | undefined) => {
 				if (settled) return;
@@ -289,10 +324,16 @@ export class TelegramBridge {
 				resolve(value);
 			};
 			const timer = setTimeout(() => finish(undefined), this.options.dialogTimeoutMs ?? 10 * 60 * 1000);
-			this.pendingSelects.set(requestId, { options, resolve: finish });
+			this.pendingSelects.set(requestId, { chatId, userId, options, resolve: finish });
 			opts?.signal?.addEventListener("abort", () => finish(undefined), { once: true });
 			void tuiPromise.then((value) => finish(value));
 		});
+		await this.api("sendMessage", {
+			chat_id: String(chatId),
+			text: `❓ ${title}`,
+			reply_markup: JSON.stringify({ inline_keyboard: rows }),
+		}).catch(() => {});
+		return selection;
 	}
 
 	/**
@@ -305,8 +346,9 @@ export class TelegramBridge {
 		opts?: { signal?: AbortSignal },
 	): Promise<string | undefined> {
 		const chatId = this.activeChatId;
+		const userId = this.activeUserId ?? chatId;
 		const tuiPromise = tui(title);
-		if (chatId === undefined) return tuiPromise;
+		if (chatId === undefined || userId === undefined) return tuiPromise;
 		// Register the pending request BEFORE the prompt message so a reply that
 		// arrives immediately (or is already queued in the poll) is not missed.
 		const pending = new Promise<string | undefined>((resolve) => {
@@ -319,7 +361,7 @@ export class TelegramBridge {
 				resolve(value);
 			};
 			const timer = setTimeout(() => finish(undefined), this.options.dialogTimeoutMs ?? 10 * 60 * 1000);
-			this.pendingTextRequest = { chatId, resolve: finish };
+			this.pendingTextRequest = { chatId, userId, resolve: finish };
 			opts?.signal?.addEventListener("abort", () => finish(undefined), { once: true });
 			void tuiPromise.then((value) => finish(value));
 		});
@@ -330,18 +372,21 @@ export class TelegramBridge {
 		return pending;
 	}
 
-	private telegramConfirm(chatId: number, title: string, message: string): Promise<boolean> {
+	private telegramConfirm(chatId: number, userId: number, title: string, message: string): Promise<boolean> {
 		return new Promise((resolve) => {
 			// Each confirm gets its own request id; callback data carries it so a
 			// late tap on an OLD button can never resolve a NEWER confirmation.
 			const requestId = randomUUID();
-			const waiter = (ok: boolean) => {
+			const finish = (ok: boolean) => {
+				const current = this.confirmWaiters.get(requestId);
+				if (!current) return;
+				clearTimeout(current.timer);
 				this.confirmWaiters.delete(requestId);
 				resolve(ok);
 			};
-			this.confirmWaiters.set(requestId, waiter);
 			const timeout = this.options.confirmTimeoutMs ?? 5 * 60 * 1000;
-			setTimeout(() => waiter(false), timeout);
+			const timer = setTimeout(() => finish(false), timeout);
+			this.confirmWaiters.set(requestId, { chatId, userId, resolve: finish, timer });
 			const body = `${title}\n\n${message}`.slice(0, 3800);
 			void this.api("sendMessage", {
 				chat_id: String(chatId),
@@ -354,8 +399,16 @@ export class TelegramBridge {
 						],
 					],
 				}),
-			}).catch(() => waiter(false));
+			}).catch(() => finish(false));
 		});
+	}
+
+	/** Bind confirmations/dialogs to the authorized actor whose queued turn actually started. */
+	handleTurnStart(message: AgentMessage): void {
+		const text = lastUserMessageText([message]);
+		const entry = this.pendingTelegram.find((candidate) => text !== undefined && textsMatch(candidate.text, text));
+		this.activeChatId = entry?.chatId;
+		this.activeUserId = entry ? (entry.userId ?? entry.chatId) : undefined;
 	}
 
 	/** Called from the session event stream. */
@@ -425,6 +478,10 @@ export class TelegramBridge {
 		await this.setPresence("🔴 Offline").catch(() => {});
 		await this.pollPromise;
 		this.startedAt = undefined;
+		for (const pending of [...this.confirmWaiters.values()]) pending.resolve(false);
+		for (const pending of [...this.pendingSelects.values()]) pending.resolve(undefined);
+		this.pendingTextRequest?.resolve(undefined);
+		this.pendingTextRequest = undefined;
 	}
 
 	/** Register the bot's / command menu (Hermes-style). */
@@ -506,23 +563,43 @@ export class TelegramBridge {
 		this.offset = nextOffset;
 	}
 
-	private isAllowed(chatId: number): boolean {
+	private isAllowedChat(chatId: number): boolean {
 		return this.options.allowlist.includes(chatId);
+	}
+
+	private isAuthorizedActor(chatId: number, userId: number | undefined, chatType?: string): boolean {
+		if (!this.isAllowedChat(chatId) || userId === undefined) return false;
+		if (chatType === "private") return userId === chatId;
+		return (this.options.userAllowlist ?? []).includes(userId);
 	}
 
 	private async handleCallbackQuery(query: {
 		id: string;
+		from?: { id: number };
 		message?: { chat: { id: number } };
 		data?: string;
 	}): Promise<void> {
 		const chatId = query.message?.chat.id;
-		if (chatId === undefined || !this.isAllowed(chatId)) return;
+		const userId = query.from?.id;
+		const actorAllowed =
+			chatId !== undefined &&
+			this.isAllowedChat(chatId) &&
+			userId !== undefined &&
+			(userId === chatId || (this.options.userAllowlist ?? []).includes(userId));
+		if (!actorAllowed) return;
 		const data = query.data ?? "";
 		if (data.startsWith("select:")) {
 			const [, requestId, indexRaw] = data.split(":");
 			const pending = requestId ? this.pendingSelects.get(requestId) : undefined;
 			const index = Number(indexRaw);
-			if (pending && Number.isInteger(index) && index >= 0 && index < pending.options.length) {
+			if (
+				pending &&
+				pending.chatId === chatId &&
+				pending.userId === userId &&
+				Number.isInteger(index) &&
+				index >= 0 &&
+				index < pending.options.length
+			) {
 				pending.resolve(pending.options[index]);
 			}
 		} else if (data.startsWith("confirm:")) {
@@ -530,12 +607,14 @@ export class TelegramBridge {
 			// late tap on an OLD button can never approve a NEWER confirmation.
 			const [, requestId, verdict] = data.split(":");
 			const waiter = requestId ? this.confirmWaiters.get(requestId) : undefined;
-			if (waiter) waiter(verdict === "approve");
+			if (waiter && waiter.chatId === chatId && waiter.userId === userId) waiter.resolve(verdict === "approve");
 		} else {
 			// Legacy bare approve/deny (pre-request-id buttons): resolve all waiters.
 			if (data === "approve" || data === "deny") {
 				const ok = data === "approve";
-				for (const waiter of [...this.confirmWaiters.values()]) waiter(ok);
+				for (const waiter of [...this.confirmWaiters.values()]) {
+					if (waiter.chatId === chatId && waiter.userId === userId) waiter.resolve(ok);
+				}
 			}
 		}
 		await this.api("answerCallbackQuery", { callback_query_id: query.id });
@@ -556,14 +635,14 @@ export class TelegramBridge {
 			statusText: this.options.getStatus?.() ?? "",
 		};
 		const reply = handleBridgeCommand(parsed, { context });
-		this.activeChatId = chatId;
-		void this.notifyTaskResult(reply).catch(() => {});
+		void this.sendText(chatId, reply).catch(() => {});
 		return reply;
 	}
 
 	private async handleMessage(message: TelegramMessage): Promise<void> {
 		const chatId = message.chat.id;
-		if (!this.isAllowed(chatId)) {
+		const userId = message.from?.id;
+		if (!this.isAuthorizedActor(chatId, userId, message.chat.type)) {
 			if (message.text?.trim() === "/start") {
 				await this.sendText(
 					chatId,
@@ -578,7 +657,11 @@ export class TelegramBridge {
 		// A pending free-text answer (ask_question input) consumes this message.
 		// The pending request is bound to the chat that asked — a reply from a
 		// different chat must NOT answer it (or leak into it).
-		if (this.pendingTextRequest && this.pendingTextRequest.chatId === chatId) {
+		if (
+			this.pendingTextRequest &&
+			this.pendingTextRequest.chatId === chatId &&
+			this.pendingTextRequest.userId === userId
+		) {
 			const request = this.pendingTextRequest;
 			this.pendingTextRequest = undefined;
 			request.resolve(text);
@@ -608,8 +691,8 @@ export class TelegramBridge {
 
 		// Only actual prompts update the confirmation target chat — /status and
 		// /help must not reroute an in-flight confirmation to a different chat.
-		this.activeChatId = chatId;
-		this.pendingTelegram.push({ chatId, text });
+		this.pendingTelegram.push({ chatId, userId, text });
+		void this.api("sendChatAction", { chat_id: String(chatId), action: "typing" }).catch(() => {});
 		try {
 			// Queue as a follow-up when the agent is mid-turn: the message is never
 			// lost to a "already processing" throw, and its response still comes
@@ -618,7 +701,9 @@ export class TelegramBridge {
 		} catch (error) {
 			// Roll back the pending entry and tell the user — otherwise every later
 			// TUI-originated response would leak to Telegram via the stuck entry.
-			const index = this.pendingTelegram.findIndex((entry) => entry.text === text);
+			const index = this.pendingTelegram.findIndex(
+				(entry) => entry.chatId === chatId && entry.userId === userId && entry.text === text,
+			);
 			if (index !== -1) this.pendingTelegram.splice(index, 1);
 			await this.sendText(
 				chatId,

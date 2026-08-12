@@ -502,6 +502,7 @@ interface RemoteBridgeLike {
 		tui: (title: string) => Promise<string | undefined>,
 		opts?: { signal?: AbortSignal },
 	): Promise<string | undefined>;
+	handleTurnStart(message: AgentMessage): void;
 	handleAgentEnd(messages: readonly AgentMessage[], willRetry: boolean): Promise<void>;
 	notifyTaskResult(text: string): Promise<void>;
 }
@@ -2091,7 +2092,9 @@ export class InteractiveMode {
 		this.startImessageBridgeIfConfigured();
 		// Forward terminal responses to whichever bridge started the turn.
 		this.remoteBridgeUnsubscribe = this.session.subscribe((event) => {
-			if (event.type === "agent_end") {
+			if (event.type === "message_start" && event.message.role === "user") {
+				for (const bridge of this.remoteBridges) bridge.handleTurnStart(event.message);
+			} else if (event.type === "agent_end") {
 				for (const bridge of this.remoteBridges) {
 					void bridge.handleAgentEnd(event.messages, event.willRetry);
 				}
@@ -2143,9 +2146,14 @@ export class InteractiveMode {
 			.split(",")
 			.map((part) => Number(part.trim()))
 			.filter((id) => Number.isFinite(id));
+		const userAllowlist = (process.env.PORCUPINE_TELEGRAM_USER_ALLOW ?? "")
+			.split(",")
+			.map((part) => Number(part.trim()))
+			.filter((id) => Number.isFinite(id));
 		this.telegramBridge = new TelegramBridge({
 			token,
 			allowlist,
+			userAllowlist,
 			prompt: (text, options) =>
 				this.session.prompt(text, { streamingBehavior: options?.streamingBehavior ?? "followUp" }),
 			confirmTui: (title, message) => this.showExtensionConfirm(title, message),
@@ -2180,9 +2188,14 @@ export class InteractiveMode {
 			.split(",")
 			.map((part) => part.trim())
 			.filter(Boolean);
+		const userAllowlist = (process.env.PORCUPINE_DISCORD_USER_ALLOW ?? "")
+			.split(",")
+			.map((part) => part.trim())
+			.filter(Boolean);
 		this.discordBridge = new DiscordBridge({
 			token,
 			allowlist,
+			userAllowlist,
 			prompt: (text, options) =>
 				this.session.prompt(text, { streamingBehavior: options?.streamingBehavior ?? "followUp" }),
 			getStatus: () =>
@@ -2196,7 +2209,7 @@ export class InteractiveMode {
 			.start()
 			.then(() => {
 				this.showStatus(
-					`Discord bridge connected (${allowlist.length > 0 ? `${allowlist.length} allowed channel${allowlist.length === 1 ? "" : "s"}` : "no channels allowed yet"}). Set PORCUPINE_DISCORD_ALLOW to authorize channel ids.`,
+					`Discord bridge connected (${allowlist.length} allowed channel${allowlist.length === 1 ? "" : "s"}, ${userAllowlist.length} allowed user${userAllowlist.length === 1 ? "" : "s"}). Set PORCUPINE_DISCORD_ALLOW and PORCUPINE_DISCORD_USER_ALLOW to authorize both.`,
 				);
 			})
 			.catch((error: unknown) => {
@@ -2212,11 +2225,16 @@ export class InteractiveMode {
 			.split(",")
 			.map((part) => part.trim())
 			.filter(Boolean);
+		const senderAllowlist = (process.env.PORCUPINE_IMESSAGE_SENDER_ALLOW ?? "")
+			.split(",")
+			.map((part) => part.trim())
+			.filter(Boolean);
 		if (allowlist.length === 0) {
 			return;
 		}
 		this.imessageBridge = new IMessageBridge({
 			allowlist,
+			senderAllowlist,
 			prompt: (text, options) =>
 				this.session.prompt(text, { streamingBehavior: options?.streamingBehavior ?? "followUp" }),
 			getStatus: () =>

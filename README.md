@@ -145,12 +145,12 @@ See [Sub-agents](Porcupine/packages/coding-agent/docs/subagents.md).
 | Surface | Use |
 |---|---|
 | **Terminal TUI** | The full interactive experience, including permission dialogs, session tree, Markdown viewer, usage, cost, and live activity. |
-| **Telegram, Discord, iMessage** | Message the same attended session from another device. Confirmation buttons and reactions race the TUI; first response wins. |
+| **Telegram, Discord, iMessage** | Message the same attended session from another device. Chat/channel and sender allowlists protect prompts and approvals; valid confirmation buttons and reactions race the TUI. |
 | **HTTP server** | `porcupine serve` exposes sessions, asynchronous prompts, SSE events, and programmatic approval for IDEs and clients. |
 | **Headless mode** | `porcupine --headless "task"` runs a CI-friendly task and exits `0` on success or `1` on failure or abort. |
 | **RPC and JSONL** | Embed Porcupine in scripts and applications through structured process protocols. |
 
-Remote bridges are allowlist-gated and attended. They drive the shared session; they are not unattended daemons.
+Remote bridges are conversation-and-sender allowlist-gated and attended. They drive the shared session; they are not unattended daemons.
 
 ## Extensible by design
 
@@ -210,7 +210,7 @@ Read [Security](Porcupine/packages/coding-agent/docs/security.md) and [Container
 | [Providers](Porcupine/packages/coding-agent/docs/providers.md) | [Sessions](Porcupine/packages/coding-agent/docs/sessions.md) | [Skills](Porcupine/packages/coding-agent/docs/skills.md) | [Server API](Porcupine/packages/coding-agent/docs/server.md) |
 | [Web Development](Porcupine/packages/coding-agent/docs/web-development.md) | [Settings](Porcupine/packages/coding-agent/docs/settings.md) | [Extensions](Porcupine/packages/coding-agent/docs/extensions.md) | [SDK](Porcupine/packages/coding-agent/docs/sdk.md) |
 | [Browser use](Porcupine/packages/coding-agent/docs/browser.md) | [Tasks and Cron](Porcupine/packages/coding-agent/docs/usage.md#tasks-and-cron-routines) | [Prompt templates](Porcupine/packages/coding-agent/docs/prompt-templates.md) | [RPC](Porcupine/packages/coding-agent/docs/rpc.md) |
-| [Sub-agents](Porcupine/packages/coding-agent/docs/subagents.md) | [Environment variables](Porcupine/packages/coding-agent/docs/environment-variables.md) | [Themes](Porcupine/packages/coding-agent/docs/themes.md) | [JSON event stream](Porcupine/packages/coding-agent/docs/json.md) |
+| [Sub-agents](Porcupine/packages/coding-agent/docs/subagents.md) | [Messaging bridges](Porcupine/packages/coding-agent/docs/messaging.md) and [environment variables](Porcupine/packages/coding-agent/docs/environment-variables.md) | [Themes](Porcupine/packages/coding-agent/docs/themes.md) | [JSON event stream](Porcupine/packages/coding-agent/docs/json.md) |
 | [Full documentation index](Porcupine/packages/coding-agent/docs/index.md) | [Keybindings](Porcupine/packages/coding-agent/docs/keybindings.md) | [Custom providers](Porcupine/packages/coding-agent/docs/custom-provider.md) | [Email](Porcupine/packages/coding-agent/docs/email.md) and [X](Porcupine/packages/coding-agent/docs/x.md) |
 
 ## Contributing

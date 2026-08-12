@@ -32,7 +32,7 @@ function update(id: number, overrides: Record<string, unknown> = {}): Record<str
 
 function textMessage(messageId: number, chatId: number, text: string): Record<string, unknown> {
 	return update(messageId * 10 + 1, {
-		message: { message_id: messageId, chat: { id: chatId, type: "private" }, text },
+		message: { message_id: messageId, chat: { id: chatId, type: "private" }, from: { id: chatId }, text },
 	});
 }
 
@@ -60,8 +60,15 @@ function makeBridge(batches: unknown[][], overrides: Partial<ConstructorParamete
 function internals(bridge: TelegramBridge): {
 	pendingTelegram: Array<{ chatId: number; text: string }>;
 	activeChatId: number | undefined;
+	activeUserId: number | undefined;
 	offset: number;
-	handleCallbackQuery(query: { id: string; message?: { chat: { id: number } }; data?: string }): Promise<void>;
+	handleMessage(message: unknown): Promise<void>;
+	handleCallbackQuery(query: {
+		id: string;
+		from?: { id: number };
+		message?: { chat: { id: number } };
+		data?: string;
+	}): Promise<void>;
 } {
 	return bridge as unknown as ReturnType<typeof internals>;
 }
@@ -90,6 +97,40 @@ describe("TelegramBridge message routing", () => {
 		expect(bridge.pendingTurns).toBe(0);
 	});
 
+	it("keeps private-chat identity authorization independent of the group user allowlist", async () => {
+		const privateMessage = {
+			message_id: 7,
+			chat: { id: ALLOWED, type: "private" },
+			from: { id: ALLOWED },
+			text: "private task",
+		};
+		const { bridge, prompts } = makeBridge([], { userAllowlist: [999] });
+		await internals(bridge).handleMessage(privateMessage);
+		expect(prompts).toEqual(["private task"]);
+	});
+
+	it("requires an explicit user allowlist before group chats can drive the session", async () => {
+		const groupMessage = update(25, {
+			message: {
+				message_id: 25,
+				chat: { id: ALLOWED, type: "group" },
+				from: { id: 999 },
+				text: "run a command",
+			},
+		});
+		const denied = makeBridge([[], [groupMessage]]);
+		await denied.bridge.start();
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		await denied.bridge.stop();
+		expect(denied.prompts).toEqual([]);
+
+		const allowed = makeBridge([[], [groupMessage]], { userAllowlist: [999] });
+		await allowed.bridge.start();
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		await allowed.bridge.stop();
+		expect(allowed.prompts).toEqual(["run a command"]);
+	});
+
 	it("answers /start and /status without starting a turn", async () => {
 		const { bridge, calls, prompts } = makeBridge([
 			[],
@@ -109,6 +150,40 @@ describe("TelegramBridge message routing", () => {
 });
 
 describe("TelegramBridge visibility matrix", () => {
+	it("does not let a later queued chat steal the current turn's confirmation target", async () => {
+		const SECOND_CHAT = 333;
+		const { bridge } = makeBridge([], { allowlist: [ALLOWED, SECOND_CHAT] });
+		await internals(bridge).handleMessage({
+			message_id: 1,
+			chat: { id: ALLOWED, type: "private" },
+			from: { id: ALLOWED },
+			text: "first task",
+		});
+		bridge.handleTurnStart({ role: "user", content: [{ type: "text", text: "first task" }] } as never);
+		expect(internals(bridge).activeChatId).toBe(ALLOWED);
+
+		await internals(bridge).handleMessage({
+			message_id: 2,
+			chat: { id: SECOND_CHAT, type: "private" },
+			from: { id: SECOND_CHAT },
+			text: "queued task",
+		});
+		expect(internals(bridge).activeChatId).toBe(ALLOWED);
+
+		bridge.handleTurnStart({ role: "user", content: [{ type: "text", text: "queued task" }] } as never);
+		expect(internals(bridge).activeChatId).toBe(SECOND_CHAT);
+	});
+
+	it("clears the remote approval target when a TUI turn starts", async () => {
+		const { bridge } = makeBridge([]);
+		const state = internals(bridge) as ReturnType<typeof internals> & { activeChatId?: number; activeUserId?: number };
+		state.activeChatId = ALLOWED;
+		state.activeUserId = ALLOWED;
+		bridge.handleTurnStart({ role: "user", content: [{ type: "text", text: "terminal task" }] } as never);
+		expect(state.activeChatId).toBeUndefined();
+		expect(state.activeUserId).toBeUndefined();
+	});
+
 	it("forwards the agent response to Telegram only for Telegram-originated turns", async () => {
 		const { bridge, calls } = makeBridge([]);
 		const messages = [
@@ -161,6 +236,7 @@ describe("TelegramBridge confirmations", () => {
 			confirmTui: () => new Promise<boolean>(() => {}),
 		});
 		internals(bridge).activeChatId = ALLOWED;
+		internals(bridge).activeUserId = ALLOWED;
 		const confirmPromise = bridge.confirm("Run command", "sudo apt update");
 
 		await new Promise((resolve) => setTimeout(resolve, 10));
@@ -172,6 +248,7 @@ describe("TelegramBridge confirmations", () => {
 		const query = update(50, {
 			callback_query: {
 				id: "cq1",
+				from: { id: ALLOWED },
 				message: { chat: { id: ALLOWED } },
 				data: "approve",
 			},
@@ -179,6 +256,41 @@ describe("TelegramBridge confirmations", () => {
 		await internals(bridge).handleCallbackQuery(query.callback_query as never);
 		expect(await confirmPromise).toBe(true);
 		expect(calls.some((call) => call.method === "answerCallbackQuery")).toBe(true);
+	});
+
+	it("rejects confirmation callbacks from another user in an allowed group", async () => {
+		const { bridge, calls } = makeBridge([], {
+			userAllowlist: [999],
+			confirmTui: () => new Promise<boolean>(() => {}),
+		});
+		internals(bridge).activeChatId = ALLOWED;
+		internals(bridge).activeUserId = 999;
+		const confirmPromise = bridge.confirm("Run command", "npm test");
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		const sent = calls.find((call) => call.method === "sendMessage");
+		const decoded = decodeURIComponent(sent?.body ?? "");
+		const requestId = /confirm:([a-f0-9-]+):approve/.exec(decoded)?.[1];
+		if (!requestId) throw new Error("no confirmation request id");
+
+		await internals(bridge).handleCallbackQuery({
+			id: "forged",
+			from: { id: 1234 },
+			message: { chat: { id: ALLOWED } },
+			data: `confirm:${requestId}:approve`,
+		});
+		const settled = await Promise.race([
+			confirmPromise.then(() => true),
+			new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 25)),
+		]);
+		expect(settled).toBe(false);
+
+		await internals(bridge).handleCallbackQuery({
+			id: "owner",
+			from: { id: 999 },
+			message: { chat: { id: ALLOWED } },
+			data: `confirm:${requestId}:approve`,
+		});
+		expect(await confirmPromise).toBe(true);
 	});
 
 	it("fails closed when neither TUI nor Telegram can answer", async () => {
@@ -207,6 +319,7 @@ describe("TelegramBridge questions (ask_question)", () => {
 	it("sends option buttons and resolves a tap to the FULL option string", async () => {
 		const { bridge, calls } = makeBridge([]);
 		internals(bridge).activeChatId = ALLOWED;
+		internals(bridge).activeUserId = ALLOWED;
 		const options = ["Use SQLite", "Use Postgres"];
 		const promise = bridge.select("Which database?", options, () => new Promise<string | undefined>(() => {}));
 
@@ -219,6 +332,7 @@ describe("TelegramBridge questions (ask_question)", () => {
 		const { requestId, index } = firstSelectRequestId(calls);
 		await internals(bridge).handleCallbackQuery({
 			id: "cq-select",
+			from: { id: ALLOWED },
 			message: { chat: { id: ALLOWED } },
 			data: `select:${requestId}:${index}`,
 		});
@@ -314,6 +428,23 @@ describe("TelegramBridge Hermes-style upgrades", () => {
 		expect(calls.find((call) => call.method === "setMyDescription")?.body).toContain("Online");
 	});
 
+	it("surfaces Bot API failures without leaking the bot token", async () => {
+		const bridge = new TelegramBridge({
+			token: "super-secret-token",
+			allowlist: [ALLOWED],
+			prompt: async () => {},
+			fetchImpl: (async () => ({
+				ok: true,
+				status: 200,
+				json: async () => ({ ok: false, description: "chat not found" }),
+			})) as unknown as typeof fetch,
+		});
+		await expect(bridge.sendText(ALLOWED, "hello")).rejects.toThrow(
+			"Telegram API sendMessage failed: chat not found",
+		);
+		await expect(bridge.sendText(ALLOWED, "hello")).rejects.not.toThrow("super-secret-token");
+	});
+
 	it("chunks long responses into 4000-char messages", async () => {
 		const { bridge, calls } = makeBridge([]);
 		const long = "x".repeat(9000);
@@ -386,6 +517,7 @@ describe("TelegramBridge bug-hunt regressions", () => {
 		// either confirmation (pre-fix, ANY approve button resolved ALL waiters).
 		await internals(bridge).handleCallbackQuery({
 			id: "cq-stale",
+			from: { id: ALLOWED },
 			message: { chat: { id: ALLOWED } },
 			data: "confirm:stale-request:approve",
 		});

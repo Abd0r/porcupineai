@@ -10,9 +10,10 @@
  * Requirements: macOS + Messages.app signed in (iMessage enabled).
  *
  * Env:
- *   PORCUPINE_IMESSAGE_ALLOW — comma-separated chat ids (e.g.
- *                              "iMessage;-;+1234567890") or phone/email handles
- *                              (resolved to a chat id at startup when possible)
+ *   PORCUPINE_IMESSAGE_ALLOW        — comma-separated chat ids (e.g.
+ *                                     "iMessage;-;+1234567890") or phone/email
+ *                                     handles (resolved at startup when possible)
+ *   PORCUPINE_IMESSAGE_SENDER_ALLOW — senders authorized inside group chats
  */
 
 import { execFile } from "node:child_process";
@@ -23,16 +24,22 @@ import { extractAssistantText, lastUserMessageText, summarizeToolCalls, textsMat
 
 const POLL_INTERVAL_MS = 3000;
 const SEND_CHUNK = 1500;
-const MAX_SEEN_IDS = 1000;
 const SEP = "\u0001";
 
 function appleScriptEscape(value: string): string {
 	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
+function normalizeIMessageIdentity(value: string): string {
+	const trimmed = value.trim().toLowerCase();
+	return trimmed.includes("@") ? trimmed : trimmed.replace(/[^0-9+]/g, "").replace(/^00/, "+");
+}
+
 export interface IMessageBridgeOptions {
-	/** Chat ids (or phone/email handles) allowed to drive the session. */
+	/** Chat ids (or phone/email handles) in which the bridge may operate. */
 	allowlist: string[];
+	/** Senders allowed inside group chats. Direct chats infer their sole participant. */
+	senderAllowlist?: string[];
 	prompt: (text: string, options?: { streamingBehavior?: "followUp" | "steer" }) => Promise<void>;
 	getStatus?: () => string;
 	dialogTimeoutMs?: number;
@@ -45,15 +52,21 @@ export class IMessageBridge {
 	private pollTimer: ReturnType<typeof setInterval> | undefined;
 	/** Resolved chat ids to poll (handles resolved at startup when possible). */
 	private pollChats: string[] = [];
-	private seenIds = new Set<string>();
+	private lastSeenIdByChat = new Map<string, string>();
 
 	/** iMessage-originated prompts awaiting their response turn (provenance match). */
-	private pendingMessages: Array<{ chatId: string; text: string }> = [];
-	/** Most recent chat that sent a real prompt; confirmations go there. */
+	private pendingMessages: Array<{ chatId: string; sender?: string; text: string }> = [];
+	/** Most recent authorized actor that sent a real prompt; confirmations go only to that actor. */
 	private activeChatId: string | undefined;
-	private pendingConfirms = new Map<string, { chatId: string; resolve: (ok: boolean) => void }>();
-	private pendingSelects = new Map<string, { options: string[]; resolve: (value: string | undefined) => void }>();
-	private pendingTextRequest: { chatId: string; resolve: (value: string | undefined) => void } | undefined;
+	private activeSender: string | undefined;
+	private pendingConfirms = new Map<string, { chatId: string; sender: string; resolve: (ok: boolean) => void }>();
+	private pendingSelects = new Map<
+		string,
+		{ chatId: string; sender: string; options: string[]; resolve: (value: string | undefined) => void }
+	>();
+	private pendingTextRequest:
+		| { chatId: string; sender: string; resolve: (value: string | undefined) => void }
+		| undefined;
 	/** Epoch ms when the bridge started polling; drives the !status uptime line. */
 	private startedAt: number | undefined;
 
@@ -121,9 +134,9 @@ export class IMessageBridge {
 		);
 	}
 
-	private fetchChatMessages(chatId: string): Promise<Array<{ id: string; text: string; fromMe: boolean }>> {
-		const handle = chatId.split(";-;").pop() ?? chatId;
-		const selfHandle = handle.replace(/^\+/, "");
+	private fetchChatMessages(
+		chatId: string,
+	): Promise<Array<{ id: string; text: string; sender: string; fromMe: boolean }>> {
 		const script = [
 			'tell application "Messages"',
 			`\tset chatId to "${appleScriptEscape(chatId)}"`,
@@ -138,14 +151,16 @@ export class IMessageBridge {
 			"end tell",
 		].join("\n");
 		return this.osascript(script).then((stdout) => {
-			const result: Array<{ id: string; text: string; fromMe: boolean }> = [];
+			const result: Array<{ id: string; text: string; sender: string; fromMe: boolean }> = [];
 			for (const line of stdout.split("\n")) {
 				const parts = line.split(SEP);
 				if (parts.length !== 3) continue;
 				const [id, text = "", sender] = parts;
 				if (!id) continue;
-				const senderClean = (sender ?? "").trim().replace(/^\+/, "");
-				result.push({ id, text, fromMe: senderClean === selfHandle });
+				// Messages no longer exposes a portable `is from me` AppleScript
+				// property. Authorization below identifies trusted remote senders;
+				// messages sent by this Mac have a different, non-allowlisted sender.
+				result.push({ id, text, sender: (sender ?? "").trim(), fromMe: false });
 			}
 			return result;
 		});
@@ -181,16 +196,19 @@ export class IMessageBridge {
 
 	remoteConfirm(title: string, message: string): Promise<boolean> | undefined {
 		const chatId = this.activeChatId;
-		if (chatId === undefined) return undefined;
+		const sender = this.activeSender;
+		if (chatId === undefined || sender === undefined) return undefined;
 		return new Promise<boolean>((resolve) => {
 			const requestId = randomUUID();
 			const waiter = (ok: boolean) => {
+				if (!this.pendingConfirms.has(requestId)) return;
+				clearTimeout(timer);
 				this.pendingConfirms.delete(requestId);
 				resolve(ok);
 			};
-			this.pendingConfirms.set(requestId, { chatId, resolve: waiter });
 			const timeout = this.options.confirmTimeoutMs ?? 5 * 60 * 1000;
-			setTimeout(() => waiter(false), timeout);
+			const timer = setTimeout(() => waiter(false), timeout);
+			this.pendingConfirms.set(requestId, { chatId, sender, resolve: waiter });
 			void this.sendText(chatId, `❓ ${title}\n\n${message}\n\nReply APPROVE to allow, DENY to block.`).catch(() =>
 				waiter(false),
 			);
@@ -204,8 +222,9 @@ export class IMessageBridge {
 		opts?: { signal?: AbortSignal },
 	): Promise<string | undefined> {
 		const chatId = this.activeChatId;
+		const sender = this.activeSender;
 		const tuiPromise = tui(title, options);
-		if (chatId === undefined || options.length === 0) return tuiPromise;
+		if (chatId === undefined || sender === undefined || options.length === 0) return tuiPromise;
 
 		const requestId = randomUUID();
 		const numbered = options.map((option, index) => `${index + 1}. ${option}`).join("\n");
@@ -221,7 +240,7 @@ export class IMessageBridge {
 				resolve(value);
 			};
 			const timer = setTimeout(() => finish(undefined), this.options.dialogTimeoutMs ?? 10 * 60 * 1000);
-			this.pendingSelects.set(requestId, { options, resolve: finish });
+			this.pendingSelects.set(requestId, { chatId, sender, options, resolve: finish });
 			opts?.signal?.addEventListener("abort", () => finish(undefined), { once: true });
 			void tuiPromise.then((value) => finish(value));
 		});
@@ -233,8 +252,9 @@ export class IMessageBridge {
 		opts?: { signal?: AbortSignal },
 	): Promise<string | undefined> {
 		const chatId = this.activeChatId;
+		const sender = this.activeSender;
 		const tuiPromise = tui(title);
-		if (chatId === undefined) return tuiPromise;
+		if (chatId === undefined || sender === undefined) return tuiPromise;
 		const pending = new Promise<string | undefined>((resolve) => {
 			let settled = false;
 			const finish = (value: string | undefined) => {
@@ -245,7 +265,7 @@ export class IMessageBridge {
 				resolve(value);
 			};
 			const timer = setTimeout(() => finish(undefined), this.options.dialogTimeoutMs ?? 10 * 60 * 1000);
-			this.pendingTextRequest = { chatId, resolve: finish };
+			this.pendingTextRequest = { chatId, sender, resolve: finish };
 			opts?.signal?.addEventListener("abort", () => finish(undefined), { once: true });
 			void tuiPromise.then((value) => finish(value));
 		});
@@ -256,6 +276,13 @@ export class IMessageBridge {
 	// ---------------------------------------------------------------------
 	// Session events
 	// ---------------------------------------------------------------------
+
+	handleTurnStart(message: AgentMessage): void {
+		const text = lastUserMessageText([message]);
+		const entry = this.pendingMessages.find((candidate) => text !== undefined && textsMatch(candidate.text, text));
+		this.activeChatId = entry?.chatId;
+		this.activeSender = entry?.sender;
+	}
 
 	async handleAgentEnd(messages: readonly AgentMessage[], willRetry: boolean): Promise<void> {
 		if (willRetry) return;
@@ -297,7 +324,7 @@ export class IMessageBridge {
 	}
 
 	private async pollChatInner(chatId: string): Promise<void> {
-		let messages: Array<{ id: string; text: string; fromMe: boolean }>;
+		let messages: Array<{ id: string; text: string; sender: string; fromMe: boolean }>;
 		try {
 			messages = await this.fetchChatMessages(chatId);
 		} catch (error) {
@@ -305,18 +332,29 @@ export class IMessageBridge {
 			console.warn(`[imessage] poll ${chatId} failed: ${error instanceof Error ? error.message : String(error)}`);
 			return;
 		}
-		for (const message of messages) {
-			if (this.seenIds.has(message.id)) continue;
-			this.seenIds.add(message.id);
-			if (this.seenIds.size > MAX_SEEN_IDS) {
-				const iterator = this.seenIds.values();
-				const first = iterator.next().value as string | undefined;
-				if (first !== undefined) this.seenIds.delete(first);
-			}
+		const previousLastId = this.lastSeenIdByChat.get(chatId);
+		if (previousLastId === undefined) {
+			// Establish a per-chat cursor without replaying the entire Messages
+			// history when the attended bridge starts.
+			const newest = messages.at(-1)?.id;
+			if (newest !== undefined) this.lastSeenIdByChat.set(chatId, newest);
+			return;
+		}
+		const previousIndex = messages.findIndex((message) => message.id === previousLastId);
+		if (previousIndex === -1) {
+			// If Messages no longer returns the prior cursor, rebase at the newest
+			// item instead of replaying an ambiguous history window.
+			const newest = messages.at(-1)?.id;
+			if (newest !== undefined) this.lastSeenIdByChat.set(chatId, newest);
+			return;
+		}
+		const unseen = messages.slice(previousIndex + 1);
+		for (const message of unseen) {
+			this.lastSeenIdByChat.set(chatId, message.id);
 			if (message.fromMe) continue;
 			const text = message.text?.trim();
 			if (!text) continue;
-			await this.handleIncoming(chatId, text).catch((error: unknown) => {
+			await this.handleIncoming(chatId, text, message.sender).catch((error: unknown) => {
 				console.warn(`[imessage] handle failed: ${error instanceof Error ? error.message : String(error)}`);
 			});
 		}
@@ -337,14 +375,30 @@ export class IMessageBridge {
 			statusText: this.options.getStatus?.() ?? "",
 		};
 		const reply = handleBridgeCommand(parsed, { context });
-		this.activeChatId = chatId;
-		void this.notifyTaskResult(reply).catch(() => {});
+		void this.sendText(chatId, reply).catch(() => {});
 		return reply;
 	}
 
-	private async handleIncoming(chatId: string, text: string): Promise<void> {
-		// A pending free-text answer consumes this message (bound to its chat).
-		if (this.pendingTextRequest && this.pendingTextRequest.chatId === chatId) {
+	private isAuthorizedSender(chatId: string, sender: string): boolean {
+		const normalized = normalizeIMessageIdentity(sender);
+		if (!normalized) return false;
+		if (chatId.includes(";-;")) {
+			return chatId.split(";-;").slice(1).map(normalizeIMessageIdentity).includes(normalized);
+		}
+		const explicit = (this.options.senderAllowlist ?? []).map(normalizeIMessageIdentity).filter(Boolean);
+		return explicit.includes(normalized);
+	}
+
+	private async handleIncoming(chatId: string, text: string, sender: string): Promise<void> {
+		if (!this.pollChats.includes(chatId) && !this.options.allowlist.includes(chatId)) return;
+		if (!this.isAuthorizedSender(chatId, sender)) return;
+
+		// A pending free-text answer consumes this message (bound to its actor).
+		if (
+			this.pendingTextRequest &&
+			this.pendingTextRequest.chatId === chatId &&
+			this.pendingTextRequest.sender === sender
+		) {
 			const request = this.pendingTextRequest;
 			this.pendingTextRequest = undefined;
 			request.resolve(text);
@@ -357,7 +411,7 @@ export class IMessageBridge {
 			if (/^(approve|yes|y|allow|ok|1)\b/.test(verdict) || /^(deny|no|n|block|0)\b/.test(verdict)) {
 				const ok = /^(approve|yes|y|allow|ok|1)\b/.test(verdict);
 				for (const [requestId, pending] of [...this.pendingConfirms.entries()]) {
-					if (pending.chatId === chatId) {
+					if (pending.chatId === chatId && pending.sender === sender) {
 						pending.resolve(ok);
 						this.pendingConfirms.delete(requestId);
 						return;
@@ -372,7 +426,7 @@ export class IMessageBridge {
 			if (Number.isInteger(number) && number >= 1) {
 				for (const [requestId, pending] of [...this.pendingSelects.entries()]) {
 					const index = number - 1;
-					if (index < pending.options.length) {
+					if (pending.chatId === chatId && pending.sender === sender && index < pending.options.length) {
 						pending.resolve(pending.options[index]);
 						this.pendingSelects.delete(requestId);
 						return;
@@ -398,12 +452,13 @@ export class IMessageBridge {
 			return;
 		}
 
-		this.activeChatId = chatId;
-		this.pendingMessages.push({ chatId, text });
+		this.pendingMessages.push({ chatId, sender, text });
 		try {
 			await this.options.prompt(text, { streamingBehavior: "followUp" });
 		} catch (error) {
-			const index = this.pendingMessages.findIndex((entry) => entry.text === text);
+			const index = this.pendingMessages.findIndex(
+				(entry) => entry.chatId === chatId && entry.sender === sender && entry.text === text,
+			);
 			if (index !== -1) this.pendingMessages.splice(index, 1);
 			await this.sendText(
 				chatId,

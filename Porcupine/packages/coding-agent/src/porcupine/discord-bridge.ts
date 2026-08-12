@@ -9,14 +9,24 @@
  * interaction callbacks are needed.
  *
  * Env:
- *   PORCUPINE_DISCORD_TOKEN  — bot token
- *   PORCUPINE_DISCORD_ALLOW  — comma-separated channel ids allowed to talk
+ *   PORCUPINE_DISCORD_TOKEN       — bot token
+ *   PORCUPINE_DISCORD_ALLOW       — comma-separated channel ids allowed to talk
+ *   PORCUPINE_DISCORD_USER_ALLOW  — comma-separated user ids allowed to act
  */
 
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import type { AgentMessage } from "@porcupineai/agent-core";
 import { type BridgeCommandContext, handleBridgeCommand, parseBridgeCommand } from "./bridge-commands.ts";
-import { extractAssistantText, lastUserMessageText, summarizeToolCalls, textsMatch } from "./telegram-bridge.ts";
+import {
+	extractAssistantText,
+	extractMediaMarkers,
+	lastUserMessageText,
+	summarizeToolCalls,
+	textsMatch,
+} from "./telegram-bridge.ts";
 
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
 const REST_BASE = "https://discord.com/api/v10";
@@ -61,8 +71,10 @@ interface DiscordReaction {
 
 export interface DiscordBridgeOptions {
 	token: string;
-	/** Channel ids (PORCUPINE_DISCORD_ALLOW) that may drive the session. */
+	/** Channel ids (PORCUPINE_DISCORD_ALLOW) in which the bridge may operate. */
 	allowlist: string[];
+	/** User ids (PORCUPINE_DISCORD_USER_ALLOW) allowed to drive or approve work. */
+	userAllowlist: string[];
 	prompt: (text: string, options?: { streamingBehavior?: "followUp" | "steer" }) => Promise<void>;
 	getStatus?: () => string;
 	dialogTimeoutMs?: number;
@@ -78,22 +90,44 @@ export class DiscordBridge {
 	private reconnectAttempts = 0;
 	private sequence: number | null = null;
 	private sessionId: string | undefined;
+	private resumeGatewayUrl: string | undefined;
 	private selfId: string | undefined;
 	private heartbeatIntervalMs = 0;
-	private heartbeatWithSeq = false;
+	private heartbeatAwaitingAck = false;
 	/** Epoch ms when the bridge connected; drives the !status uptime line. */
 	private startedAt: number | undefined;
 
 	/** Discord-originated prompts awaiting their response turn (provenance match). */
-	private pendingDiscord: Array<{ channelId: string; text: string }> = [];
-	/** Most recent channel that sent a real prompt; confirmations go there. */
+	private pendingDiscord: Array<{ channelId: string; userId: string; text: string }> = [];
+	/** Most recent authorized actor that sent a real prompt; confirmations go only to that actor. */
 	private activeChannelId: string | undefined;
-	/** Approve/Deny waiters keyed by confirm request id, scoped to their confirmation message id. */
-	private confirmWaiters = new Map<string, { waiter: (ok: boolean) => void; messageId: string | undefined }>();
-	/** ask_question option selections by request id. */
-	private pendingSelects = new Map<string, { options: string[]; resolve: (value: string | undefined) => void }>();
-	/** ask_question free-text answer bound to one channel. */
-	private pendingTextRequest: { channelId: string; resolve: (value: string | undefined) => void } | undefined;
+	private activeUserId: string | undefined;
+	/** Approve/Deny waiters keyed by confirm request id, scoped to message and actor. */
+	private confirmWaiters = new Map<
+		string,
+		{
+			waiter: (ok: boolean) => void;
+			messageId: string | undefined;
+			channelId: string;
+			userId: string;
+			timer: ReturnType<typeof setTimeout>;
+		}
+	>();
+	/** ask_question option selections scoped to their prompt message and actor. */
+	private pendingSelects = new Map<
+		string,
+		{
+			options: string[];
+			resolve: (value: string | undefined) => void;
+			messageId: string | undefined;
+			channelId: string;
+			userId: string;
+		}
+	>();
+	/** ask_question free-text answer bound to one channel and authorized actor. */
+	private pendingTextRequest:
+		| { channelId: string; userId: string; resolve: (value: string | undefined) => void }
+		| undefined;
 
 	constructor(options: DiscordBridgeOptions) {
 		this.options = options;
@@ -116,20 +150,21 @@ export class DiscordBridge {
 	// REST
 	// ---------------------------------------------------------------------
 
-	private async rest(path: string, init?: RequestInit): Promise<unknown> {
+	private async rest(path: string, init?: RequestInit, attempt = 0): Promise<unknown> {
+		const headers = new Headers(init?.headers);
+		headers.set("authorization", `Bot ${this.options.token}`);
+		if (init?.body !== undefined && !(init.body instanceof FormData) && !headers.has("content-type")) {
+			headers.set("content-type", "application/json");
+		}
 		const response = await fetch(`${REST_BASE}${path}`, {
 			...init,
-			headers: {
-				authorization: `Bot ${this.options.token}`,
-				"content-type": "application/json",
-				...init?.headers,
-			},
+			headers,
 			signal: AbortSignal.timeout(30_000),
 		});
-		if (response.status === 429) {
-			const retryAfter = Number((response.headers.get("retry-after") ?? "1") || 1);
+		if (response.status === 429 && attempt < 3) {
+			const retryAfter = Math.max(0.25, Math.min(30, Number(response.headers.get("retry-after") ?? "1") || 1));
 			await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000 + 250));
-			return this.rest(path, init);
+			return this.rest(path, init, attempt + 1);
 		}
 		if (!response.ok) {
 			const body = await response.text().catch(() => "");
@@ -164,6 +199,15 @@ export class DiscordBridge {
 		return lastId;
 	}
 
+	async sendDocument(channelId: string, filePath: string): Promise<void> {
+		const resolved = filePath.startsWith("~") ? join(homedir(), filePath.slice(1)) : filePath;
+		const buffer = await readFile(resolved);
+		const form = new FormData();
+		form.append("payload_json", JSON.stringify({ content: "" }));
+		form.append("files[0]", new Blob([buffer]), basename(resolved));
+		await this.rest(`/channels/${channelId}/messages`, { method: "POST", body: form });
+	}
+
 	private async addReaction(channelId: string, messageId: string, emoji: string): Promise<void> {
 		await this.rest(`/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}/@me`, {
 			method: "PUT",
@@ -177,19 +221,26 @@ export class DiscordBridge {
 	/** Remote-only confirm (no TUI): Approve/Deny reactions on the active channel. */
 	remoteConfirm(title: string, message: string): Promise<boolean> | undefined {
 		const channelId = this.activeChannelId;
-		if (channelId === undefined) return undefined;
+		const userId = this.activeUserId;
+		if (channelId === undefined || userId === undefined) return undefined;
 		return new Promise<boolean>((resolve) => {
 			const requestId = randomUUID();
-			const entry: { waiter: (ok: boolean) => void; messageId: string | undefined } = {
-				waiter: (ok) => {
+			const timeout = this.options.confirmTimeoutMs ?? 5 * 60 * 1000;
+			const entry = {
+				waiter: (ok: boolean) => {
+					const current = this.confirmWaiters.get(requestId);
+					if (!current) return;
+					clearTimeout(current.timer);
 					this.confirmWaiters.delete(requestId);
 					resolve(ok);
 				},
-				messageId: undefined,
+				messageId: undefined as string | undefined,
+				channelId,
+				userId,
+				timer: undefined as unknown as ReturnType<typeof setTimeout>,
 			};
+			entry.timer = setTimeout(() => entry.waiter(false), timeout);
 			this.confirmWaiters.set(requestId, entry);
-			const timeout = this.options.confirmTimeoutMs ?? 5 * 60 * 1000;
-			setTimeout(() => entry.waiter(false), timeout);
 			void this.sendText(channelId, `❓ ${title}\n\n${message}\n\nReact ✅ to approve, ❌ to deny.`).then(
 				(messageId) => {
 					try {
@@ -216,15 +267,13 @@ export class DiscordBridge {
 		opts?: { signal?: AbortSignal },
 	): Promise<string | undefined> {
 		const channelId = this.activeChannelId;
+		const userId = this.activeUserId;
 		const tuiPromise = tui(title, options);
-		if (channelId === undefined || options.length === 0) return tuiPromise;
+		if (channelId === undefined || userId === undefined || options.length === 0) return tuiPromise;
 		if (options.length > NUMBER_EMOJI.length) return tuiPromise;
 
 		const requestId = randomUUID();
-		const numbered = options.map((option, index) => `${NUMBER_EMOJI[index]} ${option}`).join("\n");
-		await this.sendText(channelId, `❓ ${title}\n\n${numbered}\n\nReact with a number.`).catch(() => {});
-
-		return new Promise<string | undefined>((resolve) => {
+		const selection = new Promise<string | undefined>((resolve) => {
 			let settled = false;
 			const finish = (value: string | undefined) => {
 				if (settled) return;
@@ -234,10 +283,23 @@ export class DiscordBridge {
 				resolve(value);
 			};
 			const timer = setTimeout(() => finish(undefined), this.options.dialogTimeoutMs ?? 10 * 60 * 1000);
-			this.pendingSelects.set(requestId, { options, resolve: finish });
+			this.pendingSelects.set(requestId, {
+				options,
+				resolve: finish,
+				messageId: undefined,
+				channelId,
+				userId,
+			});
 			opts?.signal?.addEventListener("abort", () => finish(undefined), { once: true });
 			void tuiPromise.then((value) => finish(value));
 		});
+		const numbered = options.map((option, index) => `${NUMBER_EMOJI[index]} ${option}`).join("\n");
+		const messageId = await this.sendText(channelId, `❓ ${title}\n\n${numbered}\n\nReact with a number.`).catch(
+			() => undefined,
+		);
+		const pending = this.pendingSelects.get(requestId);
+		if (pending) pending.messageId = messageId;
+		return selection;
 	}
 
 	/** ask_question free text: the next message from the same channel answers it. */
@@ -247,8 +309,9 @@ export class DiscordBridge {
 		opts?: { signal?: AbortSignal },
 	): Promise<string | undefined> {
 		const channelId = this.activeChannelId;
+		const userId = this.activeUserId;
 		const tuiPromise = tui(title);
-		if (channelId === undefined) return tuiPromise;
+		if (channelId === undefined || userId === undefined) return tuiPromise;
 		const pending = new Promise<string | undefined>((resolve) => {
 			let settled = false;
 			const finish = (value: string | undefined) => {
@@ -259,7 +322,7 @@ export class DiscordBridge {
 				resolve(value);
 			};
 			const timer = setTimeout(() => finish(undefined), this.options.dialogTimeoutMs ?? 10 * 60 * 1000);
-			this.pendingTextRequest = { channelId, resolve: finish };
+			this.pendingTextRequest = { channelId, userId, resolve: finish };
 			opts?.signal?.addEventListener("abort", () => finish(undefined), { once: true });
 			void tuiPromise.then((value) => finish(value));
 		});
@@ -270,6 +333,14 @@ export class DiscordBridge {
 	// ---------------------------------------------------------------------
 	// Session events
 	// ---------------------------------------------------------------------
+
+	/** Bind confirmations/dialogs to the authorized actor whose queued turn actually started. */
+	handleTurnStart(message: AgentMessage): void {
+		const text = lastUserMessageText([message]);
+		const entry = this.pendingDiscord.find((candidate) => text !== undefined && textsMatch(candidate.text, text));
+		this.activeChannelId = entry?.channelId;
+		this.activeUserId = entry?.userId;
+	}
 
 	/** Forward the terminal response to the channel that started the turn. */
 	async handleAgentEnd(messages: readonly AgentMessage[], willRetry: boolean): Promise<void> {
@@ -283,9 +354,12 @@ export class DiscordBridge {
 		this.pendingDiscord.splice(index, 1);
 		try {
 			const raw = extractAssistantText(messages);
+			const { clean, paths } = extractMediaMarkers(raw);
 			const tools = summarizeToolCalls(messages);
-			const body = [raw, tools ? `\n${tools}` : ""].join("").trim();
-			await this.sendText(entry.channelId, body || "Done.");
+			const body = [clean, tools ? `\n${tools}` : ""].join("").trim();
+			if (body) await this.sendText(entry.channelId, body);
+			else if (paths.length === 0) await this.sendText(entry.channelId, "Done.");
+			for (const path of paths) await this.sendDocument(entry.channelId, path).catch(() => {});
 		} catch (error) {
 			console.warn(
 				`[discord] failed to forward response: ${error instanceof Error ? error.message : String(error)}`,
@@ -309,12 +383,15 @@ export class DiscordBridge {
 			this.running = false;
 			return;
 		}
-		const ws = new WebSocketCtor(GATEWAY_URL) as unknown as GatewaySocket;
+		const gatewayUrl =
+			this.sessionId && this.sequence !== null ? (this.resumeGatewayUrl ?? GATEWAY_URL) : GATEWAY_URL;
+		const url = gatewayUrl.includes("?") ? gatewayUrl : `${gatewayUrl}/?v=10&encoding=json`;
+		const ws = new WebSocketCtor(url) as unknown as GatewaySocket;
 		this.ws = ws;
 
 		ws.onopen = () => {
-			this.reconnectAttempts = 0;
-			this.sendGateway({ op: 2, d: this.identifyPayload() });
+			// Discord requires IDENTIFY/RESUME after the server's HELLO payload.
+			// Reconnect backoff resets only after READY/RESUMED, not a bare TCP open.
 		};
 		ws.onmessage = (event) => {
 			if (typeof event.data !== "string") return;
@@ -326,8 +403,21 @@ export class DiscordBridge {
 				console.warn(`[discord] bad gateway payload: ${error instanceof Error ? error.message : String(error)}`);
 			}
 		};
-		ws.onclose = () => {
+		ws.onclose = (event) => {
 			this.stopHeartbeat();
+			if (this.ws === ws) this.ws = undefined;
+			// Authentication, intent, and shard failures cannot recover by retrying.
+			if ([4004, 4010, 4011, 4013, 4014].includes(event.code)) {
+				this.running = false;
+				console.warn(`[discord] gateway closed permanently (${event.code}): ${event.reason}`);
+				return;
+			}
+			// Invalid sequence/session timeout requires a fresh IDENTIFY.
+			if (event.code === 4007 || event.code === 4009) {
+				this.sessionId = undefined;
+				this.resumeGatewayUrl = undefined;
+				this.sequence = null;
+			}
 			if (this.running) this.scheduleReconnect();
 		};
 		ws.onerror = () => {
@@ -348,6 +438,14 @@ export class DiscordBridge {
 		};
 	}
 
+	private resumePayload(): Record<string, unknown> {
+		return {
+			token: this.options.token,
+			session_id: this.sessionId,
+			seq: this.sequence,
+		};
+	}
+
 	private sendGateway(payload: Record<string, unknown>): void {
 		this.wsSocket()?.send(JSON.stringify(payload));
 	}
@@ -357,6 +455,18 @@ export class DiscordBridge {
 			clearInterval(this.heartbeatTimer);
 			this.heartbeatTimer = undefined;
 		}
+		this.heartbeatAwaitingAck = false;
+	}
+
+	private sendHeartbeat(): void {
+		if (this.heartbeatAwaitingAck) {
+			// A missed ACK means this connection is zombied. Reconnect and RESUME
+			// instead of remaining visibly online while silently missing messages.
+			this.wsSocket()?.close(4000, "heartbeat ACK timeout");
+			return;
+		}
+		this.sendGateway({ op: 1, d: this.sequence });
+		this.heartbeatAwaitingAck = true;
 	}
 
 	private scheduleReconnect(): void {
@@ -366,12 +476,7 @@ export class DiscordBridge {
 		this.reconnectTimer = setTimeout(() => {
 			this.reconnectTimer = undefined;
 			if (!this.running) return;
-			if (this.sessionId && this.sequence !== null) {
-				// Resume before re-identifying so the bot keeps its session.
-				this.connect();
-			} else {
-				this.connect();
-			}
+			this.connect();
 		}, delay);
 	}
 
@@ -380,16 +485,29 @@ export class DiscordBridge {
 			case 10: {
 				const hello = payload.d as { heartbeat_interval: number } | undefined;
 				this.heartbeatIntervalMs = hello?.heartbeat_interval ?? 41_250;
-				this.heartbeatWithSeq = false;
 				this.stopHeartbeat();
-				this.heartbeatTimer = setInterval(() => {
-					this.sendGateway({ op: 1, d: this.heartbeatWithSeq ? this.sequence : null });
-				}, this.heartbeatIntervalMs);
+				if (this.sessionId && this.sequence !== null) {
+					this.sendGateway({ op: 6, d: this.resumePayload() });
+				} else {
+					this.sendGateway({ op: 2, d: this.identifyPayload() });
+				}
+				this.sendHeartbeat();
+				this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), this.heartbeatIntervalMs);
 				break;
 			}
 			case 11:
-				// HEARTBEAT_ACK — subsequent heartbeats carry the sequence for resume.
-				this.heartbeatWithSeq = true;
+				this.heartbeatAwaitingAck = false;
+				break;
+			case 1:
+				this.sendHeartbeat();
+				break;
+			case 9:
+				if (payload.d !== true) {
+					this.sessionId = undefined;
+					this.resumeGatewayUrl = undefined;
+					this.sequence = null;
+				}
+				this.wsSocket()?.close(4000, "invalid session");
 				break;
 			case 7:
 				// Server requests a reconnect.
@@ -406,12 +524,17 @@ export class DiscordBridge {
 		const data = payload.d as Record<string, unknown> | undefined;
 		switch (eventName) {
 			case "READY": {
-				const ready = data as { session_id?: string; user?: { id?: string } } | undefined;
+				const ready = data as
+					| { session_id?: string; resume_gateway_url?: string; user?: { id?: string } }
+					| undefined;
 				this.sessionId = ready?.session_id;
+				this.resumeGatewayUrl = ready?.resume_gateway_url;
 				this.selfId = ready?.user?.id;
+				this.reconnectAttempts = 0;
 				break;
 			}
 			case "RESUMED":
+				this.reconnectAttempts = 0;
 				break;
 			case "MESSAGE_CREATE":
 				await this.handleMessage(data as unknown as DiscordMessage);
@@ -422,8 +545,12 @@ export class DiscordBridge {
 		}
 	}
 
-	private isAllowed(channelId: string): boolean {
-		return this.options.allowlist.includes(channelId);
+	private isAllowed(channelId: string, userId: string | undefined): boolean {
+		return (
+			userId !== undefined &&
+			this.options.allowlist.includes(channelId) &&
+			this.options.userAllowlist.includes(userId)
+		);
 	}
 
 	/**
@@ -441,20 +568,24 @@ export class DiscordBridge {
 			statusText: this.options.getStatus?.() ?? "",
 		};
 		const reply = handleBridgeCommand(parsed, { context });
-		this.activeChannelId = channelId;
-		void this.notifyTaskResult(reply).catch(() => {});
+		void this.sendText(channelId, reply).catch(() => {});
 		return reply;
 	}
 
 	private async handleMessage(message: DiscordMessage): Promise<void> {
 		if (message.author?.id === this.selfId || message.author?.bot) return;
 		const channelId = message.channel_id;
-		if (!this.isAllowed(channelId)) return;
+		const userId = message.author?.id;
+		if (userId === undefined || !this.isAllowed(channelId, userId)) return;
 		const text = message.content?.trim();
 		if (!text) return;
 
 		// A pending free-text answer consumes this message (bound to its channel).
-		if (this.pendingTextRequest && this.pendingTextRequest.channelId === channelId) {
+		if (
+			this.pendingTextRequest &&
+			this.pendingTextRequest.channelId === channelId &&
+			this.pendingTextRequest.userId === userId
+		) {
 			const request = this.pendingTextRequest;
 			this.pendingTextRequest = undefined;
 			request.resolve(text);
@@ -478,12 +609,14 @@ export class DiscordBridge {
 			return;
 		}
 
-		this.activeChannelId = channelId;
-		this.pendingDiscord.push({ channelId, text });
+		this.pendingDiscord.push({ channelId, userId, text });
+		void this.rest(`/channels/${channelId}/typing`, { method: "POST" }).catch(() => {});
 		try {
 			await this.options.prompt(text, { streamingBehavior: "followUp" });
 		} catch (error) {
-			const index = this.pendingDiscord.findIndex((entry) => entry.text === text);
+			const index = this.pendingDiscord.findIndex(
+				(entry) => entry.channelId === channelId && entry.userId === userId && entry.text === text,
+			);
 			if (index !== -1) this.pendingDiscord.splice(index, 1);
 			await this.sendText(
 				channelId,
@@ -494,7 +627,7 @@ export class DiscordBridge {
 
 	private async handleReaction(reaction: DiscordReaction): Promise<void> {
 		if (reaction.user_id === this.selfId) return;
-		if (!this.isAllowed(reaction.channel_id)) return;
+		if (!this.isAllowed(reaction.channel_id, reaction.user_id)) return;
 		const emoji = reaction.emoji?.name;
 
 		// Resolve an active option selection by reaction number.
@@ -502,7 +635,12 @@ export class DiscordBridge {
 			const selectIndex = NUMBER_EMOJI.indexOf(emoji as (typeof NUMBER_EMOJI)[number]);
 			if (selectIndex >= 0) {
 				for (const [requestId, pending] of [...this.pendingSelects.entries()]) {
-					if (selectIndex < pending.options.length) {
+					if (
+						pending.channelId === reaction.channel_id &&
+						pending.userId === reaction.user_id &&
+						pending.messageId === reaction.message_id &&
+						selectIndex < pending.options.length
+					) {
 						pending.resolve(pending.options[selectIndex]);
 						this.pendingSelects.delete(requestId);
 						return;
@@ -515,8 +653,12 @@ export class DiscordBridge {
 		// confirmation message can't approve a new/current one).
 		if (emoji === "✅" || emoji === "❌") {
 			for (const entry of [...this.confirmWaiters.values()]) {
-				// Only react to the exact confirmation message this waiter is bound to.
-				if (entry.messageId !== undefined && entry.messageId !== reaction.message_id) {
+				if (
+					entry.channelId !== reaction.channel_id ||
+					entry.userId !== reaction.user_id ||
+					entry.messageId === undefined ||
+					entry.messageId !== reaction.message_id
+				) {
 					continue;
 				}
 				entry.waiter(emoji === "✅");
@@ -546,5 +688,10 @@ export class DiscordBridge {
 		}
 		this.wsSocket()?.close(1000);
 		this.ws = undefined;
+		this.startedAt = undefined;
+		for (const pending of [...this.confirmWaiters.values()]) pending.waiter(false);
+		for (const pending of [...this.pendingSelects.values()]) pending.resolve(undefined);
+		this.pendingTextRequest?.resolve(undefined);
+		this.pendingTextRequest = undefined;
 	}
 }

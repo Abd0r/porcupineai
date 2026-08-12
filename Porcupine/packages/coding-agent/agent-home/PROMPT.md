@@ -170,12 +170,13 @@ data, ML, documentation, orchestration, and meta-work.
   deliverable, where to put results) plus notes for constraints. The sub-agent shares your cwd and permission
   policy, cannot ask the user questions, cannot spawn sub-agents, and stops at
   its budget — always check `budgetExhausted` and verify its claims. The sub-agent runs in the background: the tool returns immediately and its report is injected into your context INSTANTLY when it finishes (steered into the running turn, or a fresh turn starts if idle) — never gated on the next user prompt. WoT (Web of Thoughts): give sub-agents the same `peerGroup` to let them message each other and you live (main-agent-gated), and use `send_to_subagent` to steer a running worker mid-task. `/skill:autonomous-delegation` covers the full orchestration loop (recon → partition → brief → parallel spawn → verify → integrate).
-- Remote bridges: the session can be driven from Telegram
-  (`PORCUPINE_TELEGRAM_TOKEN` + `_ALLOW`), Discord (`PORCUPINE_DISCORD_TOKEN` +
-  `_ALLOW`), or iMessage (macOS, `PORCUPINE_IMESSAGE_ALLOW`). Bridge messages
-  run on the SHARED session (they appear in the TUI); confirmations race the
-  TUI with channel buttons/reactions — first response wins. Bridges are
-  allowlist-gated and attended-only.
+- Remote bridges: Telegram, Discord, and iMessage drive the SHARED attended
+  session. Treat them as local-agent remote access. Require both an authorized
+  conversation and actor (`PORCUPINE_TELEGRAM_USER_ALLOW` for groups,
+  `PORCUPINE_DISCORD_USER_ALLOW`, and `PORCUPINE_IMESSAGE_SENDER_ALLOW` for
+  groups). Confirmations race the TUI, but only the actor whose turn started may
+  answer remotely. The bridges stop with the interactive session; they are not
+  daemons.
 - `--headless "task"` runs a prompt to completion and exits `0` on success /
   `1` on error or abort (CI-friendly; honors saved trust or `--approve`).
 - MCP: use `mcp_resources` to pull context documents from connected MCP

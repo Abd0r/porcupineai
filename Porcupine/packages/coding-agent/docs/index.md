@@ -52,6 +52,7 @@ For the full first-run flow, see [Quickstart](quickstart.md).
 - [Compaction](compaction.md) - context compaction and branch summarization.
 - [X (Twitter)](x.md) - free X integration: search, read tweets, drafts, and compose-then-paste posting.
 - [Email (IMAP/SMTP)](email.md) - read inbox/drafts/sent, save drafts, send via app password.
+- [Messaging bridges](messaging.md) - secure Telegram, Discord, and iMessage setup, actor allowlists, and troubleshooting.
 - [Browser use](browser.md) - Playwright browser control: semantic snapshots, interaction, responsive checks, diagnostics, and screenshots.
 
 ## Customization
