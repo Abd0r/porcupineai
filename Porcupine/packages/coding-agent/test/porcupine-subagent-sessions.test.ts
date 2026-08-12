@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentMessage } from "@porcupineai/agent-core";
@@ -145,6 +145,44 @@ describe("persistSubagentSession", () => {
 });
 
 describe("listSubagentSessions", () => {
+	it("breaks exact created+mtime ties deterministically by session id", async () => {
+		const sessionDir = makeTempStore();
+		await persistSubagentSession({
+			sessionDir,
+			subagentId: "sa-1",
+			task: "first",
+			result: makeResult(),
+		});
+		await persistSubagentSession({
+			sessionDir,
+			subagentId: "sa-2",
+			task: "second",
+			result: makeResult(),
+		});
+
+		// Force both files to share the same created time and mtime so only
+		// the deterministic tie-break can order them.
+		const files = readdirSync(sessionDir).filter((f) => f.endsWith(".jsonl"));
+		const now = new Date("2026-01-01T00:00:00.000Z");
+		for (const file of files) {
+			const p = join(sessionDir, file);
+			const raw = readFileSync(p, "utf8");
+			const line = raw.split("\n")[0];
+			const entry = JSON.parse(line) as { timestamp?: number };
+			if (typeof entry.timestamp === "number") {
+				writeFileSync(p, raw.replace(String(entry.timestamp), String(now.getTime())));
+			}
+			utimesSync(p, now, now);
+		}
+
+		const sessions = await listSubagentSessions(sessionDir);
+		expect(sessions.map((s) => s.subagentId).sort()).toEqual(["sa-1", "sa-2"]);
+		// Deterministic: the same input always yields the same order, regardless
+		// of directory iteration order.
+		expect(sessions[0]!.subagentId).toBe("sa-2");
+		expect(sessions[1]!.subagentId).toBe("sa-1");
+	});
+
 	it("returns subagent-tagged sessions newest first", async () => {
 		const sessionDir = makeTempStore();
 		await persistSubagentSession({

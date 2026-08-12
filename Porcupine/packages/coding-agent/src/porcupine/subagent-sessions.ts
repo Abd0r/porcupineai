@@ -182,8 +182,12 @@ export async function listSubagentSessions(sessionDir?: string, limit?: number):
 		const aCreated = a.created.getTime();
 		const bCreated = b.created.getTime();
 		if (aCreated !== bCreated) return bCreated - aCreated;
-		// Same-millisecond creates happen in quick succession; break ties by file mtime.
-		return fileMtime(b.path) - fileMtime(a.path);
+		const aMtime = fileMtime(a.path);
+		const bMtime = fileMtime(b.path);
+		if (aMtime !== bMtime) return bMtime - aMtime;
+		// Full tie: same-millisecond creates with identical mtimes. Break by
+		// session id so ordering never depends on directory iteration order.
+		return b.id.localeCompare(a.id);
 	});
 
 	const target = limit !== undefined ? subagents.slice(0, limit) : subagents;
