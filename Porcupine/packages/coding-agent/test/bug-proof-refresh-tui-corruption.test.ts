@@ -48,6 +48,7 @@ describe("/refresh TUI integrity vs bridge error spam", () => {
 				// absence of WebSocket aborts before any network I/O.
 				token: "repro.invalid.token",
 				allowlist: [],
+				userAllowlist: [],
 				prompt: async () => {},
 				getStatus: () => "",
 			});

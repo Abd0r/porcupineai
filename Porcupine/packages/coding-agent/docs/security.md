@@ -58,15 +58,19 @@ MCP servers are external tools — treat them as untrusted. Porcupine's MCP clie
 Porcupine can be controlled from a phone or chat channel via the remote
 bridges. Treat any bridge as remote access to a local agent session:
 
-- **Allowlist-gated**: Telegram only listens to chat ids in
-  `PORCUPINE_TELEGRAM_ALLOW`; Discord only listens to channel ids in
-  `PORCUPINE_DISCORD_ALLOW`; iMessage only listens to chats in
-  `PORCUPINE_IMESSAGE_ALLOW`. Everything else is ignored.
+- **Conversation and actor gated**: Telegram requires an allowed chat and, for
+  groups, a sender in `PORCUPINE_TELEGRAM_USER_ALLOW`. Discord requires both an
+  allowed channel (`PORCUPINE_DISCORD_ALLOW`) and an allowed user
+  (`PORCUPINE_DISCORD_USER_ALLOW`). iMessage direct chats infer their participant;
+  group chats require `PORCUPINE_IMESSAGE_SENDER_ALLOW`. A member of an allowed
+  group who is not an authorized actor cannot prompt, run control commands,
+  answer questions, or approve actions.
 - **Attended-only**: every bridge runs inside the interactive TUI session.
   None of them start headless and none are daemons.
 - **Same approval surface**: Ask-mode confirmations (bash commands, file
   mutations) race the TUI dialog with remote buttons/reactions/replies; the
-  first response wins. Unauthorized chats never see these prompts.
+  first valid response wins. Dialogs are bound to the actor whose turn actually
+  started, and replies or reactions from other participants are ignored.
 - **Tokens are credentials**: keep `PORCUPINE_TELEGRAM_TOKEN` and
   `PORCUPINE_DISCORD_TOKEN` in `~/.porcupine/agent/.env` (chmod 600) or your
   environment; never commit them. iMessage needs no token (it uses the signed-in

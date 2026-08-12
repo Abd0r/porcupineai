@@ -306,7 +306,7 @@ prompts (remote control from your phone):
 !help              list the available commands
 ```
 
-Only the owner chat may issue them; unknown commands get a safe usage hint.
+Only an authorized actor in an authorized chat/channel may issue them; unknown commands get a safe usage hint. Authorization checks both the conversation and the sender, so another member of an allowed group cannot prompt the agent, answer a dialog, approve an action, or queue a task.
 
 #### Telegram (`PORCUPINE_TELEGRAM_TOKEN`)
 
@@ -327,7 +327,8 @@ A bot token from @BotFather starts the Telegram bridge on launch:
   `/help`) and shows a 🟢 Online / 🔴 Offline indicator on its profile.
 - **Messages queue while the agent is busy.** If you send a message mid-task,
   it is not lost — it runs as a follow-up after the current turn, and the
-  response still comes back to Telegram.
+  response still comes back to Telegram. A typing indicator acknowledges an
+  accepted prompt immediately.
 - **Restart-safe polling.** After a restart, any updates that accumulated while
   the bridge was offline are drained without being processed, so old messages
   never re-trigger the agent and stale buttons never re-answer. Confirmations
@@ -340,33 +341,42 @@ A bot token from @BotFather starts the Telegram bridge on launch:
 Bot commands: `/start` (welcome + session info), `/status` (session, cwd, mode),
 `/help`. Any other message is sent to the agent as a prompt.
 
-**Security:** only chats in `PORCUPINE_TELEGRAM_ALLOW` (comma-separated chat
-ids) are allowed to talk to the bot. With an empty allowlist, only `/start`
+**Security:** chats must be in `PORCUPINE_TELEGRAM_ALLOW` (comma-separated chat
+ids). Private chats additionally require Telegram's sender id to equal the chat
+id. Group chats fail closed unless the sender is explicitly listed in
+`PORCUPINE_TELEGRAM_USER_ALLOW`. With an empty chat allowlist, only `/start`
 responds — it reports the chat id you need to authorize.
 
 #### Discord (`PORCUPINE_DISCORD_TOKEN`)
 
-Set a bot token and `PORCUPINE_DISCORD_ALLOW` (comma-separated channel ids) to
-use a Discord channel as a remote control:
+Set a bot token, `PORCUPINE_DISCORD_ALLOW` (comma-separated channel ids), and
+`PORCUPINE_DISCORD_USER_ALLOW` (comma-separated user ids) to use Discord as a
+remote control. Both the channel and the sender must match:
 
 - **Message the channel** → runs on the shared session, response comes back to
   the channel.
 - **Ask-mode confirmations** arrive as `✅`/`❌` reactions on the confirm
   message, racing the TUI dialog (first response wins).
 - **`ask_question` options** arrive as numbered reactions (`1️⃣ 2️⃣ …`);
-  free-text questions become "Reply with your answer" — the next message from
-  that channel answers it.
+  free-text questions become "Reply with your answer" — only the same
+  authorized user in that channel can answer it. Reactions are bound to the
+  exact prompt message, so stale reactions cannot answer a newer dialog.
 - **Commands:** `/status` · `/help`. Bot messages and messages from the bot
   itself are ignored; channels outside the allowlist are ignored.
+- Accepted prompts trigger Discord's typing indicator. `MEDIA:/path/to/file`
+  lines send local files as native attachments.
 - The bridge is **zero-dependency**: it uses Node's built-in WebSocket for the
-  gateway (auto-resume on reconnect) and REST for sending, with 429 backoff
-  and 2000-char chunking.
+  gateway and REST for sending, with bounded 429 backoff and 2000-char
+  chunking. Reconnects use Discord Opcode 6 session resume; missed heartbeat
+  acknowledgements force a reconnect instead of leaving a zombie connection.
 
 #### iMessage (`PORCUPINE_IMESSAGE_ALLOW`) — macOS only
 
 Set `PORCUPINE_IMESSAGE_ALLOW` (comma-separated chat ids like
 `iMessage;-;+1234567890`, or phone/email handles that are resolved at startup)
-to use the Messages app as a remote control:
+to use the Messages app as a remote control. Direct chats infer their sole
+participant. Group chats additionally require explicit senders in
+`PORCUPINE_IMESSAGE_SENDER_ALLOW`:
 
 - **Text the chat** → runs on the shared session, response comes back by
   iMessage.
@@ -378,9 +388,10 @@ to use the Messages app as a remote control:
   (`osascript`); sending chunks long responses.
 
 All three bridges forward responses only to the channel that started the turn
-(response provenance), queue messages while the agent is busy (never lost),
-and scope confirmations per-request (a late tap on an old button can never
-approve a newer one).
+(response provenance), queue messages while the agent is busy, bind remote
+dialogs to the authorized actor whose turn actually started, and fail closed
+when a reply/reaction comes from a different participant. Telegram and Discord
+also scope interactive controls to their exact request or message.
 
 ### Scientific Research
 

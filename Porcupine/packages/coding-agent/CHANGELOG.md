@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Messaging
+
+- Hardened Telegram, Discord, and iMessage bridges with separate conversation and actor authorization. Untrusted group participants cannot prompt the local agent, run owner commands, answer questions, or approve actions.
+- Bound remote dialogs to the authorized actor whose queued turn actually started, preventing later follow-ups from stealing an in-flight approval target.
+- Added real Discord Gateway resume and heartbeat recovery, typing indicators, exact-message reaction scoping, and native `MEDIA:` attachments.
+- Added Telegram typing indicators, validated Bot API errors, bounded rate-limit retries, and deterministic dialog cleanup.
+- Added iMessage sender-aware direct/group routing tests and a dedicated messaging setup and troubleshooting guide.
+
 ## [0.1.64] - 2026-08-11
 
 ### Performance

@@ -86,10 +86,13 @@ These variables are read by Porcupine itself:
 | `PORCUPINE_SHARE_VIEWER_URL` (legacy `PI_SHARE_VIEWER_URL`) | Override the base URL used by `/share` |
 | `PORCUPINE_HARDWARE_CURSOR` (legacy `PI_HARDWARE_CURSOR`) | Set to `1` to show the hardware cursor; see [Terminal setup](terminal-setup.md) |
 | `PORCUPINE_TELEGRAM_TOKEN` | Bot token from @BotFather; when set, the interactive TUI starts the Telegram bridge (messages mirror into the shared session)
-| `PORCUPINE_TELEGRAM_ALLOW` | Comma-separated chat ids allowed to talk to the bridge; empty allowlist means only `/start` responds (it reports the chat id to authorize) |
+| `PORCUPINE_TELEGRAM_ALLOW` | Comma-separated chat ids allowed to reach the bridge; empty means only `/start` responds (it reports the chat id to authorize) |
+| `PORCUPINE_TELEGRAM_USER_ALLOW` | Comma-separated Telegram user ids authorized inside allowed group chats; private chats authenticate by matching sender id to chat id |
 | `PORCUPINE_DISCORD_TOKEN` | Discord bot token; when set, the interactive TUI starts the Discord bridge (messages mirror into the shared session) |
-| `PORCUPINE_DISCORD_ALLOW` | Comma-separated channel ids allowed to talk to the Discord bridge |
-| `PORCUPINE_IMESSAGE_ALLOW` | Comma-separated chat ids (or phone/email handles) allowed to talk to the iMessage bridge (macOS only) |
+| `PORCUPINE_DISCORD_ALLOW` | Comma-separated Discord channel ids in which the bridge may operate |
+| `PORCUPINE_DISCORD_USER_ALLOW` | Comma-separated Discord user ids allowed to prompt, control, or approve work; required in addition to the channel allowlist |
+| `PORCUPINE_IMESSAGE_ALLOW` | Comma-separated chat ids (or phone/email handles) in which the iMessage bridge may operate (macOS only) |
+| `PORCUPINE_IMESSAGE_SENDER_ALLOW` | Comma-separated phone/email senders authorized inside allowed iMessage group chats; direct chats infer their participant |
 | `VISUAL`, `EDITOR` | External editor fallback when `externalEditor` is unset |
 | `HTTP_PROXY`, `HTTPS_PROXY` | Proxy outbound HTTP requests |
 
@@ -101,5 +104,5 @@ At CLI startup Porcupine loads `<agent home>/.env` (usually
 `~/.porcupine/agent/.env`) with dotenv semantics: `KEY=VALUE` lines, `#`
 comments, single/double quotes, and an optional `export` prefix. Variables
 already set in the shell environment win over the file. This is the
-recommended place for `PORCUPINE_TELEGRAM_TOKEN`,
-`PORCUPINE_DISCORD_TOKEN`, and their allowlists — keep the file `chmod 600` and never commit it.
+recommended place for bridge tokens and their chat/channel plus sender
+allowlists — keep the file `chmod 600` and never commit it.
