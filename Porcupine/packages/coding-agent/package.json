@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/coding-agent",
-	"version": "0.1.64",
+	"version": "0.1.65",
 	"description": "Porcupine autonomous terminal AI agent",
 	"type": "module",
 	"piConfig": {
@@ -49,11 +49,11 @@
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "1.30.0",
 		"@moonshine-ai/moonshine-js": "0.1.29",
-		"@porcupineai/agent-core": "^0.1.64",
-		"@porcupineai/ai": "^0.1.64",
-		"@porcupineai/client": "^0.1.64",
-		"@porcupineai/protocol": "^0.1.64",
-		"@porcupineai/tui": "^0.1.64",
+		"@porcupineai/agent-core": "^0.1.65",
+		"@porcupineai/ai": "^0.1.65",
+		"@porcupineai/client": "^0.1.65",
+		"@porcupineai/protocol": "^0.1.65",
+		"@porcupineai/tui": "^0.1.65",
 		"@silvia-odwyer/photon-node": "0.3.4",
 		"chalk": "5.6.2",
 		"cross-spawn": "7.0.6",

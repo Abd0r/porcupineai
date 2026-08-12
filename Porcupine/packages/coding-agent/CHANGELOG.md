@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.1.65] - 2026-08-12
+
+### Repository experience
+
+- Redesigned the public README with an evidence-led structure: 60-second start, autonomy modes, capability faculty table, surfaces, providers, published benchmark results with methodology, safety boundaries, and documentation matrix.
+- Added structured issue and pull request templates with work-type, area, status, priority, and platform labels, plus a contribution guide.
+- Modernized private security reporting (GitHub advisories, email, X) and enabled automated dependency updates.
+
+### Security and dependencies
+
+- Upgraded security-sensitive dependencies (MCP, Undici, Sharp, Nanoid, sandbox runtime, Gondolin) and cleared all open Dependabot alerts; root, sandbox, and Gondolin audits report zero vulnerabilities.
+- Enabled Dependabot version and security updates with weekly cadence.
+
 ### Remote commands
 
 - Added a discoverable remote slash-command surface for Telegram, Discord, and iMessage. `/commands` lists the full catalog (searchable and paginated), generated from the same sources as the TUI autocomplete (built-ins, prompt templates, skills, extension commands) so it never drifts from the terminal.

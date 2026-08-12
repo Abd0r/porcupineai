@@ -620,6 +620,21 @@ export const IMAGE_MODELS = {
 				cacheWrite: 0,
 			},
 		} satisfies ImagesModel<"openrouter-images">,
+		"x-ai/grok-imagine-image-2.0": {
+			id: "x-ai/grok-imagine-image-2.0",
+			name: "xAI: Grok Imagine Image 2.0",
+			api: "openrouter-images",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			input: ["text", "image"],
+			output: ["image"],
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+		} satisfies ImagesModel<"openrouter-images">,
 		"x-ai/grok-imagine-image-quality": {
 			id: "x-ai/grok-imagine-image-quality",
 			name: "SpaceXAI: Grok Imagine Image Quality",
