@@ -20,6 +20,14 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { AgentMessage } from "@porcupineai/agent-core";
 import { type BridgeCommandContext, handleBridgeCommand, parseBridgeCommand } from "./bridge-commands.ts";
+import type { RemoteSlashResult } from "./remote-command-dispatcher.ts";
+import {
+	buildRemoteCatalog,
+	formatRemoteCommandList,
+	type RemoteCatalog,
+	type RemoteCommandDescriptor,
+	resolveRemoteCommand,
+} from "./remote-slash-commands.ts";
 import { extractAssistantText, lastUserMessageText, summarizeToolCalls, textsMatch } from "./telegram-bridge.ts";
 
 const POLL_INTERVAL_MS = 3000;
@@ -44,6 +52,10 @@ export interface IMessageBridgeOptions {
 	getStatus?: () => string;
 	dialogTimeoutMs?: number;
 	confirmTimeoutMs?: number;
+	/** Canonical slash-command descriptors used for the /commands listing. */
+	getCommands?: () => RemoteCommandDescriptor[];
+	/** Runs a canonical remote command line and returns the reply to send back. */
+	dispatch?: (commandLine: string) => Promise<RemoteSlashResult>;
 }
 
 export class IMessageBridge {
@@ -69,6 +81,8 @@ export class IMessageBridge {
 		| undefined;
 	/** Epoch ms when the bridge started polling; drives the !status uptime line. */
 	private startedAt: number | undefined;
+	/** Materialized remote slash catalog (rebuilt on demand). */
+	private catalog: RemoteCatalog | undefined;
 
 	constructor(options: IMessageBridgeOptions) {
 		this.options = options;
@@ -447,8 +461,18 @@ export class IMessageBridge {
 		if (text === "/help") {
 			await this.sendText(
 				chatId,
-				"Send any message and the agent works on the shared session (shown in the TUI too).\n\nCommands: /status · /help. Confirmations arrive as text (reply APPROVE/DENY); questions as numbered replies.",
+				"Send any message and the agent works on the shared session (shown in the TUI too).\n\nCommands: /status · /help · /commands. Confirmations arrive as text (reply APPROVE/DENY); questions as numbered replies.",
 			);
+			return;
+		}
+		if (text === "/commands" || text.startsWith("/commands ")) {
+			await this.sendText(chatId, this.commandsText(text)).catch(() => {});
+			return;
+		}
+
+		// Any other /command runs through the shared remote dispatcher.
+		if (text.startsWith("/")) {
+			await this.dispatchSlash(chatId, sender, text);
 			return;
 		}
 
@@ -470,6 +494,52 @@ export class IMessageBridge {
 	private statusText(): string {
 		const status = this.options.getStatus?.() ?? "";
 		return `📡 iMessage bridge: ${this.running ? "polling" : "stopped"}\n${status}`.trim();
+	}
+
+	/** Reply with the discoverable /commands listing (searchable, paginated). */
+	private commandsText(text: string): string {
+		const query = text.replace(/^\/commands\b/i, "").trim();
+		const catalog = this.catalog ?? this.buildCatalog();
+		if (!catalog) {
+			return "/commands — remote command list\nNo commands available. Type /status or /help for the bridge controls.";
+		}
+		return formatRemoteCommandList(catalog, query || undefined);
+	}
+
+	private buildCatalog(): RemoteCatalog | undefined {
+		const descriptors = this.options.getCommands?.() ?? [];
+		if (descriptors.length === 0) return undefined;
+		return buildRemoteCatalog(descriptors, "imessage");
+	}
+
+	/** Run one remote slash command line through the shared dispatcher. */
+	private async dispatchSlash(chatId: string, sender: string | undefined, text: string): Promise<void> {
+		const dispatch = this.options.dispatch;
+		if (!dispatch) {
+			await this.sendText(chatId, "Remote slash commands are not available in this build.").catch(() => {});
+			return;
+		}
+		let commandLine = text;
+		const catalog = this.catalog ?? this.buildCatalog();
+		if (catalog) {
+			const spaceIndex = text.indexOf(" ");
+			const alias = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
+			const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
+			const resolved = resolveRemoteCommand(catalog, alias, args);
+			if (resolved) commandLine = resolved.commandLine;
+		}
+		const result = await dispatch(commandLine).catch(() => ({ kind: "not-found" as const, text: "Command failed." }));
+		if (result.kind === "text") {
+			if (result.notificationTarget && sender !== undefined) {
+				this.activeChatId = chatId;
+				this.activeSender = sender;
+			}
+			await this.sendText(chatId, result.text).catch(() => {});
+			return;
+		}
+		if (result.kind === "declined" || result.kind === "not-found") {
+			await this.sendText(chatId, result.text).catch(() => {});
+		}
 	}
 
 	/** Start polling allowed chats. Idempotent. */

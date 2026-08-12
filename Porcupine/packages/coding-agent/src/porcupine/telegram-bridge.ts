@@ -22,6 +22,14 @@ import { basename, join } from "node:path";
 import type { AgentMessage } from "@porcupineai/agent-core";
 import type { AssistantMessage } from "@porcupineai/ai";
 import { type BridgeCommandContext, handleBridgeCommand, parseBridgeCommand } from "./bridge-commands.ts";
+import type { RemoteSlashResult } from "./remote-command-dispatcher.ts";
+import {
+	buildRemoteCatalog,
+	formatRemoteCommandList,
+	type RemoteCatalog,
+	type RemoteCommandDescriptor,
+	resolveRemoteCommand,
+} from "./remote-slash-commands.ts";
 
 export interface TelegramBridgeOptions {
 	/** Bot token from @BotFather. */
@@ -46,6 +54,16 @@ export interface TelegramBridgeOptions {
 	confirmTimeoutMs?: number;
 	/** How long Telegram buttons/reply-wait stay open before resolving empty (leak guard). */
 	dialogTimeoutMs?: number;
+	/**
+	 * Canonical slash-command descriptors (builtins + templates + skills +
+	 * extensions) used to register the Telegram / command menu.
+	 */
+	getCommands?: () => RemoteCommandDescriptor[];
+	/**
+	 * Runs a canonical remote command line ("/task list") and returns the reply
+	 * to send back. Wired by the interactive mode to the shared session.
+	 */
+	dispatch?: (commandLine: string) => Promise<RemoteSlashResult>;
 }
 
 interface TelegramMessage {
@@ -186,6 +204,8 @@ export class TelegramBridge {
 	private consecutiveFailures = 0;
 	/** Epoch ms when the bridge started polling; drives the !status uptime line. */
 	private startedAt: number | undefined;
+	/** Materialized remote slash catalog for this bridge (rebuilt on refresh). */
+	private catalog: RemoteCatalog | undefined;
 
 	constructor(options: TelegramBridgeOptions) {
 		this.options = options;
@@ -484,15 +504,56 @@ export class TelegramBridge {
 		this.pendingTextRequest = undefined;
 	}
 
-	/** Register the bot's / command menu (Hermes-style). */
+	/** Register the bot's / command menu from the live command catalog (Hermes-style). */
 	private async registerCommands(): Promise<void> {
+		this.catalog = this.buildCatalog();
+		const commands = this.registrationEntries();
 		await this.api("setMyCommands", {
-			commands: JSON.stringify([
-				{ command: "start", description: "Connect this chat" },
-				{ command: "status", description: "Session state" },
-				{ command: "help", description: "How to use the agent" },
-			]),
+			commands: JSON.stringify(commands),
 		});
+	}
+
+	/**
+	 * Rebuild the remote catalog and re-register the Telegram menu. Called at
+	 * start() and after a session /reload so new extensions/skills/templates
+	 * become discoverable without a bridge restart.
+	 */
+	async refreshCommands(): Promise<void> {
+		await this.registerCommands().catch((error: unknown) => {
+			console.warn(
+				`[telegram] command registration failed: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		});
+	}
+
+	private buildCatalog(): RemoteCatalog | undefined {
+		const descriptors = this.options.getCommands?.() ?? [];
+		if (descriptors.length === 0) return undefined;
+		return buildRemoteCatalog(descriptors, "telegram");
+	}
+
+	/**
+	 * Top-100 Telegram menu entries: bridge controls first, then commands by
+	 * source rank (builtin < prompt < extension < skill), stable by name.
+	 */
+	private registrationEntries(): Array<{ command: string; description: string }> {
+		const controls = [
+			{ command: "start", description: "Connect this chat" },
+			{ command: "status", description: "Session state" },
+			{ command: "help", description: "How to use the agent" },
+			{ command: "commands", description: "List all remote commands" },
+		];
+		const catalog = this.catalog;
+		if (!catalog) return controls;
+		const rank: Record<string, number> = { builtin: 0, prompt: 1, extension: 2, skill: 3 };
+		const rest = catalog.commands
+			.map((entry) => ({ command: entry.alias, description: entry.description.slice(0, 256) }))
+			.sort((a, b) => {
+				const rankA = rank[catalog.commands.find((c) => c.alias === a.command)?.kind ?? "builtin"] ?? 0;
+				const rankB = rank[catalog.commands.find((c) => c.alias === b.command)?.kind ?? "builtin"] ?? 0;
+				return rankA - rankB || a.command.localeCompare(b.command);
+			});
+		return [...controls, ...rest].slice(0, 100);
 	}
 
 	/** Online/offline indicator on the bot's profile (setMyDescription). */
@@ -684,8 +745,19 @@ export class TelegramBridge {
 		if (text === "/help") {
 			await this.sendText(
 				chatId,
-				"Send any message and the agent works on the shared session (shown in the TUI too).\n\nCommands: /status — session state · /help — this message.\nAsk-mode confirmations arrive as Approve/Deny buttons; questions arrive as option buttons.",
+				"Send any message and the agent works on the shared session (shown in the TUI too).\n\nCommands: /status — session state · /help — this message · /commands — list all remote commands.\nAsk-mode confirmations arrive as Approve/Deny buttons; questions arrive as option buttons.",
 			);
+			return;
+		}
+		if (text === "/commands" || text.startsWith("/commands ")) {
+			await this.sendText(chatId, this.commandsText(text)).catch(() => {});
+			return;
+		}
+
+		// Any other /command runs through the shared remote dispatcher (after
+		// authorization). Only actual prompts update the confirmation target.
+		if (text.startsWith("/")) {
+			await this.dispatchSlash(chatId, userId, text);
 			return;
 		}
 
@@ -709,6 +781,47 @@ export class TelegramBridge {
 				chatId,
 				`⚠️ Could not start the task: ${error instanceof Error ? error.message : String(error)}`,
 			).catch(() => {});
+		}
+	}
+
+	/** Reply with the discoverable /commands listing (searchable, paginated). */
+	private commandsText(text: string): string {
+		const query = text.replace(/^\/commands\b/i, "").trim();
+		const catalog = this.catalog ?? this.buildCatalog();
+		if (!catalog) {
+			return "/commands — remote command list\nNo commands available. Type /status or /help for the bridge controls.";
+		}
+		return formatRemoteCommandList(catalog, query || undefined);
+	}
+
+	/** Run one remote slash command line through the shared dispatcher. */
+	private async dispatchSlash(chatId: number, userId: number | undefined, text: string): Promise<void> {
+		const dispatch = this.options.dispatch;
+		if (!dispatch) {
+			await this.sendText(chatId, "Remote slash commands are not available in this build.").catch(() => {});
+			return;
+		}
+		let commandLine = text;
+		const catalog = this.catalog ?? this.buildCatalog();
+		if (catalog) {
+			const spaceIndex = text.indexOf(" ");
+			const alias = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
+			const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
+			const resolved = resolveRemoteCommand(catalog, alias, args);
+			if (resolved) commandLine = resolved.commandLine;
+		}
+		const result = await dispatch(commandLine).catch(() => ({ kind: "not-found" as const, text: "Command failed." }));
+		if (result.kind === "text") {
+			if (result.notificationTarget && userId !== undefined) {
+				// A queued task run's completion should be reported back here.
+				this.activeChatId = chatId;
+				this.activeUserId = userId;
+			}
+			await this.sendText(chatId, result.text).catch(() => {});
+			return;
+		}
+		if (result.kind === "declined" || result.kind === "not-found") {
+			await this.sendText(chatId, result.text).catch(() => {});
 		}
 	}
 

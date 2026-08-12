@@ -82,6 +82,43 @@ Confirmations use `APPROVE` or `DENY`; option questions use numbered replies. Se
 
 Apple has removed or restricted parts of Messages AppleScript access on some macOS versions. Porcupine probes readability once and fails with a clear warning instead of repeatedly polling a bridge that cannot work. Use Telegram or Discord on affected systems.
 
+## Remote slash commands
+
+Every bridge mirrors the TUI's slash-command catalog. Send `/commands` from an
+authorized chat to see the full list (`/commands <query>` filters, `/commands
+<N>` pages). The list is generated from the same sources as the TUI autocomplete
+(built-in commands, prompt templates, skills, and extension commands), so it
+never drifts from the terminal.
+
+- **Telegram** registers the catalog in the bot menu via `setMyCommands`
+  (deterministic Telegram-safe aliases: `scoped-models` → `scoped_models`,
+  `skill:web-search` → `skill_web_search`). Both the alias and the canonical
+  name are accepted.
+- **Discord and iMessage** recognize the same `/command` lines as text; use
+  `/commands` for discovery.
+
+What can run remotely (all behind the same actor + conversation gates):
+
+| Category | Commands |
+|---|---|
+| Session info | `/session` `/usage` `/cost` `/changelog` `/memory` `/stacks` `/projects` `/subagents` `/guide` `/update` |
+| State toggles | `/reasoning [level]` `/thinking` `/adaptive` `/auto` `/model <provider/model>` `/name <name>` |
+| Task/cron | `/task list` `/task show <id>` `/task add <title> :: <prompt>` `/task run <id>` `/task pause|resume|cancel <id>` `/cron list` |
+| Goal/plan status | `/goal status` `/plan status` |
+| X / email reads | `/x ...` `/email status|drafts|inbox|read <id>` |
+
+`/task run` and `/cron run` queue the run and post the result back to the
+originating chat when it finishes.
+
+Declined remotely (with a terminal pointer in the reply): TUI-only selectors
+(`/settings`, `/tree`, `/trust`, `/resume`, `/modes`, `/view`, `/hotkeys`,
+`/fork`, `/logout`, `/export`, `/import`), lifecycle commands (`/refresh`,
+`/restart`, `/reload`, `/new`, `/quit`, `/kill`, `/clone`, `/extract-stack`,
+`/craft-stack`), and turn-starting builtins that need a live agent turn
+(`/goal <text>`, `/plan <text>`, `/compact`, `/email send`). These are listed
+so you know they exist, but run them in the terminal. Replies are redacted so
+engine output can never leak tokens, keys, or passwords.
+
 ## Shared behavior
 
 - Remote prompts queue as follow-ups while the agent is busy.
