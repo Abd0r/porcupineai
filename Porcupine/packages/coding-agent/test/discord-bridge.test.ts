@@ -273,4 +273,40 @@ describe("DiscordBridge", () => {
 
 		expect(calls.some((call) => call.path.startsWith("/channels/channel-1/messages"))).toBe(false);
 	});
+
+	describe("DiscordBridge remote slash commands", () => {
+		function makeSlashBridge() {
+			const dispatch = async (commandLine: string) => ({ kind: "text" as const, text: `EXEC:${commandLine}` });
+			const { bridge, calls, prompts, fetchImpl } = makeBridge({ dispatch });
+			return { bridge, calls, prompts, fetchImpl };
+		}
+
+		it("dispatches /commands through the shared runner without starting a turn", async () => {
+			const { bridge, calls, prompts } = makeSlashBridge();
+			const anyBridge = bridge as unknown as { handleMessage(message: unknown): Promise<void> };
+			await anyBridge.handleMessage({
+				id: "m-slash-1",
+				channel_id: "channel-1",
+				author: { id: "user-1" },
+				content: "/task list",
+			});
+			expect(prompts).toHaveLength(0);
+			const reply = calls.find((call) => call.path === "/channels/channel-1/messages" && call.method === "POST");
+			expect(reply).toBeDefined();
+			expect(JSON.parse(reply?.body ?? "{}").content).toContain("EXEC:/task list");
+		});
+
+		it("ignores slash commands from unauthorized actors", async () => {
+			const { bridge, calls, prompts } = makeSlashBridge();
+			const anyBridge = bridge as unknown as { handleMessage(message: unknown): Promise<void> };
+			await anyBridge.handleMessage({
+				id: "m-slash-2",
+				channel_id: "channel-1",
+				author: { id: "intruder" },
+				content: "/task run x",
+			});
+			expect(prompts).toHaveLength(0);
+			expect(calls.filter((call) => call.method === "POST")).toHaveLength(0);
+		});
+	});
 });

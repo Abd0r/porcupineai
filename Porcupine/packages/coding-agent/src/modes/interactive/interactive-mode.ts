@@ -142,9 +142,17 @@ import {
 	listLearningFeed,
 	processPostTurnLearning,
 } from "../../porcupine/learning-store.ts";
+import { formatMemoryReport } from "../../porcupine/memory-command.ts";
 import { buildPersonalityReminder, isTrivialChatTurn, userRequestedPlanning } from "../../porcupine/personality.ts";
+import { writeProjectContext } from "../../porcupine/project-init.ts";
 import { formatProjectsCommandOutput } from "../../porcupine/project-search.ts";
 import { runRefiner } from "../../porcupine/refiner.ts";
+import {
+	dispatchRemoteSlash,
+	type RemoteCommandContext,
+	type RemoteSlashResult,
+} from "../../porcupine/remote-command-dispatcher.ts";
+import type { RemoteCommandDescriptor } from "../../porcupine/remote-slash-commands.ts";
 import { artifactChangeFromToolCall, buildCapabilityTreeFromSession } from "../../porcupine/session-bridge.ts";
 import { PorcupineSessionOrchestrator } from "../../porcupine/session-orchestrator.ts";
 
@@ -2136,6 +2144,260 @@ export class InteractiveMode {
 		});
 	}
 
+	/**
+	 * Canonical slash-command descriptors for the remote bridges: builtins +
+	 * prompt templates + skills + extension commands (same sources as the TUI
+	 * autocomplete, so the remote menu never drifts from the terminal).
+	 */
+	private buildRemoteCommandDescriptors(): RemoteCommandDescriptor[] {
+		const descriptors: RemoteCommandDescriptor[] = BUILTIN_SLASH_COMMANDS.map((command) => ({
+			name: command.name,
+			kind: "builtin",
+			description: command.description,
+			...(command.argumentHint ? { argumentHint: command.argumentHint } : {}),
+		}));
+		for (const template of this.session.promptTemplates) {
+			descriptors.push({ name: template.name, kind: "prompt", description: template.description });
+		}
+		for (const skill of this.session.resourceLoader.getSkills().skills) {
+			descriptors.push({ name: `skill:${skill.name}`, kind: "skill", description: skill.description });
+		}
+		for (const command of this.session.extensionRunner.getRegisteredCommands()) {
+			descriptors.push({
+				name: command.invocationName,
+				kind: "extension",
+				description: command.description,
+			});
+		}
+		return descriptors;
+	}
+
+	/**
+	 * Run one canonical remote command line against the shared session and the
+	 * headless engines the TUI handlers delegate to. Never opens TUI selectors
+	 * and never bypasses the existing authorization/approval gates.
+	 */
+	private async dispatchRemoteCommand(commandLine: string): Promise<RemoteSlashResult> {
+		const context: RemoteCommandContext = {
+			agentDir: getAgentDir(),
+			taskStore: this.taskStore,
+			session: {
+				id: this.sessionManager.getSessionId(),
+				cwd: this.sessionManager.getCwd(),
+				mode: this.session.interactionMode,
+				name: this.sessionManager.getSessionName() ?? undefined,
+				activeSubagents: this.session.runningSubagentCount > 0 ? this.session.runningSubagentCount : undefined,
+			},
+			getStacks: (query) => {
+				this.refreshCapabilityTree();
+				return formatStacksCommandOutput(this.capabilityTree, query);
+			},
+			getProjects: (query) => formatProjectsCommandOutput(this.sessionManager.getCwd(), query),
+			getSubagents: async (arg) => {
+				const { listSubagentSessions } = await import("../../porcupine/subagent-sessions.ts");
+				const { formatSubagentSessionList, formatSubagentSessionView } = await import(
+					"../../porcupine/subagent-session-format.ts"
+				);
+				const sessions = await listSubagentSessions(this.sessionManager.getSessionDir());
+				return arg ? formatSubagentSessionView(sessions, arg) : formatSubagentSessionList(sessions);
+			},
+			getChangelog: () => this.remoteChangelogText(),
+			getMemory: () => formatMemoryReport(getAgentDir()),
+			getSessionReport: () => this.remoteSessionReport(),
+			getUsageReport: () => this.remoteUsageReport(),
+			getX: async (text) => {
+				const { runXCommand } = await import("../../porcupine/x-command.ts");
+				return (await runXCommand(text)).output;
+			},
+			getEmail: async (text) => {
+				const command = parseEmailCommand(text);
+				if (!command || command.kind === "invalid") {
+					return command?.kind === "invalid"
+						? command.message
+						: "Usage: /email [status|drafts|inbox|read|draft|send]";
+				}
+				const settings = this.settingsManager.getEmailSettings();
+				if (!settings) {
+					return "Email is not configured. See the email docs to set up IMAP/SMTP.";
+				}
+				try {
+					return await buildEmailCommandOutput(command, {
+						configured: true,
+						connectInfo: {
+							host: settings.host ?? "",
+							user: settings.user ?? "",
+							draftsFolder: settings.draftsFolder ?? "Drafts",
+							sentFolder: settings.sentFolder ?? "Sent Mail",
+						},
+						getClient: async () => {
+							const pass = await readSecret(getAgentDir(), EMAIL_KEYRING_SERVICE, settings.user ?? "");
+							return createEmailClient({
+								host: settings.host ?? "",
+								port: settings.port ?? (settings.secure === false ? 143 : 993),
+								secure: settings.secure ?? true,
+								user: settings.user ?? "",
+								pass,
+								draftsFolder: settings.draftsFolder ?? "Drafts",
+								sentFolder: settings.sentFolder ?? "Sent Mail",
+								timeoutMs: settings.timeoutMs ?? 15000,
+							});
+						},
+					});
+				} catch (error) {
+					return `Email command failed: ${error instanceof Error ? error.message : String(error)}`;
+				}
+			},
+			getGuide: (arg) => formatGuideCommandOutput(arg ? `/guide ${arg}` : "/guide"),
+			getGoalStatus: () => formatGoalStatus(this.goalPlanState.goal),
+			getPlanStatus: () => formatPlanStatus(this.goalPlanState.plan),
+			setReasoning: (arg) => this.remoteSetReasoning(arg),
+			setAdaptive: (arg) => this.remoteSetAdaptive(arg),
+			setAuto: (arg) => this.remoteSetAuto(arg),
+			setModel: async (arg) => this.remoteSetModel(arg),
+			setName: (name) => {
+				this.session.setSessionName(name);
+				return `Session name set to "${name}".`;
+			},
+			runInit: (arg) => this.remoteRunInit(arg),
+			runUpdate: async () => {
+				const current = this.version;
+				const latest = await checkForNewPorcupineVersion(current, { cacheTtlMs: 0 }).catch(() => undefined);
+				if (!latest) return `You're up to date — ${APP_NAME} v${current}.`;
+				this.latestVersion = latest.version;
+				const pkg = latest.packageName ?? getInstalledPackageName();
+				return [
+					`Current: v${current}`,
+					`Latest:  v${latest.version} available`,
+					"",
+					`To update: npm install -g --ignore-scripts ${pkg ?? "@porcupineai/coding-agent"}`,
+				].join("\n");
+			},
+		};
+		return dispatchRemoteSlash(commandLine, context);
+	}
+
+	/** Plain-text session report (no TUI theme markup). */
+	private remoteSessionReport(): string {
+		const stats = this.session.getSessionStats();
+		const name = this.sessionManager.getSessionName();
+		const lines = [`session: ${stats.sessionId}`];
+		if (name) lines.push(`name: ${name}`);
+		lines.push(`file: ${stats.sessionFile ?? "In-memory"}`);
+		lines.push(
+			`messages: ${stats.totalMessages} (${stats.userMessages} user / ${stats.assistantMessages} assistant)`,
+		);
+		lines.push(`tools: ${stats.toolCalls} calls, ${stats.toolResults} results`);
+		const { input, cacheRead, cacheWrite, output, total } = stats.tokens;
+		const promptTokens = input + cacheRead + cacheWrite;
+		lines.push(
+			`tokens: ${total.toLocaleString()} total (${promptTokens.toLocaleString()} in / ${output.toLocaleString()} out)`,
+		);
+		if (promptTokens > 0 && (cacheRead > 0 || cacheWrite > 0)) {
+			lines.push(`cache hits: ${((cacheRead / promptTokens) * 100).toFixed(1)}%`);
+		}
+		if (stats.cost > 0) lines.push(`cost: $${stats.cost.toFixed(3)}`);
+		return lines.join("\n");
+	}
+
+	/** Plain-text usage/cost report for /usage and /cost. */
+	private remoteUsageReport(): string {
+		const stats = this.session.getSessionStats();
+		const { input, cacheRead, cacheWrite, output, total } = stats.tokens;
+		const promptTokens = input + cacheRead + cacheWrite;
+		const lines = [
+			`tokens: ${total.toLocaleString()} total (${promptTokens.toLocaleString()} in / ${output.toLocaleString()} out)`,
+		];
+		if (promptTokens > 0 && (cacheRead > 0 || cacheWrite > 0)) {
+			lines.push(
+				`cache hits: ${((cacheRead / promptTokens) * 100).toFixed(1)}% (${cacheRead.toLocaleString()} cached)`,
+			);
+		}
+		if (stats.cost > 0) lines.push(`cost: $${stats.cost.toFixed(3)}`);
+		return lines.join("\n");
+	}
+
+	/** Plain-text changelog (newest first, no TUI theme markup). */
+	private remoteChangelogText(): string {
+		const allEntries = parseChangelog(getChangelogPath());
+		if (allEntries.length === 0) return "No changelog entries found.";
+		return allEntries
+			.reverse()
+			.map((entry) => normalizeChangelogLinks(entry.content, entry))
+			.join("\n\n");
+	}
+
+	/** Remote /reasoning: status or set a concrete/adaptive mode (no selector). */
+	private remoteSetReasoning(arg: string): string {
+		const modeArg = arg.trim().toLowerCase();
+		if (modeArg === "status" || modeArg === "?" || modeArg === "") {
+			const current = this.session.getReasoningMode();
+			return `Reasoning: ${current} | available: ${this.session.getAvailableReasoningModes().join(", ")}`;
+		}
+		if (!this.session.supportsThinking()) {
+			return "Current model does not support thinking/reasoning levels.";
+		}
+		const parsed = parseReasoningModeArg(modeArg);
+		if (!parsed) {
+			return "Usage: /reasoning [off|minimal|low|medium|high|xhigh|max|adaptive] or /reasoning status";
+		}
+		if (parsed !== "adaptive" && !this.session.getAvailableThinkingLevels().includes(parsed)) {
+			return `Level "${parsed}" is not supported by this model.`;
+		}
+		const applied = this.session.setReasoningMode(parsed);
+		return `Reasoning: ${applied}`;
+	}
+
+	/** Remote /adaptive [on|off|status]. */
+	private remoteSetAdaptive(arg: string): string {
+		const modeArg = arg.trim().toLowerCase();
+		const enabled = this.session.getReasoningMode() === "adaptive";
+		if (modeArg === "status" || modeArg === "") return `Adaptive reasoning: ${enabled ? "on" : "off"}`;
+		if (modeArg === "on" || modeArg === "true") {
+			this.session.setAdaptiveReasoning(true);
+			return "Adaptive reasoning: on";
+		}
+		if (modeArg === "off" || modeArg === "false") {
+			this.session.setAdaptiveReasoning(false);
+			return "Adaptive reasoning: off";
+		}
+		return "Usage: /adaptive [on|off|status]";
+	}
+
+	/** Remote /auto [on|off|status]. */
+	private remoteSetAuto(arg: string): string {
+		const modeArg = arg.trim().toLowerCase();
+		if (modeArg === "status" || modeArg === "") return `Auto mode: ${this.session.isAutoModeEnabled ? "on" : "off"}`;
+		if (modeArg === "on" || modeArg === "true") {
+			this.session.setAutoMode(true);
+			return "Auto mode: on";
+		}
+		if (modeArg === "off" || modeArg === "false") {
+			this.session.setAutoMode(false);
+			return "Auto mode: off";
+		}
+		return "Usage: /auto [on|off|status]";
+	}
+
+	/** Remote /model <provider/model>: resolve and set, no selector. */
+	private async remoteSetModel(arg: string): Promise<string> {
+		const model = await this.findExactModelMatch(arg);
+		if (!model) return `No model matched "${arg}". Run '/model' in the terminal to browse models.`;
+		try {
+			await this.session.setModel(model);
+			return `Model set to ${model.id}.`;
+		} catch (error) {
+			return `Model change failed: ${error instanceof Error ? error.message : String(error)}`;
+		}
+	}
+
+	/** Remote /init [--force]: generate the project context file. */
+	private remoteRunInit(arg: string): string {
+		const result = writeProjectContext(this.sessionManager.getCwd(), { force: arg.includes("--force") });
+		if (result.status === "unchanged") return "Project context is already up to date.";
+		if (result.status === "created" || result.status === "merged") return `${result.path} updated.`;
+		return "Project context generation failed.";
+	}
+
 	/** Start the Telegram bridge when PORCUPINE_TELEGRAM_TOKEN is configured. */
 	private startTelegramBridgeIfConfigured(): void {
 		const token = process.env.PORCUPINE_TELEGRAM_TOKEN;
@@ -2163,6 +2425,8 @@ export class InteractiveMode {
 					this.sessionManager.getCwd(),
 					this.session.interactionMode,
 				),
+			getCommands: () => this.buildRemoteCommandDescriptors(),
+			dispatch: (commandLine) => this.dispatchRemoteCommand(commandLine),
 		});
 		void this.telegramBridge
 			.start()
@@ -2204,6 +2468,8 @@ export class InteractiveMode {
 					this.sessionManager.getCwd(),
 					this.session.interactionMode,
 				),
+			getCommands: () => this.buildRemoteCommandDescriptors(),
+			dispatch: (commandLine) => this.dispatchRemoteCommand(commandLine),
 		});
 		void this.discordBridge
 			.start()
@@ -2243,6 +2509,8 @@ export class InteractiveMode {
 					this.sessionManager.getCwd(),
 					this.session.interactionMode,
 				),
+			getCommands: () => this.buildRemoteCommandDescriptors(),
+			dispatch: (commandLine) => this.dispatchRemoteCommand(commandLine),
 		});
 		void this.imessageBridge
 			.start()

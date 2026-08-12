@@ -176,7 +176,10 @@ describe("TelegramBridge visibility matrix", () => {
 
 	it("clears the remote approval target when a TUI turn starts", async () => {
 		const { bridge } = makeBridge([]);
-		const state = internals(bridge) as ReturnType<typeof internals> & { activeChatId?: number; activeUserId?: number };
+		const state = internals(bridge) as ReturnType<typeof internals> & {
+			activeChatId?: number;
+			activeUserId?: number;
+		};
 		state.activeChatId = ALLOWED;
 		state.activeUserId = ALLOWED;
 		bridge.handleTurnStart({ role: "user", content: [{ type: "text", text: "terminal task" }] } as never);
@@ -488,6 +491,94 @@ describe("TelegramBridge Hermes-style upgrades", () => {
 		await bridge.handleAgentEnd(messages, false);
 		const sends = calls.filter((call) => call.method === "sendMessage");
 		expect(sends.length).toBe(2);
+		expect(bridge.pendingTurns).toBe(0);
+	});
+});
+
+describe("TelegramBridge remote slash commands", () => {
+	function descriptors() {
+		return [
+			{ name: "scoped-models", kind: "builtin" as const, description: "Enable/disable models" },
+			{
+				name: "task",
+				kind: "builtin" as const,
+				description: "Manage tasks",
+				argumentHint: "add <title> :: <prompt>",
+			},
+			{ name: "skill:web-search", kind: "skill" as const, description: "Search the web" },
+		];
+	}
+
+	it("registers Telegram-safe aliases in the command menu", async () => {
+		const { bridge, calls } = makeBridge([], { getCommands: descriptors });
+		await bridge.start();
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		await bridge.stop();
+		const registration = calls.find((call) => call.method === "setMyCommands");
+		expect(registration).toBeDefined();
+		const body = decodeURIComponent(registration?.body ?? "");
+		expect(body).toContain("scoped_models");
+		expect(body).toContain("skill_web_search");
+		expect(body).toContain('"start"');
+	});
+
+	it("lists commands via /commands", async () => {
+		const { bridge, calls } = makeBridge([], { getCommands: descriptors });
+		const message = {
+			message_id: 60,
+			chat: { id: ALLOWED, type: "private" },
+			from: { id: ALLOWED },
+			text: "/commands",
+		};
+		await internals(bridge).handleMessage(message);
+		const reply = calls.find((call) => call.method === "sendMessage");
+		const decoded = decodeURIComponent(reply?.body ?? "").replace(/\+/g, " ");
+		expect(decoded).toContain("remote command list");
+		expect(decoded).toContain("task");
+	});
+
+	it("runs remote commands through the shared dispatcher", async () => {
+		const dispatch = async (commandLine: string) => ({ kind: "text", text: `EXEC:${commandLine}` }) as const;
+		const { bridge, calls } = makeBridge([], { dispatch });
+		await internals(bridge).handleMessage({
+			message_id: 61,
+			chat: { id: ALLOWED, type: "private" },
+			from: { id: ALLOWED },
+			text: "/task list",
+		});
+		const reply = calls.find((call) => call.method === "sendMessage");
+		const decoded = decodeURIComponent(reply?.body ?? "").replace(/\+/g, " ");
+		expect(decoded).toContain("EXEC:/task list");
+	});
+
+	it("declines lifecycle commands with a terminal pointer", async () => {
+		const dispatch = async () =>
+			({
+				kind: "declined",
+				text: "/refresh is not available remotely — run it in the Porcupine terminal.",
+			}) as const;
+		const { bridge, calls } = makeBridge([], { dispatch });
+		await internals(bridge).handleMessage({
+			message_id: 62,
+			chat: { id: ALLOWED, type: "private" },
+			from: { id: ALLOWED },
+			text: "/refresh",
+		});
+		const reply = calls.find((call) => call.method === "sendMessage");
+		const decoded = decodeURIComponent(reply?.body ?? "").replace(/\+/g, " ");
+		expect(decoded).toContain("terminal");
+	});
+
+	it("does not start a prompt turn for slash commands", async () => {
+		const dispatch = async () => ({ kind: "text", text: "ok" }) as const;
+		const { bridge, prompts } = makeBridge([], { dispatch });
+		await internals(bridge).handleMessage({
+			message_id: 63,
+			chat: { id: ALLOWED, type: "private" },
+			from: { id: ALLOWED },
+			text: "/task list",
+		});
+		expect(prompts).toEqual([]);
 		expect(bridge.pendingTurns).toBe(0);
 	});
 });

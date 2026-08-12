@@ -75,4 +75,36 @@ describe("IMessageBridge actor authorization", () => {
 		await internals(bridge).handleIncoming(groupChat, "APPROVE", "+15559876543");
 		expect(await confirmation).toBe(true);
 	});
+
+	it("dispatches remote slash commands without starting a prompt turn", async () => {
+		const dispatch = async (commandLine: string) => ({ kind: "text" as const, text: `EXEC:${commandLine}` });
+		const { bridge, prompts } = makeBridge({ dispatch });
+		const sent: string[] = [];
+		(bridge as unknown as { sendText: (chat: string, text: string) => Promise<void> }).sendText = async (
+			_chat,
+			text,
+		) => {
+			sent.push(text);
+		};
+		await internals(bridge).handleIncoming("iMessage;-;+15551234567", "/task list", "+15551234567");
+		expect(prompts).toEqual([]);
+		expect(sent).toEqual(["EXEC:/task list"]);
+	});
+
+	it("declines lifecycle slash commands with a terminal pointer", async () => {
+		const dispatch = async () => ({
+			kind: "declined" as const,
+			text: "/refresh is not available remotely — run it in the Porcupine terminal.",
+		});
+		const { bridge } = makeBridge({ dispatch });
+		const sent: string[] = [];
+		(bridge as unknown as { sendText: (chat: string, text: string) => Promise<void> }).sendText = async (
+			_chat,
+			text,
+		) => {
+			sent.push(text);
+		};
+		await internals(bridge).handleIncoming("iMessage;-;+15551234567", "/refresh", "+15551234567");
+		expect(sent.join("\n")).toContain("terminal");
+	});
 });

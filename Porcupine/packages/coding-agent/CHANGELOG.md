@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Remote commands
+
+- Added a discoverable remote slash-command surface for Telegram, Discord, and iMessage. `/commands` lists the full catalog (searchable and paginated), generated from the same sources as the TUI autocomplete (built-ins, prompt templates, skills, extension commands) so it never drifts from the terminal.
+- Telegram registers the catalog in the bot menu via `setMyCommands` with deterministic Telegram-safe aliases (`scoped-models` → `scoped_models`, `skill:web-search` → `skill_web_search`).
+- Remote execution reuses the headless command engines the TUI handlers delegate to (session stats, task store, goal/plan status, X/email reads, reasoning/auto/model toggles), replies to the originating chat, and never opens TUI selectors or bypasses authorization.
+- `/task run` and `/cron run` queue the run and post the result back to the originating chat when it finishes.
+- TUI-only selectors and lifecycle commands are declined remotely with a terminal pointer; every reply is redacted so engine output cannot leak tokens, keys, or passwords.
+
 ### Messaging
 
 - Hardened Telegram, Discord, and iMessage bridges with separate conversation and actor authorization. Untrusted group participants cannot prompt the local agent, run owner commands, answer questions, or approve actions.

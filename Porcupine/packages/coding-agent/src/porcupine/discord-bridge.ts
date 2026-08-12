@@ -20,6 +20,14 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import type { AgentMessage } from "@porcupineai/agent-core";
 import { type BridgeCommandContext, handleBridgeCommand, parseBridgeCommand } from "./bridge-commands.ts";
+import type { RemoteSlashResult } from "./remote-command-dispatcher.ts";
+import {
+	buildRemoteCatalog,
+	formatRemoteCommandList,
+	type RemoteCatalog,
+	type RemoteCommandDescriptor,
+	resolveRemoteCommand,
+} from "./remote-slash-commands.ts";
 import {
 	extractAssistantText,
 	extractMediaMarkers,
@@ -79,6 +87,10 @@ export interface DiscordBridgeOptions {
 	getStatus?: () => string;
 	dialogTimeoutMs?: number;
 	confirmTimeoutMs?: number;
+	/** Canonical slash-command descriptors used for the /commands listing. */
+	getCommands?: () => RemoteCommandDescriptor[];
+	/** Runs a canonical remote command line and returns the reply to send back. */
+	dispatch?: (commandLine: string) => Promise<RemoteSlashResult>;
 }
 
 export class DiscordBridge {
@@ -96,6 +108,8 @@ export class DiscordBridge {
 	private heartbeatAwaitingAck = false;
 	/** Epoch ms when the bridge connected; drives the !status uptime line. */
 	private startedAt: number | undefined;
+	/** Materialized remote slash catalog (rebuilt on demand). */
+	private catalog: RemoteCatalog | undefined;
 
 	/** Discord-originated prompts awaiting their response turn (provenance match). */
 	private pendingDiscord: Array<{ channelId: string; userId: string; text: string }> = [];
@@ -604,8 +618,18 @@ export class DiscordBridge {
 		if (text === "/help") {
 			await this.sendText(
 				channelId,
-				"Send any message and the agent works on the shared session (shown in the TUI too).\n\nCommands: /status · /help. Ask-mode confirmations arrive as ✅/❌ reactions; questions as numbered reactions.",
+				"Send any message and the agent works on the shared session (shown in the TUI too).\n\nCommands: /status · /help · /commands. Ask-mode confirmations arrive as ✅/❌ reactions; questions as numbered reactions.",
 			);
+			return;
+		}
+		if (text === "/commands" || text.startsWith("/commands ")) {
+			await this.sendText(channelId, this.commandsText(text)).catch(() => {});
+			return;
+		}
+
+		// Any other /command runs through the shared remote dispatcher.
+		if (text.startsWith("/")) {
+			await this.dispatchSlash(channelId, userId, text);
 			return;
 		}
 
@@ -622,6 +646,52 @@ export class DiscordBridge {
 				channelId,
 				`⚠️ Could not start the task: ${error instanceof Error ? error.message : String(error)}`,
 			).catch(() => {});
+		}
+	}
+
+	/** Reply with the discoverable /commands listing (searchable, paginated). */
+	private commandsText(text: string): string {
+		const query = text.replace(/^\/commands\b/i, "").trim();
+		const catalog = this.catalog ?? this.buildCatalog();
+		if (!catalog) {
+			return "/commands — remote command list\nNo commands available. Type /status or /help for the bridge controls.";
+		}
+		return formatRemoteCommandList(catalog, query || undefined);
+	}
+
+	private buildCatalog(): RemoteCatalog | undefined {
+		const descriptors = this.options.getCommands?.() ?? [];
+		if (descriptors.length === 0) return undefined;
+		return buildRemoteCatalog(descriptors, "discord");
+	}
+
+	/** Run one remote slash command line through the shared dispatcher. */
+	private async dispatchSlash(channelId: string, userId: string | undefined, text: string): Promise<void> {
+		const dispatch = this.options.dispatch;
+		if (!dispatch) {
+			await this.sendText(channelId, "Remote slash commands are not available in this build.").catch(() => {});
+			return;
+		}
+		let commandLine = text;
+		const catalog = this.catalog ?? this.buildCatalog();
+		if (catalog) {
+			const spaceIndex = text.indexOf(" ");
+			const alias = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
+			const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
+			const resolved = resolveRemoteCommand(catalog, alias, args);
+			if (resolved) commandLine = resolved.commandLine;
+		}
+		const result = await dispatch(commandLine).catch(() => ({ kind: "not-found" as const, text: "Command failed." }));
+		if (result.kind === "text") {
+			if (result.notificationTarget && userId !== undefined) {
+				this.activeChannelId = channelId;
+				this.activeUserId = userId;
+			}
+			await this.sendText(channelId, result.text).catch(() => {});
+			return;
+		}
+		if (result.kind === "declined" || result.kind === "not-found") {
+			await this.sendText(channelId, result.text).catch(() => {});
 		}
 	}
 
