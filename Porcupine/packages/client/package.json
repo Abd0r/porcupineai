@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/client",
-	"version": "0.1.64",
+	"version": "0.1.65",
 	"description": "Transport-neutral client for remote Porcupine sessions over framed CBOR bytes",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -47,7 +47,7 @@
 		"node": ">=22.19.0"
 	},
 	"dependencies": {
-		"@porcupineai/protocol": "^0.1.64"
+		"@porcupineai/protocol": "^0.1.65"
 	},
 	"devDependencies": {
 		"shx": "0.4.0",
