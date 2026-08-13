@@ -81,7 +81,7 @@ describe("http-api permission single-response (BUG-01)", () => {
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({ allow: false }),
 		});
-		expect(second.status).toBe(408);
+		expect(second.status).toBe(404);
 		expect(decisions).toEqual([true]); // exactly one decision, never a second
 	});
 });

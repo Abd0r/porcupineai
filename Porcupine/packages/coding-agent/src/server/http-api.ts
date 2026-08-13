@@ -272,7 +272,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				// handler).
 				const responder = permissionResponders.get(permissionId);
 				if (!responder) {
-					json(res, 408, { error: "permission request already timed out" });
+					json(res, 404, { error: "permission request not found or already answered" });
 					return;
 				}
 				permissionResponders.delete(permissionId);

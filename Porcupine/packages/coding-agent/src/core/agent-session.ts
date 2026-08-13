@@ -1687,7 +1687,7 @@ export class AgentSession {
 			// The user's new prompt is sent below, so do not call agent.continue() here.
 			const lastAssistant = this._findLastAssistantMessage();
 			if (lastAssistant) {
-				await this._checkCompaction(lastAssistant, false, true);
+				await this._checkCompaction(lastAssistant, false);
 			}
 
 			// Adaptive reasoning: classify thinking effort for THIS user message only.
@@ -2631,16 +2631,8 @@ export class AgentSession {
 	 *
 	 * @param assistantMessage The assistant message to check
 	 * @param skipAbortedCheck If false, include aborted messages (for pre-prompt check). Default: true
-	 * @param prePrompt True when called from prompt() before sending the next user turn.
-	 *   An overflow "willRetry" cannot actually be honored there (the user's new prompt is
-	 *   sent immediately and agent.continue() must not run), so we compact WITHOUT consuming
-	 *   the overflow retry budget or mutating agent state (BUG-11).
 	 */
-	private async _checkCompaction(
-		assistantMessage: AssistantMessage,
-		skipAbortedCheck = true,
-		prePrompt = false,
-	): Promise<boolean> {
+	private async _checkCompaction(assistantMessage: AssistantMessage, skipAbortedCheck = true): Promise<boolean> {
 		const settings = this.settingsManager.getCompactionSettings();
 		if (!settings.enabled) return false;
 		// Threshold uses 80/20 when reserveTokens is unset (resolved inside shouldCompact).
@@ -2675,14 +2667,6 @@ export class AgentSession {
 			const willRetry = assistantMessage.stopReason !== "stop";
 
 			if (!willRetry) {
-				return await this._runAutoCompaction("overflow", false);
-			}
-
-			// Pre-prompt: the new user prompt is about to be sent and agent.continue()
-			// must not be called here, so a would-be overflow "retry" cannot actually
-			// happen. Compact without consuming the retry budget or removing the error
-			// message from agent state; the real recovery runs post-turn (BUG-11).
-			if (prePrompt) {
 				return await this._runAutoCompaction("overflow", false);
 			}
 
