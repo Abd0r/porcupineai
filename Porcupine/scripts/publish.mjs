@@ -123,6 +123,7 @@ for (const pkg of packageStates) {
 		continue;
 	}
 
-	run("npm", ["publish", "--access", "public", "--provenance", "--ignore-scripts"], { cwd: pkg.directory });
+	const provenance = process.env.NPM_PROVENANCE === "1" ? ["--provenance"] : [];
+	run("npm", ["publish", "--access", "public", ...provenance, "--ignore-scripts"], { cwd: pkg.directory });
 	console.log();
 }
