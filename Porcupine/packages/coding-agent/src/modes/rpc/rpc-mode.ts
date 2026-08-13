@@ -252,9 +252,17 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 
 		async editor(title: string, prefill?: string): Promise<string | undefined> {
 			const id = crypto.randomUUID();
+			const timeoutMs = 5 * 60_000; // default; editor requests have no opts-driven timeout
 			return new Promise((resolve, reject) => {
+				const cleanup = () => pendingExtensionRequests.delete(id);
+				const timeoutId = setTimeout(() => {
+					cleanup();
+					resolve(undefined);
+				}, timeoutMs);
 				pendingExtensionRequests.set(id, {
 					resolve: (response: RpcExtensionUIResponse) => {
+						clearTimeout(timeoutId);
+						cleanup();
 						if ("cancelled" in response && response.cancelled) {
 							resolve(undefined);
 						} else if ("value" in response) {
@@ -408,7 +416,17 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 					})
 					.catch((e) => {
 						if (!preflightSucceeded) {
+							preflightSucceeded = true; // mark settled so we never double-emit
 							output(error(id, "prompt", e.message));
+						}
+					})
+					.finally(() => {
+						// If prompt() resolved normally but the preflight callback never fired,
+						// we would otherwise emit nothing and the client hangs forever. Emit a
+						// fallback success so every prompt path yields exactly one response.
+						if (!preflightSucceeded) {
+							preflightSucceeded = true;
+							output(success(id, "prompt"));
 						}
 					});
 				return undefined;
@@ -803,8 +821,13 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 	process.stdin.on("end", onInputEnd);
 
 	detachInput = (() => {
+		let tail: Promise<void> = Promise.resolve();
 		const detachJsonl = attachJsonlLineReader(process.stdin, (line) => {
-			void handleInputLine(line);
+			// Serialize line handling through a promise chain so concurrent commands
+			// (e.g. two pipe commands in one stdin chunk) never race on shared session
+			// state (rebindSession / command ordering). Each line runs only after the
+			// previous one fully settles.
+			tail = tail.then(() => handleInputLine(line));
 		});
 		return () => {
 			detachJsonl();

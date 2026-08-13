@@ -45,13 +45,10 @@ export function createMemoryToolDefinition(
 		name: "memory",
 		label: "memory",
 		description:
-			"Durable cross-session memory. target=user → USER.md (who the user is). target=memory → MEMORY.md (agent notes). Actions: add, replace, remove, list. Save stable prefs/corrections/environment facts only — not task progress.",
-		promptSnippet: "Persistent MEMORY.md / USER.md (add/replace/remove/list)",
+			"Durable memory store: USER.md (who the user is) and MEMORY.md (agent notes). add | replace | remove | list. Agent-decided, never auto-saved — full policy in the memory-hygiene skill.",
+		promptSnippet: "USER.md / MEMORY.md store (agent-decided; see memory-hygiene skill)",
 		promptGuidelines: [
-			"Use memory when the user states a durable preference, correction, or stable fact.",
-			"target=user for who they are / prefs; target=memory for agent environment notes.",
-			"Do not store secrets, passwords, API keys, or temporary task TODOs.",
-			"list first if unsure what is already stored.",
+			"Memory writes are agent-decided: durable facts only, dedupe first, one line each — see the memory-hygiene skill.",
 		],
 		parameters: memorySchema,
 		async execute(_toolCallId, args) {

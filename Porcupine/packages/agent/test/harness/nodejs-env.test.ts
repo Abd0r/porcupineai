@@ -372,6 +372,24 @@ describe("NodeExecutionEnv", () => {
 		expect(stderr).toBe("err");
 	});
 
+	it("BUG-3: captures stdout written late by a grandchild after the shell exits", async () => {
+		const root = createTempDir();
+		const env = new NodeExecutionEnv({ cwd: root });
+		// Spawn a detached grandchild that inherits the parent's stdout, writes a
+		// marker ~250ms after it is spawned, and then closes. The shell exits almost
+		// immediately, so the marker arrives after the child process has "ended".
+		const command =
+			"node -e \"const{spawn}=require('child_process');" +
+			"spawn(process.execPath,['-e','setTimeout(()=>process.stdout.write(\\\"LATE_GRANDCHILD_OUTPUT\\\"),250)']," +
+			"{stdio:'inherit',detached:true}).unref();" +
+			'"';
+		const result = await withTimeout(env.exec(command), 5000);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.value.stdout).toContain("LATE_GRANDCHILD_OUTPUT");
+		}
+	});
+
 	it("reports a missing working directory before spawning", async () => {
 		const root = createTempDir();
 		const env = new NodeExecutionEnv({ cwd: join(root, "missing") });
@@ -446,5 +464,19 @@ describe("NodeExecutionEnv", () => {
 		const fullOutput = getOrThrow(await env.readTextFile(result.fullOutputPath!));
 		expect(fullOutput.split("\n").length).toBeGreaterThan(10000);
 		expect(result.output.length).toBeLessThan(fullOutput.length);
+	});
+
+	it("BUG-2: full output file is byte-exact (raw CR preserved) while the inline snippet is sanitized", async () => {
+		const root = createTempDir();
+		const env = new NodeExecutionEnv({ cwd: root });
+		// Emit enough output carrying \r so the full-output file is created. The
+		// inline snippet strips/truncates it, but the raw file must retain "\r".
+		const result = getOrThrow(
+			await executeShellWithCapture(env, "for i in $(seq 1 12000); do printf 'a\\rX\\n'; done"),
+		);
+		expect(result.fullOutputPath).toBeDefined();
+		const fullOutput = getOrThrow(await env.readTextFile(result.fullOutputPath!));
+		expect(fullOutput).toContain("a\rX\n"); // raw CR preserved (byte-exact head)
+		expect(fullOutput.startsWith("a\rX\n")).toBe(true); // head retained, not truncated
 	});
 });

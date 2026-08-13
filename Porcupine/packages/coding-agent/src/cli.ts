@@ -12,7 +12,28 @@ import { setProductEnvironment } from "./product-environment.ts";
 
 process.title = APP_NAME;
 setProductEnvironment("CODING_AGENT", "true");
-process.emitWarning = (() => {}) as typeof process.emitWarning;
+// Filter only the known-noisy runtime warning classes (experimental/deprecation)
+// instead of silently swallowing ALL Node warnings. Everything else (app and
+// third-party warnings, unhandled diagnostics) is forwarded unchanged, so real
+// signals are not hidden.
+{
+	const realEmitWarning = process.emitWarning.bind(process);
+	process.emitWarning = ((warning, ...args: Array<unknown>) => {
+		// Classify the warning so we only silence the genuinely noisy
+		// experimental/deprecation classes (see BUG-16). Accept all three overload
+		// shapes: (warning, name, ctor), (warning, {type,...}), (warning, Error).
+		let typeName = "";
+		if (typeof args[0] === "string") typeName = args[0];
+		else if (args[0] && typeof args[0] === "object") {
+			const opts = args[0] as { type?: unknown; name?: unknown };
+			typeName = String(opts.type ?? opts.name ?? "");
+		} else if (warning instanceof Error) {
+			typeName = warning.name ?? "";
+		}
+		if (typeName === "DeprecationWarning" || typeName === "ExperimentalWarning") return;
+		(realEmitWarning as (...w: unknown[]) => void)(warning, ...args);
+	}) as typeof process.emitWarning;
+}
 
 // Never die silently on an unhandled rejection; surface a clean message and a
 // non-zero exit so pipeline consumers and CI see the failure.

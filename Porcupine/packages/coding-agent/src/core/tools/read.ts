@@ -388,6 +388,11 @@ export function createReadToolDefinition(
 			}
 			const offset = coerceLineNumber(rawInput.offset, "offset");
 			const limit = coerceLineNumber(rawInput.limit, "limit");
+			// offset is 1-indexed; reject 0 (and negatives) explicitly rather than
+			// silently collapsing to line 1 (BUG-3). undefined means "from the top".
+			if (offset !== undefined && offset <= 0) {
+				throw new Error(`Invalid offset: ${offset} — offset must be a positive line number (1-indexed).`);
+			}
 			return new Promise<{
 				content: (TextContent | ImageContent | AudioContent)[];
 				details: ReadToolDetails | undefined;
@@ -574,15 +579,23 @@ export function createReadToolDefinition(
 									content = [{ type: "text", text: outputText }];
 									if (!READ_DEDUP_KILL_SWITCH) dedupCache.record(dedupKey);
 									// Record the delivered window so the edit tool can refuse to
-									// overwrite parts of the file the model has never seen.
-									const deliveredCount = truncation
-										? truncation.outputLines
-										: (userLimitedLines ?? totalFileLines - startLine);
+									// overwrite parts of the file the model has never seen. When the
+									// first line exceeds the byte limit (firstLineExceedsLimit) only a
+									// size note is shown, never the line's content — record ZERO lines
+									// seen so the giant line is never mis-marked as "fully seen" (BUG-1).
+									const deliveredCount = truncation.firstLineExceedsLimit
+										? 0
+										: truncation
+											? truncation.outputLines
+											: (userLimitedLines ?? totalFileLines - startLine);
 									getReadLedger().recordRead(absolutePath, {
 										mtimeMs: st.mtimeMs,
 										size: st.size,
 										seenFromLine: startLineDisplay,
-										seenToLine: startLineDisplay + Math.max(0, deliveredCount - 1),
+										// deliveredCount===0 means NO content line was actually seen
+										// (firstLineExceedsLimit); pin seenToLine below seenFromLine so the
+										// record never claims a line was seen (BUG-1).
+										seenToLine: startLineDisplay + deliveredCount - 1,
 										totalLines: totalFileLines,
 									});
 								}

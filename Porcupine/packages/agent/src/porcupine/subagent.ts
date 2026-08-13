@@ -179,15 +179,21 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 		maxContextTokens,
 	});
 
+	let budgetStopFired = false;
 	const toolWrappers = options.tools.map((tool) =>
 		withStepCounter(tool, (toolName, toolArgs) => {
 			steps += 1;
 			const overBudget = steps > maxSteps;
 			if (overBudget) {
 				budgetHit = true;
-				stopRun?.();
+				// Fire the stop only once, when the budget is first consumed (abort is
+				// idempotent, but repeated post-budget invocations must not re-signal).
+				if (!budgetStopFired) {
+					budgetStopFired = true;
+					stopRun?.();
+				}
 			}
-			options.onProgress?.({ type: "step", step: steps, toolName, args: toolArgs });
+			options.onProgress?.({ type: "step", step: Math.min(steps, maxSteps), toolName, args: toolArgs });
 			return overBudget;
 		}),
 	);
@@ -293,7 +299,16 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 					},
 					...keepRecentTail(segment, maxContextTokens),
 				];
+				// Preserve any steering/follow-up messages queued (via registerSteer)
+				// during the segment: reset() clears both queues, which would silently
+				// drop instructions the parent believes it delivered.
+				const queuedSteering = agent.drainSteeringMessages();
+				const queuedFollowUps = agent.drainFollowUpMessages();
 				agent.reset();
+				// Re-queue so the resumed segment consumes them after the compaction
+				// prompt is processed.
+				for (const message of queuedSteering) agent.steer(message);
+				for (const message of queuedFollowUps) agent.followUp(message);
 				// The segment's messages are gone: restart the incremental estimate.
 				lastEstimatedMessages = 0;
 				runningContextTokens = Math.ceil(systemPrompt.length / 4);
@@ -320,7 +335,8 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 	const result: SubagentResult = {
 		ok: !failed,
 		summary: summarize(messages),
-		steps,
+		// Clamp so the reported counter never exceeds the budget the caller set.
+		steps: Math.min(steps, maxSteps),
 		usage: {
 			inputTokens,
 			outputTokens: Math.ceil(outputTokens / 4),

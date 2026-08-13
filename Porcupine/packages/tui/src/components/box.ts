@@ -5,6 +5,7 @@ type RenderCache = {
 	childLines: string[];
 	width: number;
 	bgSample: string | undefined;
+	bgFn: ((text: string) => string) | undefined;
 	lines: string[];
 };
 
@@ -69,6 +70,7 @@ export class Box implements Component {
 			!!cache &&
 			cache.width === width &&
 			cache.bgSample === bgSample &&
+			cache.bgFn === this.bgFn &&
 			cache.childLines.length === childLines.length &&
 			cache.childLines.every((line, i) => line === childLines[i])
 		);
@@ -102,7 +104,11 @@ export class Box implements Component {
 			this.scanBuffer = new Array<string[] | undefined>(n);
 		}
 		const scanned = this.scanBuffer;
-		let stable = this.cache !== undefined && width === this.lastRenderWidth && bgSample === this.lastBgSample;
+		let stable =
+			this.cache !== undefined &&
+			width === this.lastRenderWidth &&
+			bgSample === this.lastBgSample &&
+			this.cache.bgFn === this.bgFn;
 		for (let i = 0; i < n; i++) {
 			const lines = this.children[i]!.render(contentWidth);
 			scanned[i] = lines;
@@ -165,7 +171,7 @@ export class Box implements Component {
 		}
 
 		// Update cache
-		this.cache = { childLines, width, bgSample, lines: result };
+		this.cache = { childLines, width, bgSample, bgFn: this.bgFn, lines: result };
 
 		return result;
 	}

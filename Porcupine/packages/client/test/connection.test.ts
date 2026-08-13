@@ -331,4 +331,18 @@ describe("PorcupineClient", () => {
 				}),
 		).toThrow(/maxFrameLength/);
 	});
+
+	test("validates requestTimeoutMs is a positive safe integer (BUG-C2)", () => {
+		const server = new MemoryByteServer();
+		for (const bad of [0, -1, 1.5, NaN, Infinity]) {
+			expect(
+				() =>
+					new PorcupineClient({
+						token: "secret",
+						requestTimeoutMs: bad as unknown as number,
+						transportFactory: (handlers) => server.connect(handlers),
+					}),
+			).toThrow(/requestTimeoutMs/);
+		}
+	});
 });

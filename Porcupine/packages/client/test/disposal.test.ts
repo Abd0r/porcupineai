@@ -51,4 +51,27 @@ describe("PorcupineClient disposal", () => {
 		expect(client.disposed).toBe(true);
 		expect(client.connectionState).toBe("disconnected");
 	});
+
+	test("disposing an inactive session handle never throws synchronously (BUG-C1)", async () => {
+		const server = new MemoryByteServer();
+		const client = await connectClient(server);
+		const handle = await attachSession(client, server, sessionSnapshot("session-1"));
+
+		expect(handle.attached).toBe(true);
+		await client.dispose();
+		expect(handle.attached).toBe(false);
+
+		// dispose() must conform to the AsyncDisposable contract: return a promise even
+		// when the underlying lease release would assert (it must never throw synchronously).
+		let syncThrow: unknown;
+		let disposal: unknown;
+		try {
+			disposal = handle.dispose();
+		} catch (error) {
+			syncThrow = error;
+		}
+		expect(syncThrow).toBeUndefined();
+		expect(disposal).toBeInstanceOf(Promise);
+		await expect(disposal as Promise<void>).resolves.toBeUndefined();
+	});
 });

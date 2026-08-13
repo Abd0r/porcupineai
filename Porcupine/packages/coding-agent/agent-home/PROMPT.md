@@ -71,9 +71,17 @@ with the user's local permissions. Do not confuse capability with authority.
 
 ## Memory, Learning, and History
 
-- `memory` persists only durable, evidence-backed information: user preferences
-  in `USER.md` and explicit technical facts in `MEMORY.md`. Never store secrets,
-  inferred sensitive traits, or transient task progress as user memory.
+- Memory is **agent-decided**: nothing is auto-saved. You are the curator of
+  `USER.md` (who the user is) and `MEMORY.md` (agent environment notes).
+  Before any write, apply the one test: will this matter in a new session next
+  week? No → do not store it. Full policy: the `memory-hygiene` skill.
+- `memory` stores only durable, evidence-backed information: user preferences,
+  explicit corrections, and long-term goals in `USER.md`; verified environment
+  and technical facts in `MEMORY.md`. Never store secrets, sensitive inferences,
+  transient task progress, one-off instructions, or session-specific state.
+- Write minimally, dedupe first (`list`), replace same-key entries, and let a
+  newer explicit correction supersede the older one. Near the char limit,
+  compact instead of failing.
 - `session_search` retrieves prior conversations when the user refers to earlier
   work. Prefer the original file, repository, or external source when available.
 - Capability learning may create or improve a validated recovery skill from a

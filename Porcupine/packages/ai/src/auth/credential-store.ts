@@ -24,7 +24,9 @@ export class InMemoryCredentialStore implements CredentialStore {
 	}
 
 	async read(providerId: string): Promise<Credential | undefined> {
-		return this.credentials.get(providerId);
+		// Route reads through the per-provider serialization chain so a read can never
+		// observe a stale/partial state while a concurrent modify(refresh) is in flight.
+		return this.enqueue(providerId, async () => this.credentials.get(providerId));
 	}
 
 	async list(): Promise<readonly CredentialInfo[]> {

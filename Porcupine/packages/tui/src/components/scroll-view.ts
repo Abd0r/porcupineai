@@ -63,7 +63,7 @@ export class ScrollView extends Container {
 	}
 
 	get isScrollbarVisible(): boolean {
-		if (this.scrollbar === "always") return this.currentViewportHeight > 0;
+		if (this.scrollbar === "always") return this.currentViewportHeight > 0 && this.contentHeight > 0;
 		return (
 			this.scrollbar === "auto" && this.contentHeight > this.currentViewportHeight && this.transientScrollbarVisible
 		);

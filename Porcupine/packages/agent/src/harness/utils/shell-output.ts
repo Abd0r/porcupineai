@@ -63,6 +63,10 @@ export async function executeShellWithCapture(
 	let currentLineBytes = 0;
 	let fullOutputPath: string | undefined;
 	let fullOutputRequested = false;
+	// Raw bytes received so far (pre-sanitization), so the full-output file is
+	// byte-exact rather than a sanitized/trimmed tail. Cleared once handed to the
+	// full-output file so memory stays bounded for non-truncating runs.
+	let rawAccumulated = "";
 	let acceptingOutput = true;
 	let writeChain: Promise<Result<void, ExecutionError>> = Promise.resolve(ok(undefined));
 	let captureError: ExecutionError | undefined;
@@ -114,6 +118,7 @@ export async function executeShellWithCapture(
 	const onChunk = (chunk: string): void => {
 		if (!acceptingOutput) return;
 		try {
+			rawAccumulated += chunk;
 			const text = sanitizeBinaryOutput(chunk).replace(/\r/g, "");
 			const textBytes = encoder.encode(text).byteLength;
 			totalBytes += textBytes;
@@ -132,9 +137,11 @@ export async function executeShellWithCapture(
 			tailOutput += text;
 			const totalLines = completedLines + (hasOpenLine ? 1 : 0);
 			if ((totalBytes > DEFAULT_MAX_BYTES || totalLines > DEFAULT_MAX_LINES) && !fullOutputRequested) {
-				ensureFullOutputFile(tailOutput);
+				ensureFullOutputFile(rawAccumulated);
+				rawAccumulated = "";
 			} else if (fullOutputRequested) {
-				appendFullOutput(text);
+				appendFullOutput(chunk);
+				rawAccumulated = "";
 			}
 			tailOutput = trimToLastUtf8Bytes(tailOutput, maxOutputBytes, encoder);
 			options?.onChunk?.(text, createProgress);
@@ -155,7 +162,10 @@ export async function executeShellWithCapture(
 		});
 		acceptingOutput = false;
 		let progress = createProgress();
-		if (progress.truncation.truncated && !fullOutputRequested) ensureFullOutputFile(tailOutput);
+		if (progress.truncation.truncated && !fullOutputRequested) {
+			ensureFullOutputFile(rawAccumulated);
+			rawAccumulated = "";
+		}
 		const writeResult = await writeChain;
 		if (!writeResult.ok) return err(writeResult.error);
 		if (captureError) return err(captureError);

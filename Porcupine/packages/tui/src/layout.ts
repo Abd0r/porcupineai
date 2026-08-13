@@ -268,11 +268,13 @@ export function getScrollbarGeometry(box: LayoutBox): ScrollbarGeometry | undefi
 
 	const contentHeight = box.children[0]?.rect.height ?? box.scrollContentLines?.length ?? 0;
 	const trackHeight = box.rect.height;
+	if (contentHeight <= 0) return undefined;
 
 	const minThumbHeight = Math.min(2, trackHeight);
+	const maxContentHeight = Math.max(contentHeight, 1);
 	const thumbHeight = Math.max(
 		minThumbHeight,
-		Math.min(trackHeight, Math.round((trackHeight * trackHeight) / contentHeight)),
+		Math.min(trackHeight, Math.round((trackHeight * trackHeight) / maxContentHeight)),
 	);
 	const maxScrollTop = Math.max(0, contentHeight - trackHeight);
 	const maxThumbTop = trackHeight - thumbHeight;

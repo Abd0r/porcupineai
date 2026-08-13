@@ -214,22 +214,67 @@ export async function rebuildCachedBranch(
 		}
 
 		const branchId = uuidv7();
+
+		// Bound the parent-walk recursion so a corrupt parent-id cycle cannot spin
+		// forever; the cap is far beyond any legitimate chain. A cycle or dangling
+		// parent is detected below after the walk completes.
+		const maxDepth = 1_000_000;
 		await db
 			.prepare(
-				`WITH RECURSIVE path(id, entry_seq, parent_id) AS (
-					SELECT id, entry_seq, parent_id
+				`WITH RECURSIVE path(id, entry_seq, parent_id, depth) AS (
+					SELECT id, entry_seq, parent_id, 1
 					FROM session_entries
 					WHERE session_id = ? AND id = ?
 					UNION ALL
-					SELECT parent.id, parent.entry_seq, parent.parent_id
+					SELECT parent.id, parent.entry_seq, parent.parent_id, child.depth + 1
 					FROM session_entries AS parent
 					JOIN path AS child ON child.parent_id = parent.id
-					WHERE parent.session_id = ?
+					WHERE parent.session_id = ? AND child.depth < ?
 				)
 				INSERT INTO branch_entries (session_id, branch_id, entry_id, entry_seq)
 				SELECT ?, ?, id, entry_seq FROM path`,
 			)
-			.run(sessionId, leafId, sessionId, sessionId, branchId);
+			.run(sessionId, leafId, sessionId, maxDepth, sessionId, branchId);
+
+		// Validate the walk: every visited node must be distinct (a revisit means
+		// a parent-id cycle), the walk must end at a root (parent_id NULL) — a
+		// non-null deepest parent means the chain was truncated or dangles — and
+		// the leaf itself must exist.
+		const walk = await db
+			.prepare(
+				`WITH RECURSIVE path(id, parent_id, depth) AS (
+					SELECT id, parent_id, 1
+					FROM session_entries
+					WHERE session_id = ? AND id = ?
+					UNION ALL
+					SELECT parent.id, parent.parent_id, child.depth + 1
+					FROM session_entries AS parent
+					JOIN path AS child ON child.parent_id = parent.id
+					WHERE parent.session_id = ? AND child.depth < ?
+				)
+				SELECT
+					COUNT(*) AS reached,
+					COUNT(DISTINCT id) AS distinctIds,
+					(SELECT parent_id FROM path ORDER BY depth DESC LIMIT 1) AS deepestParent
+				FROM path`,
+			)
+			.get<{ reached: number; distinctIds: number; deepestParent: string | null }>(
+				sessionId,
+				leafId,
+				sessionId,
+				maxDepth,
+			);
+		if (!walk || walk.reached === 0) {
+			throw invalidSession(`branch cache rebuild found no entry for leaf ${leafId}`);
+		}
+		if (walk.reached > walk.distinctIds) {
+			throw invalidSession(`branch cache cycle detected rebuilding branch for leaf ${leafId}`);
+		}
+		if (walk.deepestParent !== null) {
+			throw invalidSession(
+				`branch cache walk for leaf ${leafId} did not reach a root (dangling or truncated parent chain)`,
+			);
+		}
 		await db
 			.prepare("INSERT INTO branch_tips (session_id, tip_id, branch_id) VALUES (?, ?, ?)")
 			.run(sessionId, leafId, branchId);

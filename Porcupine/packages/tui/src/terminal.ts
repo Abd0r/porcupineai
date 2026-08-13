@@ -390,6 +390,9 @@ export class ProcessTerminal implements Terminal {
 
 		const previousHandler = this.inputHandler;
 		this.inputHandler = undefined;
+		// Flush any half-assembled partial sequence held by the StdinBuffer so a stale
+		// prefix isn't re-delivered to the restored handler after the drain completes.
+		this.stdinBuffer?.clear();
 
 		let lastDataTime = Date.now();
 		const onData = () => {

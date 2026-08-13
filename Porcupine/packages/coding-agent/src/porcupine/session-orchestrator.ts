@@ -150,9 +150,11 @@ export class PorcupineSessionOrchestrator {
 	constructor(options: PorcupineSessionOrchestratorOptions) {
 		this.getCapabilities = options.getCapabilities;
 		this.configDir = options.configDir;
-		const hasHome = Boolean(options.configDir);
-		this.enableUserPatterns = options.enableUserPatterns ?? hasHome;
-		this.enableCapabilityLearning = options.enableCapabilityLearning ?? hasHome;
+		// Memory/user modeling is AGENT-DECIDED via the memory tool. Automatic
+		// user-pattern and capability learning is opt-in only (explicitly
+		// enabled by a surface), never on by default — auto-saves fill junk.
+		this.enableUserPatterns = options.enableUserPatterns ?? false;
+		this.enableCapabilityLearning = options.enableCapabilityLearning ?? false;
 		this.onEvent = options.onEvent;
 	}
 

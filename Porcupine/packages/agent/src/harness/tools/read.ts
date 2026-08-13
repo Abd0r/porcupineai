@@ -13,6 +13,8 @@ import { detectSupportedImageMimeType, encodeBase64 } from "./image.ts";
 import { resolveReadToolPath } from "./path-utils.ts";
 import type { ExecutionToolContext } from "./tool-context.ts";
 
+const MAX_READ_IMAGE_BYTES = 10 * 1024 * 1024;
+
 const readSchema = Type.Object({
 	path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
 	offset: Type.Optional(Type.Number({ description: "Line number to start reading from (1-indexed)" })),
@@ -55,6 +57,22 @@ export function createReadTool<TContext extends ExecutionToolContext = Execution
 			const bytes = getOrThrow(await env.readBinaryFile(absolutePath, signal));
 			const mimeType = detectSupportedImageMimeType(bytes);
 			if (mimeType) {
+				// Guard against unbounded in-memory/transcript bloat from very large
+				// images: without a cap, bytes are base64-encoded (~1.33x) in full into
+				// the transcript/provider payload. Delegate oversize images to an
+				// imageProcessor that can resize; otherwise flag them instead of
+				// base64-encoding the whole file.
+				if (bytes.byteLength > MAX_READ_IMAGE_BYTES && !options?.imageProcessor) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Read image file [${mimeType}]\n[Image omitted: ${bytes.byteLength} bytes exceeds the ${MAX_READ_IMAGE_BYTES}-byte read limit. Configure an imageProcessor to resize large images, or use bash: head/convert to downscale.]`,
+							},
+						],
+						details: undefined,
+					};
+				}
 				if (options?.imageProcessor) {
 					const processed = await options.imageProcessor(bytes, mimeType, {
 						autoResizeImages: options.autoResizeImages ?? true,

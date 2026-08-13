@@ -137,6 +137,12 @@ class UnixByteTransport implements ByteTransport {
 
 			try {
 				this.#socket.once("close", onClose);
+				// Re-check after registering: if the socket was closed/destroyed in the gap
+				// between the writable check above and registering onClose, the close event
+				// may never fire and the write callback may never run — fail fast instead.
+				if (this.#socket.destroyed) {
+					fail(new Error("Unix transport closed during write"));
+				}
 				const accepted = this.#socket.write(chunk, (error) => {
 					if (error) {
 						fail(error);

@@ -62,6 +62,25 @@ describe("provider request retries", () => {
 		expect(request).toHaveBeenCalledTimes(2);
 	});
 
+	it("detaches the abort listener after a completed retry sleep", async () => {
+		vi.useFakeTimers();
+		const controller = new AbortController();
+		const request = vi
+			.fn<() => Promise<string>>()
+			.mockRejectedValueOnce(providerError(429, { "retry-after-ms": "100" }))
+			.mockResolvedValue("ok");
+
+		const result = retryProviderRequest(request, { maxRetries: 1, signal: controller.signal });
+		await vi.advanceTimersByTimeAsync(100); // sleep completes and resolves
+		await expect(result).resolves.toBe("ok");
+
+		// Normal-completion path must have detached the abort listener, so aborting
+		// afterwards neither rejects the already-settled promise nor leaves a listener
+		// that disturbs later operations (BUG-5).
+		controller.abort();
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
 	it("aborts a provider-requested retry delay", async () => {
 		vi.useFakeTimers();
 		const controller = new AbortController();

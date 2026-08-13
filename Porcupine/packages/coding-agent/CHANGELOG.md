@@ -1,6 +1,23 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.66] - 2026-08-13
+
+### Security
+
+- Anthropic OAuth now uses an independent random `state` token: the PKCE code verifier is no longer embedded in the authorize URL or redirect (it is only used for the token exchange), closing a verifier-leakage vector.
+- Auto Mode rm-scope analysis now expands `${HOME}`/`$VAR`/`${VAR}` path forms and fails closed on any unresolved shell variable, closing the `${HOME}/...` protected-path and workspace-gate bypass (with regression tests).
+- Credential migration is atomic and idempotent: merged credentials are written to `auth.json` (temp-file + rename, 0600) before legacy `oauth.json`/`settings.json apiKeys` sources are touched, and a partial earlier run merges instead of overwriting. A corrupt existing `auth.json` is never overwritten.
+- `porcupine serve` bearer-token comparison is constant-time, and each permission request can be answered exactly once (a late or duplicate response after timeout is refused instead of double-delivering).
+
+### Fixed
+
+- Deep bug sweep (~50 fixes across all packages, each with regression tests): agent-loop unhandled-rejection path and stream termination, late grandchild stdout truncation (grace raised and settle moved to stream end), double `agent_end` on failure, steering-queue ordering, post-abort parallel tool execution, session JSONL rewrite is now atomic (temp + rename) with exit-time flush, compaction context preserved across branches, read-ledger no longer records bogus "seen" windows for oversized lines (and rejects `offset: 0` explicitly), sub-agent report-injection failures no longer fabricate failed results, web-extract truncates at UTF-8 boundaries with a response body cap, Gemini API thinking tokens no longer double-counted, streaming-parse throttle cache no longer crosses concurrent streams, RPC input lines serialized, SSE broadcasts guard closed clients, SQLite branch-cache parent walk is cycle-guarded and must reach a root, TUI scrollbar/settings-list/cursor fixes, and client `dispose()` no longer throws synchronously.
+
+### Memory and learning
+
+- Memory is now agent-decided: automatic user-pattern and capability learning is opt-in and off by default (`enableUserPatterns`/`enableCapabilityLearning` default false). The agent curates `USER.md` (who the user is) and `MEMORY.md` (environment notes) through the `memory` tool under the `meta/memory-hygiene` policy.
+- Storage limits raised to USER.md 12,000 / MEMORY.md 16,000 chars with per-turn prompt-injection budgets (6,000 / 8,000) and a truncation marker pointing to the full file. `remove`/`replace` always succeed even when a file is over the limit; `replace` matches exact entries or unambiguous substrings; adds dedupe exactly.
+- The memory tool's per-turn prompt surface is a single line; the full policy lives in the agent prompt and the `memory-hygiene` skill (docs/usage.md updated to match).
 
 ## [0.1.65] - 2026-08-12
 

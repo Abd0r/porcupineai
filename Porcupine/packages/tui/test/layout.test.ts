@@ -240,6 +240,20 @@ describe("viewport layout", () => {
 		assert.strictEqual(thumbHeightFor(400), 2);
 	});
 
+	it('handles an "always" scrollbar over (near-)empty content without a full-track/Infinite thumb (BUG-5)', () => {
+		const scrollbarBackground = "\x1b[48;5;1m";
+		const scrollbarStyle = (text: string) => `${scrollbarBackground}${text}\x1b[49m`;
+
+		// contentHeight 1 in a viewport of 5 previously produced Math.round((25)/1)=25
+		// -> clamped to trackHeight (full track), or Infinity when contentHeight was 0.
+		const tiny = new ScrollView(new Text("only-one-line", 0, 0), { scrollbar: "always", scrollbarStyle });
+		const tinyFrame = renderLayoutFrame(tiny, 6, 5, () => {});
+		assert.ok(Array.isArray(tinyFrame.lines), "tiny-content scrollbar render should not throw");
+		tinyFrame.lines.forEach((line) => {
+			assert.strictEqual(typeof line, "string");
+		});
+	});
+
 	it("updates reserved scrollbar layout at runtime", () => {
 		const scrollView = new ScrollView(new Text("123456", 0, 0), { scrollbar: "always" });
 		const render = () => renderLayoutFrame(new HStack([scrollView], { align: "start" }), 6, 2, () => {});

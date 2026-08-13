@@ -131,14 +131,20 @@ Use Auto when you want Porcupine to carry a task as far as it safely can without
 
 ### Autonomous Learning
 
-Porcupine learns after a turn has settled. It does not pause for a proposal
-approval queue. The learning loop only activates artifacts backed by concrete
-turn evidence:
+Automatic learning is **opt-in and off by default** (`enableUserPatterns` /
+`enableCapabilityLearning`). When enabled, Porcupine learns after a turn has
+settled — it does not pause for a proposal approval queue, and only activates
+artifacts backed by concrete turn evidence:
 
 - high-confidence user preferences are added to `~/.porcupine/agent/USER.md`;
 - explicit technical facts are added to `~/.porcupine/agent/MEMORY.md`;
 - verified tool failures can create a recovery skill at
   `~/.porcupine/agent/skills/<stack>/learned-<slug>/SKILL.md`.
+
+By default, memory and user modeling are **agent-decided**: the agent curates
+`USER.md` (who the user is) and `MEMORY.md` (environment notes) through the
+`memory` tool, following the `meta/memory-hygiene` policy (durable facts only,
+dedupe, one line each, newer corrections replace older ones).
 
 Run `/learning` (or `/learning graph`) to render the evidence graph. It starts
 at the first recorded learning event and groups durable improvements by memory

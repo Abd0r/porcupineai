@@ -33,6 +33,8 @@ export type CanEditResult =
 
 /** Render the seen window (1-indexed, inclusive) as the compact "X-Y" form. */
 function formatSeenWindow(stored: StoredRecord): string {
+	// Empty window (no content line was actually seen, e.g. firstLineExceedsLimit).
+	if (stored.seenFromLine > stored.seenToLine) return "0";
 	// Unit-covering reads: a single line reads as "N" rather than "N-N".
 	if (stored.seenFromLine === stored.seenToLine) {
 		return String(stored.seenFromLine);

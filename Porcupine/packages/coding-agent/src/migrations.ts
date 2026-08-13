@@ -14,7 +14,39 @@ const EXTENSIONS_DOC_URL =
 	"https://github.com/earendil-works/porcupine-mono/blob/main/packages/coding-agent/docs/extensions.md";
 
 /**
+ * Read a JSON file into an object. Returns null when the file exists but is
+ * corrupt (callers must not overwrite in that case).
+ */
+function tryReadJson(path: string): Record<string, unknown> | null {
+	try {
+		const value = JSON.parse(readFileSync(path, "utf-8"));
+		return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+	} catch {
+		return null;
+	}
+}
+
+/** Write JSON durably: temp file (0600) + rename, with a Windows fallback. */
+function writeJsonAtomic(path: string, value: unknown): void {
+	mkdirSync(dirname(path), { recursive: true });
+	const temp = `${path}.tmp-${process.pid}`;
+	writeFileSync(temp, JSON.stringify(value, null, 2), { mode: 0o600 });
+	try {
+		renameSync(temp, path);
+	} catch {
+		// Windows cannot rename over an existing file: remove and retry.
+		rmSync(path, { force: true });
+		renameSync(temp, path);
+	}
+}
+
+/**
  * Migrate legacy oauth.json and settings.json apiKeys to auth.json.
+ *
+ * Ordering guarantee: the merged credentials are written to auth.json FIRST
+ * (atomically), and only afterwards are the legacy sources removed. A crash
+ * at any point can never lose credentials — the worst case is a stale legacy
+ * source file that gets re-migrated on the next run.
  *
  * @returns Array of provider names that were migrated
  */
@@ -24,49 +56,76 @@ export function migrateAuthToAuthJson(): string[] {
 	const oauthPath = join(agentDir, "oauth.json");
 	const settingsPath = join(agentDir, "settings.json");
 
-	// Skip if auth.json already exists
-	if (existsSync(authPath)) return [];
-
-	const migrated: Record<string, unknown> = {};
+	// Merge into any existing auth.json so a partial earlier run is idempotent.
+	// If auth.json exists but is corrupt, never overwrite it — leave the legacy
+	// sources intact so a human can recover.
+	let migrated: Record<string, unknown> = {};
+	if (existsSync(authPath)) {
+		const existing = tryReadJson(authPath);
+		if (existing === null) return [];
+		migrated = existing;
+	}
 	const providers: string[] = [];
+	let oauthRead = false;
+	let settingsContent: string | null = null;
+	let settingsHasApiKeys = false;
 
-	// Migrate oauth.json
+	// Read oauth.json (no mutation yet).
 	if (existsSync(oauthPath)) {
 		try {
 			const oauth = JSON.parse(readFileSync(oauthPath, "utf-8"));
 			for (const [provider, cred] of Object.entries(oauth)) {
-				migrated[provider] = { type: "oauth", ...(cred as object) };
-				providers.push(provider);
+				if (!(provider in migrated)) {
+					migrated[provider] = { type: "oauth", ...(cred as object) };
+					providers.push(provider);
+				}
 			}
-			renameSync(oauthPath, `${oauthPath}.migrated`);
+			oauthRead = true;
 		} catch {
 			// Skip on error
 		}
 	}
 
-	// Migrate settings.json apiKeys
+	// Read settings.json apiKeys (no mutation yet).
 	if (existsSync(settingsPath)) {
 		try {
 			const content = readFileSync(settingsPath, "utf-8");
 			const settings = JSON.parse(content);
 			if (settings.apiKeys && typeof settings.apiKeys === "object") {
+				settingsHasApiKeys = true;
 				for (const [provider, key] of Object.entries(settings.apiKeys)) {
-					if (!migrated[provider] && typeof key === "string") {
+					if (!(provider in migrated) && typeof key === "string") {
 						migrated[provider] = { type: "api_key", key };
 						providers.push(provider);
 					}
 				}
 				delete settings.apiKeys;
-				writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 			}
+			settingsContent = JSON.stringify(settings, null, 2);
 		} catch {
 			// Skip on error
 		}
 	}
 
-	if (Object.keys(migrated).length > 0) {
-		mkdirSync(dirname(authPath), { recursive: true });
-		writeFileSync(authPath, JSON.stringify(migrated, null, 2), { mode: 0o600 });
+	// Durable destination first.
+	if (providers.length > 0) {
+		writeJsonAtomic(authPath, migrated);
+	}
+
+	// Source cleanup only after auth.json is on disk (best-effort).
+	if (oauthRead) {
+		try {
+			renameSync(oauthPath, `${oauthPath}.migrated`);
+		} catch {
+			// auth.json already holds the credentials; leave the source in place.
+		}
+	}
+	if (settingsContent !== null && settingsHasApiKeys) {
+		try {
+			writeFileSync(settingsPath, settingsContent);
+		} catch {
+			// auth.json already holds the credentials; leave settings.json as-is.
+		}
 	}
 
 	return providers;

@@ -21,6 +21,19 @@ describe("analyzeRmScope — intent inferred from scope", () => {
 		expect(analyzeRmScope("rm -rf $HOME/Desktop", CWD, PROTECTED)).toEqual({ insideWorkspace: false });
 	});
 
+	it("braced variable forms resolve outside the workspace (regression: home-bypass)", () => {
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: shell variables are the subject under test
+		expect(analyzeRmScope("rm -rf ${HOME}/Desktop", CWD, PROTECTED)).toEqual({ insideWorkspace: false });
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: shell variables are the subject under test
+		expect(analyzeRmScope("rm -rf ${HOME}", CWD, PROTECTED)).toEqual({ insideWorkspace: false });
+	});
+
+	it("unresolvable shell variables fail closed (regression: empty-var path)", () => {
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: shell variables are the subject under test
+		expect(analyzeRmScope("rm -rf ${NOPE}/etc", CWD, PROTECTED)).toEqual({ insideWorkspace: false });
+		expect(analyzeRmScope("rm -rf $HOME$SOMETHING", CWD, PROTECTED)).toEqual({ insideWorkspace: false });
+	});
+
 	it("deleting the working directory itself is never allowed", () => {
 		expect(analyzeRmScope("rm -rf .", CWD, PROTECTED)?.protected).toBe("the working directory itself");
 	});
