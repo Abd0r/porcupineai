@@ -39,10 +39,10 @@
 		"node": ">=22.19.0"
 	},
 	"dependencies": {
-		"typebox": "1.3.7"
+		"typebox": "1.3.11"
 	},
 	"devDependencies": {
 		"shx": "0.4.0",
-		"vitest": "4.1.9"
+		"vitest": "4.1.10"
 	}
 }
