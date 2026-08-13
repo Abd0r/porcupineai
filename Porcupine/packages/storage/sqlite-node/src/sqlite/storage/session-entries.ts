@@ -190,7 +190,7 @@ export function decodeEntry(row: SessionEntryRow): SessionTreeEntry {
 			if (
 				typeof payload.customType !== "string" ||
 				typeof payload.display !== "boolean" ||
-				!("content" in payload)
+				!(typeof payload.content === "string" || isTextImageContentArray(payload.content))
 			) {
 				throw invalidEntry(`entry ${row.id} has invalid custom_message payload`);
 			}

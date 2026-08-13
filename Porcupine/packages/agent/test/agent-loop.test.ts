@@ -8,7 +8,8 @@ import {
 } from "@porcupineai/ai";
 import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
-import { agentLoop, agentLoopContinue } from "../src/agent-loop.ts";
+import { agentLoop, agentLoopContinue, createIncrementalConverter } from "../src/agent-loop.ts";
+import { convertToLlm as builtInConvertToLlm } from "../src/harness/messages.ts";
 import { setDefaultStreamFn } from "../src/index.ts";
 import type { AgentContext, AgentEvent, AgentLoopConfig, AgentMessage, AgentTool } from "../src/types.ts";
 
@@ -1361,6 +1362,50 @@ describe("agentLoop with AgentMessage", () => {
 		}
 
 		expect(llmCalls).toBe(1);
+	});
+
+	it("BUG-1: agentLoop terminates its stream when the stream function rejects", async () => {
+		const context: AgentContext = { systemPrompt: "", messages: [], tools: [] };
+		const config: AgentLoopConfig = {
+			model: createModel(),
+			convertToLlm: identityConverter,
+		};
+
+		// Stream function throws synchronously instead of emitting an error event.
+		const stream = agentLoop([createUserMessage("Hello")], context, config, undefined, () => {
+			throw new Error("provider exploded");
+		});
+
+		// Must not hang: agentLoop's .catch should terminal the stream with agent_end.
+		const events: AgentEvent[] = [];
+		for await (const event of stream) {
+			events.push(event);
+		}
+		expect(events.some((event) => event.type === "agent_end")).toBe(true);
+		expect(await stream.result()).toEqual([]);
+	});
+
+	it("BUG-8: incremental converter tolerates fresh (copied) arrays with unchanged prefix", async () => {
+		const history = [createUserMessage("m1"), createUserMessage("m2"), createUserMessage("m3")];
+		const config: AgentLoopConfig = { model: createModel(), convertToLlm: builtInConvertToLlm };
+		const converter = createIncrementalConverter(config);
+
+		await converter.convert(history);
+
+		// transformContext hooks often return a fresh `.slice()` of the same messages
+		// plus a new tail. This must stay correct (identical to a full conversion),
+		// and must NOT force a full re-conversion of the entire history every turn.
+		const fresh = [...history, createUserMessage("m4")];
+		const copiedFresh = fresh.slice(); // fresh array, same element references for the prefix
+		const incremental = await converter.convert(copiedFresh);
+		expect(incremental).toEqual(builtInConvertToLlm(copiedFresh));
+
+		// A same-length fresh copy (only the last message object changed) also stays
+		// correct and is handled incrementally (only the last element re-converted).
+		const freshened = history.slice();
+		freshened[freshened.length - 1] = createUserMessage("m3-revised");
+		const incrementalSameLength = await converter.convert(freshened);
+		expect(incrementalSameLength).toEqual(builtInConvertToLlm(freshened));
 	});
 });
 

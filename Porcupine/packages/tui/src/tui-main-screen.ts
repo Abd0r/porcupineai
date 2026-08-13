@@ -204,6 +204,10 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		}
 		this.previousRawLines = newLines;
 
+		// Mutating passes below (extractCursorPosition / applyLineResets) consume the
+		// returned array in place; copy it first so the shared render cache stays pristine.
+		newLines = [...newLines];
+
 		// Composite overlays into the rendered lines (before differential compare)
 		if (this.hasOverlayEntries) {
 			newLines = this.compositeOverlays(newLines, width, height);

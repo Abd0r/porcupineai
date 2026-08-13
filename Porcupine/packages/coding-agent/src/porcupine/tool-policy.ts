@@ -275,6 +275,18 @@ export function createComposedToolDefinition(policy: ToolPolicyEntry): ToolDefin
 		description: `${policy.description}\n\n<composed tool> Defined in ${TOOL_POLICY_FILE}; executes an allowlisted read-only command.`,
 		parameters: Type.Object({}),
 		async execute() {
+			// Runtime re-validation: the stored policy is trusted only if it still
+			// passes validation at execution time. A hand-edited or stale entry is
+			// refused here rather than spawning a now-denied command.
+			const problems = validateToolPolicy(policy);
+			if (problems.length > 0) {
+				return {
+					content: [
+						{ type: "text", text: `composed tool "${policy.name}" failed validation: ${problems.join("; ")}` },
+					],
+					details: { isError: true },
+				};
+			}
 			return new Promise((resolve) => {
 				const child = spawn(policy.command[0]!, policy.command.slice(1), {
 					stdio: ["ignore", "pipe", "pipe"],
@@ -283,22 +295,33 @@ export function createComposedToolDefinition(policy: ToolPolicyEntry): ToolDefin
 				let stdout = "";
 				let stderr = "";
 				let truncated = false;
+				let settled = false;
 				const cap = policy.maxOutput ?? COMPOSED_MAX_OUTPUT;
 				// Soft cap truncates-and-returns; a hard cap bounds memory without
 				// turning a large *successful* output into an error.
 				const hardCap = cap * 10;
+				const childStdoutCap = hardCap;
+				const childStderrCap = 4_000;
+				// Guard against a double-settle (spawn "error" + "close" both fire on
+				// spawn failure); only the first resolve is honored.
+				const settle = (value: Parameters<typeof resolve>[0]) => {
+					if (settled) return;
+					settled = true;
+					resolve(value);
+				};
 				child.stdout.on("data", (chunk: Buffer) => {
-					if (stdout.length >= hardCap) return; // stop accumulating, do not kill
+					if (stdout.length >= childStdoutCap) return; // stop accumulating, do not kill
 					stdout += chunk.toString();
 					if (stdout.length > cap) truncated = true;
 				});
 				child.stderr.on("data", (chunk: Buffer) => {
+					if (stderr.length >= childStderrCap) return; // cap stderr like stdout
 					stderr += chunk.toString();
 				});
 				child.on("error", (error) => {
 					const err = error as NodeJS.ErrnoException;
 					const timedOut = err.code === "ETIMEDOUT";
-					resolve({
+					settle({
 						content: [
 							{
 								type: "text",
@@ -310,7 +333,7 @@ export function createComposedToolDefinition(policy: ToolPolicyEntry): ToolDefin
 				});
 				child.on("close", (code) => {
 					if (code !== 0) {
-						resolve({
+						settle({
 							content: [
 								{
 									type: "text",
@@ -322,7 +345,7 @@ export function createComposedToolDefinition(policy: ToolPolicyEntry): ToolDefin
 						return;
 					}
 					const shown = truncated ? `${stdout.slice(0, cap)}\n[truncated]` : stdout.slice(0, cap);
-					resolve({
+					settle({
 						content: [{ type: "text", text: shown }],
 						details: { ok: true, truncated },
 					});

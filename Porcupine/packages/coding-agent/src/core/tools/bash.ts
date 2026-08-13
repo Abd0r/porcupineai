@@ -135,11 +135,14 @@ export function createLocalBashOperations(options?: { shellPath?: string }): Bas
 				// Handle shell spawn errors and wait for the process to terminate without hanging
 				// on inherited stdio handles held by detached descendants.
 				const exitCode = await waitForChildProcess(child);
-				if (signal?.aborted) {
-					throw new Error("aborted");
-				}
+				// Check the caller-intended timeout FIRST (BUG-10): if the abort controller
+				// happens to be aborted around the same moment the timeout fires, the user's
+				// requested `timeout:` must win rather than being mislabeled as "aborted".
 				if (timedOut) {
 					throw new Error(`timeout:${timeout}`);
+				}
+				if (signal?.aborted) {
+					throw new Error("aborted");
 				}
 				return { exitCode };
 			} finally {

@@ -81,7 +81,7 @@ export function parseNotebook(buffer: Buffer): NotebookRender | null {
 	}
 	if (root === null || typeof root !== "object" || Array.isArray(root)) return null;
 	const obj = root as Record<string, unknown>;
-	const rawCells = obj["cells"];
+	const rawCells = obj.cells;
 	if (!Array.isArray(rawCells)) return null;
 
 	const cells: NotebookCell[] = rawCells.map((rawCell, idx) => {
@@ -89,13 +89,13 @@ export function parseNotebook(buffer: Buffer): NotebookRender | null {
 			return { index: idx + 1, kind: "markdown", source: "" };
 		}
 		const cell = rawCell as Record<string, unknown>;
-		const kindRaw = cell["cell_type"];
+		const kindRaw = cell.cell_type;
 		const kind: NotebookCell["kind"] = kindRaw === "code" || kindRaw === "raw" ? kindRaw : "markdown";
-		const source = joinField(cell["source"]);
+		const source = joinField(cell.source);
 
 		const cellData: NotebookCell = { index: idx + 1, kind, source };
 
-		const outputs = cell["outputs"];
+		const outputs = cell.outputs;
 		if (Array.isArray(outputs) && outputs.length > 0) {
 			const normalised: NotebookOutput[] = [];
 			for (const rawOut of outputs) {
@@ -148,26 +148,26 @@ function imageDataUrl(mime: string, base64: unknown): string | null {
 function parseOutput(rawOut: unknown): NotebookOutput | null {
 	if (rawOut === null || typeof rawOut !== "object" || Array.isArray(rawOut)) return null;
 	const out = rawOut as Record<string, unknown>;
-	const outputType = out["output_type"];
+	const outputType = out.output_type;
 
 	// Streams (stdout/stderr) carry text in `text`.
 	if (outputType === "stream") {
-		const text = joinField(out["text"]);
+		const text = joinField(out.text);
 		return text !== "" ? { kind: "text", text } : null;
 	}
 
 	// Errors carry a name, a value and a traceback.
 	if (outputType === "error") {
-		const ename = joinField(out["ename"]);
-		const evalue = joinField(out["evalue"]);
-		const traceback = joinField(out["traceback"]);
+		const ename = joinField(out.ename);
+		const evalue = joinField(out.evalue);
+		const traceback = joinField(out.traceback);
 		const text = [ename, evalue].filter((s) => s !== "").join(": ") || "error";
 		const full = traceback !== "" ? `${text}\n${traceback}` : text;
 		return { kind: "error", text: full };
 	}
 
 	// display_data / execute_result carry a mime bundle in `data`.
-	const data = out["data"];
+	const data = out.data;
 	if (data === null || typeof data !== "object" || Array.isArray(data)) return null;
 	const bundle = data as Record<string, unknown>;
 

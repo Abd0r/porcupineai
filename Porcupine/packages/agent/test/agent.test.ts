@@ -619,7 +619,7 @@ describe("Agent", () => {
 		expect(agent.state.messages[agent.state.messages.length - 1].role).toBe("assistant");
 	});
 
-	it("continue() should keep one-at-a-time steering semantics from assistant tail", async () => {
+	it("continue() drains the full steering queue from an assistant tail", async () => {
 		let responseCount = 0;
 		const agent = new Agent({
 			streamFn: () => {
@@ -658,9 +658,11 @@ describe("Agent", () => {
 
 		await expect(agent.continue()).resolves.toBeUndefined();
 
+		// Both queued steering messages are injected before a single assistant turn,
+		// so one continue() consumes the whole steering queue.
 		const recentMessages = agent.state.messages.slice(-4);
-		expect(recentMessages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
-		expect(responseCount).toBe(2);
+		expect(recentMessages.map((m) => m.role)).toEqual(["assistant", "user", "user", "assistant"]);
+		expect(responseCount).toBe(1);
 	});
 
 	it("keeps legacy prepareNextTurn signal callback behavior", async () => {

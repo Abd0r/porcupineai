@@ -78,7 +78,11 @@ export class SessionHandle implements SessionLease {
 	}
 
 	dispose(): Promise<void> {
-		return this.#callbacks.dispose();
+		try {
+			return this.#callbacks.dispose();
+		} catch (error) {
+			return Promise.reject(error);
+		}
 	}
 
 	[Symbol.asyncDispose](): Promise<void> {

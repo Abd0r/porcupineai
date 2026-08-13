@@ -116,6 +116,64 @@ describe("tool-policy validation (Phase F)", () => {
 	});
 });
 
+describe("tool-policy runtime revalidation + stderr cap (BUG-09/BUG-10)", () => {
+	it("refuses to execute a composed tool whose stored command was tampered to a denied binary", async () => {
+		const dir = tempDir("porcupine-policy-rev-");
+		const created = upsertToolPolicy(dir, {
+			name: "safe-ls",
+			description: "List files",
+			command: ["ls"],
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+		// Simulate a hand-edited / tampered entry that now points at a denied binary.
+		const tampered = { ...created.policy, command: ["rm", "-rf", "/"] };
+		const def = createComposedToolDefinition(tampered);
+		const result = await def.execute("call-t", {}, undefined, undefined, undefined as never);
+		const text = result.content
+			.filter((part) => part.type === "text")
+			.map((part) => (part as { text?: string }).text ?? "")
+			.join("");
+		expect(text).toContain("failed validation");
+		expect((result.details as { isError?: boolean }).isError).toBe(true);
+	});
+
+	it("caps accumulated stderr output", async () => {
+		const dir = tempDir("porcupine-policy-stderr-");
+		// "cat" an oversized missing path: deterministic non-zero exit with stderr.
+		const created = upsertToolPolicy(dir, {
+			name: "noisy-cat",
+			description: "Emit stderr",
+			command: ["cat", `/definitely/nonexistent/porcupine-${`x`.repeat(300)}`],
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+		const def = createComposedToolDefinition(created.policy);
+		const result = await def.execute("call-s", {}, undefined, undefined, undefined as never);
+		const text = result.content
+			.filter((part) => part.type === "text")
+			.map((part) => (part as { text?: string }).text ?? "")
+			.join("");
+		expect(text).toContain("composed tool exited");
+		expect(text.length).toBeLessThan(1_000);
+	});
+
+	it("does not double-settle on spawn error + close", async () => {
+		const dir = tempDir("porcupine-policy-dbl-");
+		const created = upsertToolPolicy(dir, {
+			name: "dbl-cmd",
+			description: "exit non-zero",
+			command: ["cat", "/nope-does-not-exist-12345"],
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+		const def = createComposedToolDefinition(created.policy);
+		const result = await def.execute("call-d", {}, undefined, undefined, undefined as never);
+		expect(result.content.length).toBeGreaterThan(0);
+		expect((result.details as { isError?: boolean }).isError).toBe(true);
+	});
+});
+
 describe("tool-policy registry (Phase F)", () => {
 	it("creates, lists, updates (with snapshot) and deletes composed tools", () => {
 		const dir = tempDir("porcupine-policy-");

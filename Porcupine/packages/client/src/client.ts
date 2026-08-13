@@ -72,6 +72,10 @@ export class PorcupineClient {
 	#disposePromise: Promise<void> | undefined;
 
 	constructor(options: PorcupineClientOptions) {
+		const requestTimeoutMs = options.requestTimeoutMs ?? 60_000;
+		if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
+			throw new TypeError("PorcupineClient requestTimeoutMs must be a positive safe integer");
+		}
 		this.#options = options;
 		this.#state = new ClientState(options.onListenerError);
 		this.#connection = new Connection({

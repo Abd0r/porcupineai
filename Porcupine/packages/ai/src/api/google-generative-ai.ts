@@ -223,8 +223,9 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
 					output.usage = {
 						input:
 							(chunk.usageMetadata.promptTokenCount || 0) - (chunk.usageMetadata.cachedContentTokenCount || 0),
-						output:
-							(chunk.usageMetadata.candidatesTokenCount || 0) + (chunk.usageMetadata.thoughtsTokenCount || 0),
+						// On the Gemini Google AI API candidatesTokenCount already includes thinking
+						// tokens (unlike Vertex), so adding thoughtsTokenCount would double-count them.
+						output: chunk.usageMetadata.candidatesTokenCount || 0,
 						cacheRead: chunk.usageMetadata.cachedContentTokenCount || 0,
 						cacheWrite: 0,
 						reasoning: chunk.usageMetadata.thoughtsTokenCount || 0,

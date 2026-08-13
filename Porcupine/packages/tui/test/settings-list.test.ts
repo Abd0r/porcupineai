@@ -55,4 +55,36 @@ describe("SettingsList", () => {
 
 		assert.deepStrictEqual(changes, [{ id: "ui-mode", value: "fullscreen" }]);
 	});
+
+	it("clamps the value column width so current values survive on narrow terminals (BUG-4)", () => {
+		const list = new SettingsList(
+			[{ id: "mode", label: "Mode", currentValue: "fullscreen", values: ["regular", "fullscreen"] }],
+			10,
+			testTheme,
+			() => {},
+			() => {},
+			{},
+		);
+
+		// usedWidth = prefix(2) + maxLabelWidth(4) + separator(2) = 8, so at container width
+		// 14 the value receives 4 columns and must be present ("full"), not silently dropped.
+		const [row] = list.render(14);
+		assert.ok(row.startsWith("> Mode"), `setting row should render: ${JSON.stringify(row)}`);
+		assert.ok(row.includes("full"), `value column should be preserved at width 14: ${JSON.stringify(row)}`);
+	});
+
+	it("truncates gracefully without negative-width value arithmetic on very narrow terminals (BUG-4)", () => {
+		const list = new SettingsList(
+			[{ id: "mode", label: "Mode", currentValue: "fullscreen", values: ["regular", "fullscreen"] }],
+			10,
+			testTheme,
+			() => {},
+			() => {},
+			{},
+		);
+		for (const width of [4, 6, 8]) {
+			const lines = list.render(width);
+			assert.ok(lines.length > 0, `expected lines for width ${width}`);
+		}
+	});
 });

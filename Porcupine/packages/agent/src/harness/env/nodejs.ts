@@ -32,7 +32,11 @@ import {
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_MS / 1000;
-const EXIT_STDIO_GRACE_MS = 100;
+// Safety net for a child whose grandchild never closes its inherited stdout/stderr
+// after the shell exits. The normal settle path is the stdout/stderr `end`/`close`
+// events, which capture all late-arriving output; this timer only guards against a
+// permanent hang. It drains (not destroys) the streams, so buffered output is kept.
+const EXIT_STDIO_GRACE_MS = 2000;
 
 function resolveTimeoutMs(timeout: number | undefined): Result<number | undefined, ExecutionError> {
 	if (timeout === undefined) return ok(undefined);
@@ -295,8 +299,11 @@ function waitForChildProcess(child: ChildProcess): Promise<number | null> {
 			if (settled) return;
 			settled = true;
 			cleanup();
-			child.stdout?.destroy();
-			child.stderr?.destroy();
+			// Drain rather than destroy: destroying discards buffered stdout/stderr
+			// still arriving from grandchild processes after the shell exits. Resume
+			// lets any in-flight buffered data flush to the `data` consumers.
+			child.stdout?.resume();
+			child.stderr?.resume();
 			resolvePromise(code);
 		};
 		const maybeFinalizeAfterExit = (): void => {

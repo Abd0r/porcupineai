@@ -225,6 +225,35 @@ describe("AgentHarness tools", () => {
 			});
 		});
 
+		it("BUG-4: flags oversize images instead of base64-encoding them", async () => {
+			const context = createContext();
+			// A structurally valid PNG (signature + IHDR header) padded beyond the read
+			// image byte cap so detectSupportedImageMimeType recognizes it as an image.
+			const size = 10 * 1024 * 1024 + 1024;
+			const bigPng = new Uint8Array(size);
+			bigPng.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0); // PNG signature
+			bigPng.set([0x00, 0x00, 0x00, 0x0d], 8); // IHDR chunk length = 13
+			bigPng.set(
+				[..."IHDR"].map((c) => c.charCodeAt(0)),
+				12,
+			); // IHDR type
+			getOrThrow(await context.env.writeFile("huge.png", bigPng));
+
+			const result = await createReadTool().execute(
+				"read-huge",
+				{ path: "huge.png" },
+				undefined,
+				undefined,
+				context,
+			);
+
+			const text = textOutput(result);
+			expect(text).toContain("Read image file [image/png]");
+			expect(text).toContain("Image omitted");
+			// No base64 image payload should be embedded.
+			expect(result.content.some((c) => (c as { type: string }).type === "image")).toBe(false);
+		});
+
 		it("delegates image conversion and resizing to an injected processor", async () => {
 			const context = createContext();
 			const bmp = createTinyBmp();

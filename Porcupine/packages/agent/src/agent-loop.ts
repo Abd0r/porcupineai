@@ -71,9 +71,19 @@ export function createIncrementalConverter(config: AgentLoopConfig): Incremental
 	let convertedCount = 0;
 	return {
 		async convert(messages: AgentMessage[]): Promise<Message[]> {
-			if (messages !== cachedArray || messages.length < convertedCount) {
-				// New or reshaped array (transformContext returned a fresh array, or
-				// history shrank): full conversion.
+			// Treat a fresh array whose already-converted prefix holds the SAME
+			// message references as the cached history as logically unchanged: a
+			// transformContext hook frequently returns a new `.slice()`/spread copy
+			// of the same messages, which must not force a full re-conversion every
+			// turn (that would be O(n²) over a long session).
+			const sameHistory =
+				messages === cachedArray ||
+				(cachedArray !== null &&
+					messages.length >= convertedCount &&
+					hasSameReferencePrefix(cachedArray, messages, convertedCount));
+			if (!sameHistory || messages.length < convertedCount) {
+				// New or reshaped array (transformContext returned a fresh array of
+				// genuinely different messages, or history shrank): full conversion.
 				converted = await config.convertToLlm(messages);
 				cachedArray = messages;
 				convertedCount = messages.length;
@@ -94,6 +104,14 @@ export function createIncrementalConverter(config: AgentLoopConfig): Incremental
 			return converted;
 		},
 	};
+}
+
+/** True when newArr[0..count) holds the same message references as oldArr[0..count). */
+function hasSameReferencePrefix(oldArr: AgentMessage[], newArr: AgentMessage[], count: number): boolean {
+	for (let i = 0; i < count; i++) {
+		if (oldArr[i] !== newArr[i]) return false;
+	}
+	return true;
 }
 
 /**
@@ -118,9 +136,23 @@ export function agentLoop(
 		},
 		signal,
 		streamFn,
-	).then((messages) => {
-		stream.end(messages);
-	});
+	).then(
+		(messages) => {
+			stream.end(messages);
+		},
+		(err) => {
+			// The stream function (or the loop) rejected instead of emitting a
+			// non-error stop. Without this handler the rejection would be an
+			// unhandled promise rejection and `stream` would never end, leaking its
+			// event buffer and subscribers. Push a synthetic terminal so consumers
+			// see agent_end and the stream resolves, then end it.
+			console.error("[agent-loop] agentLoop failed", err);
+			try {
+				stream.push({ type: "agent_end", messages: [] });
+			} catch {}
+			stream.end([]);
+		},
+	);
 
 	return stream;
 }
@@ -157,9 +189,20 @@ export function agentLoopContinue(
 		},
 		signal,
 		streamFn,
-	).then((messages) => {
-		stream.end(messages);
-	});
+	).then(
+		(messages) => {
+			stream.end(messages);
+		},
+		(err) => {
+			// See agentLoop: a rejected loop must still terminal the stream so
+			// subscribers are not left hanging and the rejection is not unhandled.
+			console.error("[agent-loop] agentLoopContinue failed", err);
+			try {
+				stream.push({ type: "agent_end", messages: [] });
+			} catch {}
+			stream.end([]);
+		},
+	);
 
 	return stream;
 }
@@ -394,61 +437,72 @@ async function streamAssistantResponse(
 	let partialMessage: AssistantMessage | null = null;
 	let addedPartial = false;
 
-	for await (const event of response) {
-		switch (event.type) {
-			case "start":
-				partialMessage = event.partial;
-				context.messages.push(partialMessage);
-				addedPartial = true;
-				await emit({ type: "message_start", message: { ...partialMessage } });
-				break;
-
-			case "text_start":
-			case "text_delta":
-			case "text_end":
-			case "thinking_start":
-			case "thinking_delta":
-			case "thinking_end":
-			case "toolcall_start":
-			case "toolcall_delta":
-			case "toolcall_end":
-				if (partialMessage) {
+	try {
+		for await (const event of response) {
+			switch (event.type) {
+				case "start":
 					partialMessage = event.partial;
-					context.messages[context.messages.length - 1] = partialMessage;
-					await emit({
-						type: "message_update",
-						assistantMessageEvent: event,
-						message: { ...partialMessage },
-					});
-				}
-				break;
+					context.messages.push(partialMessage);
+					addedPartial = true;
+					await emit({ type: "message_start", message: { ...partialMessage } });
+					break;
 
-			case "done":
-			case "error": {
-				const finalMessage = await response.result();
-				if (addedPartial) {
-					context.messages[context.messages.length - 1] = finalMessage;
-				} else {
-					context.messages.push(finalMessage);
+				case "text_start":
+				case "text_delta":
+				case "text_end":
+				case "thinking_start":
+				case "thinking_delta":
+				case "thinking_end":
+				case "toolcall_start":
+				case "toolcall_delta":
+				case "toolcall_end":
+					if (partialMessage) {
+						partialMessage = event.partial;
+						context.messages[context.messages.length - 1] = partialMessage;
+						await emit({
+							type: "message_update",
+							assistantMessageEvent: event,
+							message: { ...partialMessage },
+						});
+					}
+					break;
+
+				case "done":
+				case "error": {
+					const finalMessage = await response.result();
+					if (addedPartial) {
+						context.messages[context.messages.length - 1] = finalMessage;
+					} else {
+						context.messages.push(finalMessage);
+					}
+					if (!addedPartial) {
+						await emit({ type: "message_start", message: { ...finalMessage } });
+					}
+					await emit({ type: "message_end", message: finalMessage });
+					return finalMessage;
 				}
-				if (!addedPartial) {
-					await emit({ type: "message_start", message: { ...finalMessage } });
-				}
-				await emit({ type: "message_end", message: finalMessage });
-				return finalMessage;
 			}
 		}
-	}
 
-	const finalMessage = await response.result();
-	if (addedPartial) {
-		context.messages[context.messages.length - 1] = finalMessage;
-	} else {
-		context.messages.push(finalMessage);
-		await emit({ type: "message_start", message: { ...finalMessage } });
+		const finalMessage = await response.result();
+		if (addedPartial) {
+			context.messages[context.messages.length - 1] = finalMessage;
+		} else {
+			context.messages.push(finalMessage);
+			await emit({ type: "message_start", message: { ...finalMessage } });
+		}
+		await emit({ type: "message_end", message: finalMessage });
+		return finalMessage;
+	} catch (error) {
+		// The request rejected mid-stream after a partial was pushed into the
+		// shared context. Remove the stale in-flight partial so it does not linger
+		// in the transcript beside a subsequent error/failure message, then
+		// propagate the underlying error to the loop/error handler.
+		if (addedPartial && context.messages[context.messages.length - 1] === partialMessage) {
+			context.messages.pop();
+		}
+		throw error;
 	}
-	await emit({ type: "message_end", message: finalMessage });
-	return finalMessage;
 }
 
 /**
@@ -599,7 +653,7 @@ async function executeToolCallsParallel(
 			continue;
 		}
 
-		finalizedCalls.push(async () => {
+		const runPrepared = async () => {
 			const executed = await executePreparedToolCall(preparation, signal, emit);
 			const finalized = await finalizeExecutedToolCall(
 				currentContext,
@@ -611,14 +665,29 @@ async function executeToolCallsParallel(
 			);
 			await emitToolExecutionEnd(finalized, emit);
 			return finalized;
-		});
+		};
+		(runPrepared as unknown as { toolCall: AgentToolCall }).toolCall = toolCall;
+		finalizedCalls.push(runPrepared);
 		if (signal?.aborted) {
 			break;
 		}
 	}
 
 	const orderedFinalizedCalls = await Promise.all(
-		finalizedCalls.map((entry) => (typeof entry === "function" ? entry() : Promise.resolve(entry))),
+		finalizedCalls.map((entry) => {
+			if (typeof entry !== "function") return Promise.resolve(entry);
+			if (signal?.aborted) {
+				// A tool call that was prepared but never started must not run after an
+				// abort: post-abort side effects would occur and their results would be
+				// appended as if the batch completed. Return an aborted error result.
+				return Promise.resolve({
+					toolCall: (entry as unknown as { toolCall: AgentToolCall }).toolCall,
+					result: createErrorToolResult("Operation aborted"),
+					isError: true,
+				} satisfies FinalizedToolCallOutcome);
+			}
+			return entry();
+		}),
 	);
 	const messages: ToolResultMessage[] = [];
 	for (const finalized of orderedFinalizedCalls) {

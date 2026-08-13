@@ -210,7 +210,12 @@ export function streamProxy(model: Model<any>, context: Context, options: ProxyS
 				throw new Error("Request aborted by user");
 			}
 
-			stream.end();
+			// End with the built partial as the terminal result. The EventStream's
+			// `end(result)` resolves `result()` even when the server closes the stream
+			// without a trailing `done` data event (truncation). Passing the partial
+			// guarantees a settled terminal and a consistent result instead of a
+			// never-resolving `finalResultPromise`.
+			stream.end(partial);
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			const reason = options.signal?.aborted ? "aborted" : "error";

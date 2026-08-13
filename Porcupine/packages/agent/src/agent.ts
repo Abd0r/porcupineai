@@ -151,6 +151,12 @@ class PendingMessageQueue {
 		return [first];
 	}
 
+	drainAll(): AgentMessage[] {
+		const drained = this.messages.slice();
+		this.messages = [];
+		return drained;
+	}
+
 	clear(): void {
 		this.messages = [];
 	}
@@ -173,6 +179,8 @@ export class Agent {
 	private readonly listeners = new Set<(event: AgentEvent, signal: AbortSignal) => Promise<void> | void>();
 	private readonly steeringQueue: PendingMessageQueue;
 	private readonly followUpQueue: PendingMessageQueue;
+	/** True once an `agent_end` terminal event has been emitted for the current run. */
+	private _terminalEmitted = false;
 
 	public convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
 	public transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>;
@@ -287,6 +295,16 @@ export class Agent {
 		this.steeringQueue.clear();
 	}
 
+	/** Drain and return all queued steering messages (regardless of mode). */
+	drainSteeringMessages(): AgentMessage[] {
+		return this.steeringQueue.drainAll();
+	}
+
+	/** Drain and return all queued follow-up messages (regardless of mode). */
+	drainFollowUpMessages(): AgentMessage[] {
+		return this.followUpQueue.drainAll();
+	}
+
 	/** Remove all queued follow-up messages. */
 	clearFollowUpQueue(): void {
 		this.followUpQueue.clear();
@@ -358,13 +376,16 @@ export class Agent {
 		}
 
 		if (lastMessage.role === "assistant") {
-			const queuedSteering = this.steeringQueue.drain();
+			// Drain the full steering queue (not just one message): multi-message
+			// steering queues must all be processed within one `continue()`, not one
+			// steering message per call.
+			const queuedSteering = this.steeringQueue.drainAll();
 			if (queuedSteering.length > 0) {
 				await this.runPromptMessages(queuedSteering, { skipInitialSteeringPoll: true });
 				return;
 			}
 
-			const queuedFollowUps = this.followUpQueue.drain();
+			const queuedFollowUps = this.followUpQueue.drainAll();
 			if (queuedFollowUps.length > 0) {
 				await this.runPromptMessages(queuedFollowUps);
 				return;
@@ -483,6 +504,7 @@ export class Agent {
 		this._state.isStreaming = true;
 		this._state.streamingMessage = undefined;
 		this._state.errorMessage = undefined;
+		this._terminalEmitted = false;
 
 		try {
 			await executor(abortController.signal);
@@ -494,6 +516,13 @@ export class Agent {
 	}
 
 	private async handleRunFailure(error: unknown, aborted: boolean): Promise<void> {
+		// If the loop already emitted its own `agent_end` (e.g. it stopped due to an
+		// error/abort stop reason) before an unrelated exception escaped, do not emit
+		// a fabricated failure sequence on top of it: that would duplicate the
+		// terminal and inject a message that was never part of the transcript.
+		if (this._terminalEmitted) {
+			return;
+		}
 		const failureMessage = {
 			role: "assistant",
 			content: [{ type: "text", text: "" }],
@@ -563,6 +592,7 @@ export class Agent {
 
 			case "agent_end":
 				this._state.streamingMessage = undefined;
+				this._terminalEmitted = true;
 				break;
 		}
 

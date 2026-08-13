@@ -261,9 +261,19 @@ export function createSubagentToolDefinition(options: SubagentToolOptions): Tool
 			options.onRegister?.(id, () => controller.abort());
 			void promise
 				.then((result) => {
-					return options.onComplete?.(id, result);
+					// Report injection is SEPARATE from the sub-agent run: if the
+					// onComplete callback (which injects the report into the session)
+					// throws, that must NOT fabricate a failed result for a sub-agent
+					// that actually succeeded (BUG-9). Swallow the report error only.
+					Promise.resolve()
+						.then(() => options.onComplete?.(id, result))
+						.catch((reportError: unknown) => {
+							console.error(`[subagent ${id}] report-injection failed:`, reportError);
+						});
 				})
-				.catch((error) => {
+				.catch((runError) => {
+					// Only a genuinely failed/errored sub-agent run reaches here — not a
+					// report-injection failure.
 					options.onEvent?.({
 						type: "done",
 						subagentId: id,
@@ -274,7 +284,7 @@ export function createSubagentToolDefinition(options: SubagentToolOptions): Tool
 							usage: { inputTokens: 0, outputTokens: 0, contextTokens: 0 },
 							messages: [],
 							budgetExhausted: false,
-							error: error instanceof Error ? error.message : String(error),
+							error: runError instanceof Error ? runError.message : String(runError),
 						},
 					});
 				})

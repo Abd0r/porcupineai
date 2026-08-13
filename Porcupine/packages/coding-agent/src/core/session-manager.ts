@@ -13,11 +13,14 @@ import {
 	closeSync,
 	createReadStream,
 	existsSync,
+	fsyncSync,
 	mkdirSync,
 	openSync,
 	readdirSync,
 	readSync,
+	renameSync,
 	statSync,
+	unlinkSync,
 	writeFileSync,
 } from "fs";
 import { readdir, stat } from "fs/promises";
@@ -35,6 +38,26 @@ import {
 } from "./messages.ts";
 
 export const CURRENT_SESSION_VERSION = 3;
+
+// Live persisted SessionManager instances, tracked so the debounced persist
+// buffer is drained synchronously on process exit (BUG-5). The unref'd timer must
+// not be allowed to silently drop transient entries that are still buffered.
+const livePersistManagers = new Set<SessionManager>();
+let persistExitHookRegistered = false;
+function ensurePersistExitHook(manager: SessionManager): void {
+	livePersistManagers.add(manager);
+	if (persistExitHookRegistered) return;
+	persistExitHookRegistered = true;
+	process.once("beforeExit", () => {
+		for (const m of livePersistManagers) {
+			try {
+				m.flushPersistOnExit();
+			} catch {
+				// Shutdown-path failure of one manager must not take down the process.
+			}
+		}
+	});
+}
 
 export type SessionType = "session" | "subagent";
 
@@ -474,6 +497,14 @@ export function buildContextEntries(
 		if (foundFirstKept) {
 			contextEntries.push(entry);
 		}
+	}
+	// If the compaction's firstKeptEntryId is NOT on the current path (e.g. the
+	// branch was created after a compaction captured a kept-suffix that no longer
+	// lies on this leaf's path), the intended kept-window cannot be reconstructed.
+	// Fall back to including all pre-compaction entries on THIS path so the turns
+	// the new branch depends on are never silently dropped from context (BUG-7).
+	if (!foundFirstKept && compactionIdx > 0) {
+		contextEntries.push(...path.slice(0, compactionIdx));
 	}
 	contextEntries.push(...path.slice(compactionIdx + 1));
 	return contextEntries;
@@ -1052,6 +1083,39 @@ export class SessionManager {
 		}
 	}
 
+	private _atomicRewrite(): void {
+		// Write to a temp file then rename over the target so a crash mid-write never
+		// leaves the session JSONL truncated/corrupt (BUG-4). renameSync is atomic
+		// on the same filesystem.
+		if (!this.persist || !this.sessionFile || this.sessionFile === "") return;
+		const target = this.sessionFile;
+		const dir = resolve(target, "..");
+		if (!existsSync(dir)) {
+			mkdirSync(dir, { recursive: true });
+		}
+		const tmp = join(dir, `.${this.sessionId}.tmp-${randomUUID()}`);
+		const fd = openSync(tmp, "w");
+		try {
+			for (const entry of this.fileEntries) {
+				writeFileSync(fd, `${JSON.stringify(entry)}\n`);
+			}
+			// Flush to disk (file contents + metadata) before the atomic rename so a
+			// crash right after rename cannot expose a zero-length or partial file.
+			fsyncSync(fd);
+		} finally {
+			closeSync(fd);
+		}
+		try {
+			renameSync(tmp, target);
+		} catch (error) {
+			// Best effort: leave the temp file for recovery rather than losing data.
+			try {
+				unlinkSync(tmp);
+			} catch {}
+			throw error;
+		}
+	}
+
 	private _rewriteFile(): void {
 		if (!this.persist || !this.sessionFile) return;
 		// The rewrite writes ALL of fileEntries (the source of truth), which
@@ -1062,14 +1126,7 @@ export class SessionManager {
 			this.persistTimer = null;
 		}
 		this.persistBuffer = [];
-		const fd = openSync(this.sessionFile, "w");
-		try {
-			for (const entry of this.fileEntries) {
-				writeFileSync(fd, `${JSON.stringify(entry)}\n`);
-			}
-		} finally {
-			closeSync(fd);
-		}
+		this._atomicRewrite();
 	}
 
 	isPersisted(): boolean {
@@ -1146,6 +1203,14 @@ export class SessionManager {
 		}, SessionManager.PERSIST_DEBOUNCE_MS);
 		// Never keep the process alive for a pending flush.
 		this.persistTimer.unref?.();
+		// But still drain it before the process exits so buffered transient
+		// entries are never silently lost (BUG-5).
+		ensurePersistExitHook(this);
+	}
+
+	/** Drains the debounced persist buffer synchronously; exposed for the exit hook. */
+	flushPersistOnExit(): void {
+		this._flushPersistBuffer();
 	}
 
 	_persist(entry: SessionEntry, opts?: { immediate?: boolean }): void {
@@ -1165,16 +1230,10 @@ export class SessionManager {
 		if (!this.flushed) {
 			// First assistant entry: write ALL entries (including anything still
 			// sitting in the append buffer) into the fresh file, then clear the
-			// buffer — fileEntries is complete and the rewrite covers them.
+			// buffer — fileEntries is complete and the atomic rewrite covers them
+			// (BUG-4: temp-file + rename so a crash can't truncate the JSONL).
 			this.persistBuffer = [];
-			const fd = openSync(this.sessionFile, "w");
-			try {
-				for (const e of this.fileEntries) {
-					writeFileSync(fd, `${JSON.stringify(e)}\n`);
-				}
-			} finally {
-				closeSync(fd);
-			}
+			this._atomicRewrite();
 			this.flushed = true;
 		} else if (opts?.immediate) {
 			// Read-critical append: write now so a reader sees the entry immediately,

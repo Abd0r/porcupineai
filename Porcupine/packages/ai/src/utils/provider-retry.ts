@@ -79,17 +79,25 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
 			return;
 		}
 
+		let settled = false;
 		const onAbort = () => {
+			if (settled) return;
+			settled = true;
 			clearTimeout(timeout);
 			reject(createAbortError());
 		};
 		const timeout = setTimeout(
 			() => {
+				if (settled) return;
+				settled = true;
 				signal?.removeEventListener("abort", onAbort);
 				resolve();
 			},
 			Math.max(0, ms),
 		);
+		// { once: true } auto-detaches on the abort path; the timeout path detaches
+		// explicitly above, so the listener is removed on every settle path and a
+		// long-lived caller signal never accumulates listeners across retries.
 		signal?.addEventListener("abort", onAbort, { once: true });
 	});
 }

@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import type { ImageContent } from "@porcupineai/ai";
@@ -70,9 +71,11 @@ function ensureWorkerScript(): string {
 	return WORKER_CACHE_PATH;
 }
 
-function writeTempImages(images: ImageContent[]): string[] {
-	const tempDir = join(WORKER_CACHE_DIR, "tmp");
-	mkdirSync(tempDir, { recursive: true });
+function writeTempImages(images: ImageContent[]): { paths: string[]; tempDir: string } {
+	// Private per-invocation temp dir (0700) so attached (potentially confidential)
+	// image bytes never land in a shared, world-readable tmp location.
+	const tempDir = join(WORKER_CACHE_DIR, "tmp", randomUUID());
+	mkdirSync(tempDir, { recursive: true, mode: 0o700 });
 	const paths: string[] = [];
 	for (let i = 0; i < images.length; i++) {
 		const img = images[i];
@@ -83,7 +86,16 @@ function writeTempImages(images: ImageContent[]): string[] {
 		writeFileSync(path, img.data, "base64");
 		paths.push(path);
 	}
-	return paths;
+	return { paths, tempDir };
+}
+
+/** Best-effort deletion of the per-invocation temp dir and its image files. */
+function cleanupTempImages(tempDir: string): void {
+	try {
+		rmSync(tempDir, { recursive: true, force: true });
+	} catch {
+		// Best-effort cleanup; a stale empty dir is harmless.
+	}
 }
 
 function buildOcrPrompt(_paths: string[], ocrResults: Array<{ path: string; text: string }>): string {
@@ -114,7 +126,7 @@ export default function imageScraperExtension(porcupine: ExtensionAPI): void {
 			if (input.includes("image")) return undefined;
 
 			// Write base64 image data to temp files for Unstructured to process.
-			const localPaths = writeTempImages(images);
+			const { paths: localPaths, tempDir } = writeTempImages(images);
 
 			// Show animated UI indicator while OCR runs.
 			ctx.ui?.setStatus?.(
@@ -161,6 +173,7 @@ export default function imageScraperExtension(porcupine: ExtensionAPI): void {
 					prompt: `${event.prompt}\n\n[Image extraction failed: ${message}]`,
 				};
 			} finally {
+				cleanupTempImages(tempDir);
 				ctx.ui?.setStatus?.("image-scraper", undefined);
 				ctx.ui?.setWorkingIndicator?.();
 			}

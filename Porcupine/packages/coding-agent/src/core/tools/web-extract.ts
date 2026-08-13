@@ -9,6 +9,10 @@ import { type Static, Type } from "typebox";
 import { theme } from "../../modes/interactive/theme/theme.ts";
 import type { ToolDefinition } from "../extensions/types.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
+import { truncateBytePrefix } from "./truncate.ts";
+
+/** Hard cap on the response body we will buffer, so a redirect/large endpoint can't exhaust memory (BUG-8). */
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 const webExtractSchema = Type.Object({
 	url: Type.String({ description: "HTTP(S) URL to fetch" }),
@@ -53,6 +57,54 @@ function htmlToText(html: string): string {
 	return s.trim();
 }
 
+/**
+ * Drain a fetch Response body into a string, stopping once `maxBytes` have been
+ * buffered (BUG-8). Prevents unbounded memory from a huge/redirected endpoint.
+ * Returns whatever was read as a UTF-8 string (may be a whole-codepoint prefix of
+ * the full body).
+ */
+async function readBodyCapped(res: Response, maxBytes: number): Promise<string> {
+	const reader = res.body?.getReader();
+	if (!reader) {
+		return await res.text();
+	}
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	while (total < maxBytes) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		const room = maxBytes - total;
+		if (value && value.length > room) {
+			chunks.push(value.subarray(0, room));
+			total += room;
+			break;
+		}
+		if (value) {
+			chunks.push(value);
+			total += value.length;
+		}
+	}
+	// Clean up: cancel the underlying stream so we don't leak a reader.
+	await reader.cancel().catch(() => {});
+	const decoder = new TextDecoder("utf-8", { fatal: true });
+	let out = "";
+	for (const c of chunks) {
+		try {
+			out += decoder.decode(c);
+		} catch {
+			// A chunk split mid-codepoint at the cap: stop — do not emit an invalid
+			// partial character; the caller truncates further anyway.
+			break;
+		}
+	}
+	try {
+		out += decoder.decode();
+	} catch {
+		// ignore trailing partial sequence
+	}
+	return out;
+}
+
 export async function extractUrl(
 	url: string,
 	maxChars = 12_000,
@@ -73,7 +125,10 @@ export async function extractUrl(
 			redirect: "follow",
 		});
 		const contentType = res.headers.get("content-type") || undefined;
-		const raw = await res.text();
+		// Read the body with a hard byte cap (BUG-8) so a redirect or oversized
+		// endpoint can't buffer unbounded data. `res.text()`/`arrayBuffer()` would
+		// read the entire (unbounded) body, so we drain the stream ourselves.
+		const raw = await readBodyCapped(res, MAX_BODY_BYTES);
 		let text: string;
 		if (contentType?.includes("html") || /<html[\s>]/i.test(raw.slice(0, 500))) {
 			text = htmlToText(raw);
@@ -82,7 +137,9 @@ export async function extractUrl(
 		}
 		const limit = Number.isFinite(maxChars) ? Math.max(500, Math.min(100_000, Math.floor(maxChars))) : 12_000;
 		const truncated = text.length > limit;
-		if (truncated) text = `${text.slice(0, limit)}\n\n[truncated to ${limit} chars]`;
+		// Truncate at a UTF-8-safe whole-codepoint boundary (BUG-8); slice(0,limit)
+		// could split a multi-byte surrogate/codepoint producing invalid output.
+		if (truncated) text = `${truncateBytePrefix(text, limit)}\n\n[truncated to ${limit} chars]`;
 		return {
 			text: text || "(empty page)",
 			details: {

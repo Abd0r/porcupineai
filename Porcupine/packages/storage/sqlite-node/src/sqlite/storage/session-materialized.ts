@@ -41,6 +41,7 @@ interface SessionMaterializedSummary {
 	costTotal: number;
 	currentModel?: { provider: string; modelId: string } | null;
 	currentThinkingLevel?: ThinkingLevel | null;
+	modelThinkingConfigs?: ModelThinkingConfig[];
 }
 
 function compareModelThinkingConfig(left: ModelThinkingConfig, right: ModelThinkingConfig): number {
@@ -217,6 +218,7 @@ export function serializeSummary(state: SessionMaterializedState): string {
 		costTotal: state.costTotal,
 		currentModel: state.currentModel,
 		currentThinkingLevel: state.currentThinkingLevel,
+		modelThinkingConfigs: normalizeModelThinkingConfigs(state.modelThinkingConfigs),
 	};
 	return JSON.stringify(summary);
 }
@@ -248,7 +250,8 @@ function parseSummary(json: string): SessionMaterializedSummary {
 			(!isRecord(currentModel) ||
 				typeof currentModel.provider !== "string" ||
 				typeof currentModel.modelId !== "string")) ||
-		(currentThinkingLevel !== undefined && currentThinkingLevel !== null && !isThinkingLevel(currentThinkingLevel))
+		(currentThinkingLevel !== undefined && currentThinkingLevel !== null && !isThinkingLevel(currentThinkingLevel)) ||
+		(parsed.modelThinkingConfigs !== undefined && !isModelThinkingConfigArray(parsed.modelThinkingConfigs))
 	) {
 		throw invalidSession("materialized session summary has invalid fields");
 	}
@@ -264,7 +267,23 @@ function parseSummary(json: string): SessionMaterializedSummary {
 				? { provider: currentModel.provider as string, modelId: currentModel.modelId as string }
 				: (currentModel ?? undefined),
 		currentThinkingLevel: (currentThinkingLevel as ThinkingLevel | null | undefined) ?? undefined,
+		modelThinkingConfigs: isModelThinkingConfigArray(parsed.modelThinkingConfigs)
+			? parsed.modelThinkingConfigs
+			: undefined,
 	};
+}
+
+function isModelThinkingConfigArray(value: unknown): value is ModelThinkingConfig[] {
+	return (
+		Array.isArray(value) &&
+		value.every(
+			(item) =>
+				isRecord(item) &&
+				typeof item.provider === "string" &&
+				typeof item.modelId === "string" &&
+				isThinkingLevel(item.thinkingLevel),
+		)
+	);
 }
 
 function parseEntryMaterializedPayload(row: EntryMaterializedRow): unknown {
@@ -291,7 +310,7 @@ export function materializedStateFromRows(
 		totalTokens: summary.totalTokens,
 		costTotal: summary.costTotal,
 		labelsById: new Map<string, string>(),
-		modelThinkingConfigs: [],
+		modelThinkingConfigs: summary.modelThinkingConfigs ? [...summary.modelThinkingConfigs] : [],
 		currentModel: summary.currentModel ?? null,
 		currentThinkingLevel: summary.currentThinkingLevel ?? null,
 	};

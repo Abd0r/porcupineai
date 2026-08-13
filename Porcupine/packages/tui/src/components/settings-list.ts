@@ -136,7 +136,7 @@ export class SettingsList implements Component {
 			// Calculate space for value
 			const separator = "  ";
 			const usedWidth = prefixWidth + maxLabelWidth + visibleWidth(separator);
-			const valueMaxWidth = width - usedWidth - 2;
+			const valueMaxWidth = Math.max(0, width - usedWidth - 2);
 
 			const valueText = this.theme.value(truncateToWidth(item.currentValue, valueMaxWidth, ""), isSelected);
 

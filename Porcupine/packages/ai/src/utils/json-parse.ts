@@ -127,6 +127,7 @@ export function parseStreamingJson<T = Record<string, unknown>>(partialJson: str
 const STREAMING_PARSE_INTERVAL_MS = 50;
 
 let lastStreamingParseAt = 0;
+let lastStreamingParseKey = "";
 let lastStreamingParseResult: unknown;
 
 /**
@@ -137,13 +138,19 @@ let lastStreamingParseResult: unknown;
  * The intermediate value is display-only — the authoritative parse always
  * happens on the arguments.done event and at tool execution — so throttling
  * mid-stream parses to one per 50ms is invisible and preserves correctness.
- * Shared module state is fine: concurrent streams still get fresh authoritative
- * parses at their done events.
+ * The shared cache is keyed by content identity so concurrent streams sharing the
+ * throttle window never cross-read each other's mid-stream parse; the authoritative
+ * parse always happens at the block's done event.
  */
 export function parseStreamingJsonThrottled<T = Record<string, unknown>>(partialJson: string | undefined): T {
 	const now = performance.now();
-	if (now - lastStreamingParseAt >= STREAMING_PARSE_INTERVAL_MS) {
+	// Key the shared cache by the content identity so concurrent streams sharing the
+	// throttle window never cross-read one another's mid-stream parse (each stream
+	// appends its own tool-arg delta, producing a distinct buffer per stream).
+	const key = partialJson ?? "";
+	if (now - lastStreamingParseAt >= STREAMING_PARSE_INTERVAL_MS || key !== lastStreamingParseKey) {
 		lastStreamingParseAt = now;
+		lastStreamingParseKey = key;
 		lastStreamingParseResult = parseStreamingJson<T>(partialJson);
 	}
 	return lastStreamingParseResult as T;
