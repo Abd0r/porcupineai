@@ -55,7 +55,7 @@
 		"@porcupineai/protocol": "^0.1.67",
 		"@porcupineai/tui": "^0.1.67",
 		"@silvia-odwyer/photon-node": "0.3.4",
-		"chalk": "5.6.2",
+		"chalk": "6.0.0",
 		"cross-spawn": "7.0.6",
 		"diff": "8.0.4",
 		"glob": "13.0.6",
