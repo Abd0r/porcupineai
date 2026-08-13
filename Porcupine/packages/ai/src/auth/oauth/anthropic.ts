@@ -26,6 +26,14 @@ let nodeApis: NodeApis | null = null;
 let nodeApisPromise: Promise<NodeApis> | null = null;
 
 const decode = (s: string) => atob(s);
+
+let _randomBytes: typeof import("node:crypto").randomBytes | null = null;
+async function createOAuthState(): Promise<string> {
+	if (!_randomBytes) {
+		_randomBytes = (await import("node:crypto")).randomBytes;
+	}
+	return _randomBytes(16).toString("hex");
+}
 const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
 const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
 const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
@@ -228,7 +236,12 @@ async function exchangeAuthorizationCode(
 
 async function loginAnthropic(interaction: AuthInteraction): Promise<OAuthCredential> {
 	const { verifier, challenge } = await generatePKCE();
-	const server = await startCallbackServer(verifier);
+	// The OAuth `state` is an independent CSRF token. It must NOT be the PKCE
+	// code_verifier: the verifier is a bearer secret that redeems the code, and
+	// embedding it in the authorize URL / redirect would leak it via browser
+	// history, proxies, and gateway logs.
+	const oauthState = await createOAuthState();
+	const server = await startCallbackServer(oauthState);
 	const manualAbort = new AbortController();
 	let code: string | undefined;
 	let state: string | undefined;
@@ -244,7 +257,7 @@ async function loginAnthropic(interaction: AuthInteraction): Promise<OAuthCreden
 			scope: SCOPES,
 			code_challenge: challenge,
 			code_challenge_method: "S256",
-			state: verifier,
+			state: oauthState,
 		});
 		interaction.notify({
 			type: "auth_url",
@@ -276,9 +289,9 @@ async function loginAnthropic(interaction: AuthInteraction): Promise<OAuthCreden
 			state = result.state;
 		} else if (manualInput) {
 			const parsed = parseAuthorizationInput(manualInput);
-			if (parsed.state && parsed.state !== verifier) throw new Error("OAuth state mismatch");
+			if (parsed.state && parsed.state !== oauthState) throw new Error("OAuth state mismatch");
 			code = parsed.code;
-			state = parsed.state ?? verifier;
+			state = parsed.state ?? oauthState;
 		}
 
 		if (!code) {
@@ -286,9 +299,9 @@ async function loginAnthropic(interaction: AuthInteraction): Promise<OAuthCreden
 			if (manualError) throw manualError;
 			if (manualInput) {
 				const parsed = parseAuthorizationInput(manualInput);
-				if (parsed.state && parsed.state !== verifier) throw new Error("OAuth state mismatch");
+				if (parsed.state && parsed.state !== oauthState) throw new Error("OAuth state mismatch");
 				code = parsed.code;
-				state = parsed.state ?? verifier;
+				state = parsed.state ?? oauthState;
 			}
 		}
 

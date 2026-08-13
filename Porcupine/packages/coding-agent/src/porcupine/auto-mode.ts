@@ -362,7 +362,7 @@ function extractRmTargets(command: string): string[] {
 		);
 }
 
-/** Expand a leading `~` or `$HOME` in a shell path token. */
+/** Expand a leading `~` or `$VAR`/`${VAR}` in a shell path token. */
 function expandHome(token: string): string {
 	const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
 	if (token === "~" || token.startsWith("~/")) {
@@ -370,6 +370,17 @@ function expandHome(token: string): string {
 	}
 	if (token === "$HOME" || token.startsWith("$HOME/")) {
 		return home ? (token === "$HOME" ? home : join(home, token.slice(6))) : token;
+	}
+	// General $VAR / ${VAR} expansion for env vars that hold absolute paths
+	// (HOME, USERPROFILE, PWD, OLDPWD, ...). Unset vars stay literal — the
+	// caller must fail closed on any remaining `$` because the shell expands
+	// the token at exec time to a path the guard cannot see.
+	const match = /^\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)(.*)$/.exec(token);
+	if (match) {
+		const name = match[1].startsWith("{") ? match[1].slice(1, -1) : match[1];
+		const rest = match[2];
+		const value = process.env[name];
+		if (value) return rest ? join(value, rest) : value;
 	}
 	return token;
 }
@@ -386,8 +397,15 @@ export function analyzeRmScope(
 ): { protected?: string; insideWorkspace: boolean } | null {
 	const targets = extractRmTargets(command);
 	if (targets.length === 0) return null;
-	const resolved = targets.map((target) => resolve(cwd, expandHome(target)));
-	for (const path of resolved) {
+	const resolved = targets.map((target) => {
+		const expanded = expandHome(target);
+		return { path: resolve(cwd, expanded), unresolved: expanded.includes("$") };
+	});
+	for (const { path, unresolved } of resolved) {
+		// Fail closed: an unexpanded shell variable means the real target path is
+		// unknown at guard time (e.g. `${UNSET}/etc` expands to `/etc` in the
+		// shell), so the delete cannot be classified as inside the workspace.
+		if (unresolved) return { insideWorkspace: false };
 		if (path === cwd) {
 			// `rm -rf .` would delete the working directory itself.
 			return { protected: "the working directory itself", insideWorkspace: false };
@@ -395,7 +413,7 @@ export function analyzeRmScope(
 		const hit = protectedPaths.find((pp) => path === pp || path.startsWith(pp + sep));
 		if (hit) return { protected: hit, insideWorkspace: false };
 	}
-	return { insideWorkspace: resolved.every((path) => path.startsWith(cwd + sep)) };
+	return { insideWorkspace: resolved.every(({ path }) => path.startsWith(cwd + sep)) };
 }
 
 export async function guardBashCommand(options: {

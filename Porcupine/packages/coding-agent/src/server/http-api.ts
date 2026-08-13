@@ -11,6 +11,7 @@
  * via adaptSessionToServeApi before starting the API.
  */
 
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { stripAnsi } from "../utils/ansi.ts";
 
@@ -95,16 +96,31 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 	const permissionResponders = new Map<string, (allow: boolean) => void>();
 	const sessionEvents = new Set<(event: unknown) => void>();
 
+	// Write one SSE payload to a single client, removing it on any failure so a
+	// closed/dropped socket can't throw mid-fan-out and never holds the entry.
+	const writeSse = (client: ServerResponse, chunk: string): void => {
+		try {
+			if (client.writableEnded || client.destroyed) {
+				sseClients.delete(client);
+				return;
+			}
+			client.write(chunk);
+		} catch {
+			// EPIPE / closed socket — drop the client so it isn't written again.
+			sseClients.delete(client);
+		}
+	};
+
 	const broadcast = (event: unknown): void => {
 		const serialized = JSON.stringify(event);
-		for (const client of sseClients) {
-			client.write(`data: ${serialized}\n\n`);
+		for (const client of Array.from(sseClients)) {
+			writeSse(client, `data: ${serialized}\n\n`);
 		}
 	};
 
 	const heartbeat = setInterval(() => {
-		for (const client of sseClients) {
-			client.write(`: ping\n\n`);
+		for (const client of Array.from(sseClients)) {
+			writeSse(client, `: ping\n\n`);
 		}
 	}, SSE_HEARTBEAT_MS);
 	heartbeat.unref();
@@ -112,7 +128,18 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 	const requireAuth = (req: IncomingMessage): boolean => {
 		if (!token) return true;
 		const header = req.headers.authorization;
-		return header === `Bearer ${token}`;
+		if (typeof header !== "string") return false;
+		const expected = `Bearer ${token}`;
+		// Constant-time comparison: hash both sides to equal-length digests so the
+		// `crypto.timingSafeEqual` buffer-length precondition is satisfied and the
+		// comparison reveals no timing information about the token.
+		try {
+			const a = createHash("sha256").update(header).digest();
+			const b = createHash("sha256").update(expected).digest();
+			return timingSafeEqual(a, b);
+		} catch {
+			return false;
+		}
 	};
 
 	/**
@@ -164,7 +191,9 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				});
 				res.write(`data: ${JSON.stringify({ type: "server_connected" })}\n\n`);
 				sseClients.add(res);
-				req.on("close", () => sseClients.delete(res));
+				const onClose = () => sseClients.delete(res);
+				req.on("close", onClose);
+				res.on("close", onClose);
 				return;
 			}
 
@@ -224,11 +253,6 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					json(res, 400, { error: "malformed permission id" });
 					return;
 				}
-				const responder = permissionResponders.get(permissionId);
-				if (!responder) {
-					json(res, 404, { error: `no pending permission request "${permissionId}"` });
-					return;
-				}
 				const raw = await readBody(req);
 				let allow: unknown;
 				try {
@@ -239,6 +263,16 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				}
 				if (typeof allow !== "boolean") {
 					json(res, 400, { error: "allow must be a boolean" });
+					return;
+				}
+				// Re-fetch the responder AFTER the (potentially slow) body read and only
+				// respond if it is still present. If the 60s timeout already fired, it
+				// deleted the entry and auto-denied — so this lookup returns undefined and
+				// we must NOT answer again (avoids a double decision to the confirm
+				// handler).
+				const responder = permissionResponders.get(permissionId);
+				if (!responder) {
+					json(res, 408, { error: "permission request already timed out" });
 					return;
 				}
 				permissionResponders.delete(permissionId);
