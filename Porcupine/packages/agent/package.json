@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/agent-core",
-	"version": "0.1.66",
+	"version": "0.1.67",
 	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -29,7 +29,7 @@
 		"prepublishOnly": "npm run build"
 	},
 	"dependencies": {
-		"@porcupineai/ai": "^0.1.66",
+		"@porcupineai/ai": "^0.1.67",
 		"diff": "8.0.4",
 		"ignore": "7.0.5",
 		"typebox": "1.3.7",
