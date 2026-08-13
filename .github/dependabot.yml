@@ -11,6 +11,9 @@ updates:
     labels:
       - dependencies
       - status/needs-triage
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       routine-updates:
         patterns:
@@ -29,6 +32,9 @@ updates:
     labels:
       - dependencies
       - status/needs-triage
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       routine-updates:
         patterns:
@@ -47,6 +53,9 @@ updates:
     labels:
       - dependencies
       - status/needs-triage
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       routine-updates:
         patterns:
@@ -65,6 +74,9 @@ updates:
     labels:
       - dependencies
       - status/needs-triage
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       routine-updates:
         patterns:
@@ -83,6 +95,9 @@ updates:
     labels:
       - dependencies
       - status/needs-triage
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       routine-updates:
         patterns:
