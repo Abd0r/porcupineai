@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -12,6 +12,7 @@ import {
 	formatMemoryForPrompt,
 	mutateMemory,
 } from "../src/porcupine/index.ts";
+import { USER_CHAR_LIMIT, USER_PROMPT_CHAR_LIMIT } from "../src/porcupine/memory-store.ts";
 
 describe("persistent memory", () => {
 	it("adds lists and injects into system prompt", () => {
@@ -32,6 +33,44 @@ describe("persistent memory", () => {
 			toolSnippets: { memory: "Durable memory" },
 		});
 		expect(prompt).toContain("prefers concise");
+	});
+
+	it("remove always succeeds even when the file is over the limit", () => {
+		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-mem-over-"));
+		expect(mutateMemory(agentDir, "add", "user", { content: "long entry" }).ok).toBe(true);
+		// Simulate an over-limit file written directly (e.g. migrated state).
+		const path = join(agentDir, "USER.md");
+		const over = `${readFileSync(path, "utf8")}\n- ${`y`.repeat(USER_CHAR_LIMIT + 100)}\n`;
+		writeFileSync(path, over);
+		const rm = mutateMemory(agentDir, "remove", "user", { oldText: "long entry" });
+		expect(rm.ok).toBe(true);
+		expect(readFileSync(path, "utf8")).not.toContain("long entry");
+	});
+
+	it("replace matches exact entries and unambiguous substrings only", () => {
+		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-mem-repl-"));
+		mutateMemory(agentDir, "add", "user", { content: "alpha one" });
+		mutateMemory(agentDir, "add", "user", { content: "alpha two" });
+		// Ambiguous substring must fail while two entries contain it.
+		const ambiguous = mutateMemory(agentDir, "replace", "user", { oldText: "alpha", content: "gamma" });
+		expect(ambiguous.ok).toBe(false);
+		// Exact match wins and replaces the right entry.
+		const exact = mutateMemory(agentDir, "replace", "user", { oldText: "alpha one", content: "beta one" });
+		expect(exact.ok).toBe(true);
+		const list = mutateMemory(agentDir, "list", "user");
+		expect(list.entries?.some((e) => e.text === "beta one")).toBe(true);
+		expect(list.entries?.some((e) => e.text === "alpha two")).toBe(true);
+	});
+
+	it("prompt injection truncates at the budget with a count marker", () => {
+		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-mem-budget-"));
+		mutateMemory(agentDir, "add", "user", { content: "first fact" });
+		mutateMemory(agentDir, "add", "user", { content: `long ${`z`.repeat(9_000)}` });
+		mutateMemory(agentDir, "add", "user", { content: "last fact" });
+		const block = formatMemoryForPrompt(agentDir);
+		expect(block).toContain("first fact");
+		expect(block.length).toBeLessThan(USER_PROMPT_CHAR_LIMIT + 400);
+		expect(block).toContain("more entries in USER.md");
 	});
 
 	it("memory tool executes", async () => {

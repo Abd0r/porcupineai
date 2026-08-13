@@ -13,8 +13,17 @@ export type MemoryAction = "add" | "replace" | "remove" | "list";
 export const MEMORY_FILE = "MEMORY.md";
 export const USER_FILE = "USER.md";
 
-export const MEMORY_CHAR_LIMIT = 8_000;
-export const USER_CHAR_LIMIT = 4_000;
+/** Storage limits: how large each memory file may grow on disk. */
+export const MEMORY_CHAR_LIMIT = 16_000;
+export const USER_CHAR_LIMIT = 12_000;
+
+/**
+ * Prompt budgets: how much of each file is injected into the system prompt
+ * every turn. Storage can outgrow this; the injected block is truncated with a
+ * count marker and the full file stays reachable via the memory tool.
+ */
+export const MEMORY_PROMPT_CHAR_LIMIT = 8_000;
+export const USER_PROMPT_CHAR_LIMIT = 6_000;
 
 const DEFAULT_MEMORY = `# MEMORY
 
@@ -95,25 +104,49 @@ export function ensureMemoryFiles(agentDir: string): void {
 	}
 }
 
-/** Bullet / non-empty lines under the heading, for list/remove/replace. */
-export function listEntries(content: string): MemoryEntry[] {
+/**
+ * Bullet / non-empty lines under the heading, for list/remove/replace.
+ * The preamble (header lines and any intro text before the first bullet) is
+ * preserved separately so rebuilds never destroy user-authored structure.
+ */
+export interface MemoryBody {
+	preamble: string[];
+	entries: MemoryEntry[];
+}
+
+export function parseMemoryBody(content: string): MemoryBody {
 	const lines = content.replace(/\r\n/g, "\n").split("\n");
+	const preamble: string[] = [];
 	const entries: MemoryEntry[] = [];
 	let i = 0;
+	let seenEntry = false;
 	for (const line of lines) {
 		const trimmed = line.trim();
-		if (!trimmed) continue;
-		if (trimmed.startsWith("#")) continue;
+		if (!trimmed) {
+			if (!seenEntry) preamble.push(line);
+			continue;
+		}
+		if (trimmed.startsWith("#")) {
+			if (!seenEntry) preamble.push(line);
+			continue;
+		}
+		seenEntry = true;
 		i += 1;
 		entries.push({ index: i, text: trimmed.replace(/^- /, "") });
 	}
-	return entries;
+	return { preamble, entries };
 }
 
-function rebuildFromEntries(target: MemoryTarget, entries: MemoryEntry[]): string {
-	const header = target === "user" ? "# USER\n\n" : "# MEMORY\n\n";
-	if (entries.length === 0) return header;
-	return `${header + entries.map((e) => `- ${e.text}`).join("\n")}\n`;
+/** Legacy alias: flat entry list for existing callers/tests. */
+export function listEntries(content: string): MemoryEntry[] {
+	return parseMemoryBody(content).entries;
+}
+
+function rebuildFromEntries(target: MemoryTarget, body: MemoryBody): string {
+	const fallback = target === "user" ? "# USER\n\n" : "# MEMORY\n\n";
+	const preamble = body.preamble.length > 0 ? `${body.preamble.join("\n")}\n` : fallback;
+	if (body.entries.length === 0) return `${preamble}\n`;
+	return `${preamble}${body.entries.map((e) => `- ${e.text}`).join("\n")}\n`;
 }
 
 export function mutateMemory(
@@ -126,7 +159,8 @@ export function mutateMemory(
 	const file = memoryPath(agentDir, target);
 	const limit = charLimit(target);
 	let body = readMemoryFile(agentDir, target);
-	const entries = listEntries(body);
+	const parsed = parseMemoryBody(body);
+	const entries = parsed.entries;
 
 	if (action === "list") {
 		return {
@@ -156,8 +190,8 @@ export function mutateMemory(
 				limit,
 			};
 		}
-		// de-dupe exact
-		if (entries.some((e) => e.text === fact || e.text.endsWith(fact))) {
+		// de-dupe: exact text only (substring suffixes cause false positives).
+		if (entries.some((e) => e.text === fact)) {
 			return {
 				ok: true,
 				target,
@@ -186,14 +220,20 @@ export function mutateMemory(
 				limit,
 			};
 		}
-		const idx = entries.findIndex((e) => e.text.includes(oldText));
+		// Prefer an exact entry match; fall back to a substring match only when
+		// it is unambiguous (exactly one entry contains it).
+		let idx = entries.findIndex((e) => e.text === oldText);
+		if (idx < 0) {
+			const candidates = entries.filter((e) => e.text.includes(oldText));
+			if (candidates.length === 1) idx = entries.indexOf(candidates[0]);
+		}
 		if (idx < 0) {
 			return {
 				ok: false,
 				target,
 				action,
 				file,
-				message: `no entry matching oldText: ${oldText}`,
+				message: `no unique entry matching oldText: ${oldText}`,
 				content: body,
 				chars: body.length,
 				limit,
@@ -233,14 +273,22 @@ export function mutateMemory(
 		entries.push(...next.map((e, i) => ({ index: i + 1, text: e.text })));
 	}
 
-	body = rebuildFromEntries(target, entries);
-	if (body.length > limit) {
+	body = rebuildFromEntries(target, parsed);
+	// Only growth mutations are bounded by the storage limit. remove/replace
+	// shrink or hold the size and must always succeed once matched, otherwise a
+	// file over the limit becomes uneditable.
+	if (action === "add" && body.length > limit) {
+		const longest = [...entries]
+			.sort((a, b) => b.text.length - a.text.length)
+			.slice(0, 5)
+			.map((e) => `- (${e.text.length}c) ${e.text.slice(0, 80)}…`)
+			.join("\n");
 		return {
 			ok: false,
 			target,
 			action,
 			file,
-			message: `would exceed ${limit} char limit (${body.length}). Remove/shorten entries first.`,
+			message: `would exceed ${limit} char limit (${body.length}). Shorten or remove entries first; longest entries:\n${longest}`,
 			content: readMemoryFile(agentDir, target),
 			chars: readMemoryFile(agentDir, target).length,
 			limit,
@@ -265,19 +313,35 @@ export function mutateMemory(
 /** Block injected into the system prompt when files have substance. */
 export function formatMemoryForPrompt(agentDir: string): string {
 	ensureMemoryFiles(agentDir);
-	const mem = readMemoryFile(agentDir, "memory").trim();
-	const user = readMemoryFile(agentDir, "user").trim();
 	const parts: string[] = [];
 
-	const userEntries = listEntries(user);
-	const memEntries = listEntries(mem);
+	for (const target of ["user", "memory"] as const) {
+		const file = target === "user" ? USER_FILE : MEMORY_FILE;
+		const budget = target === "user" ? USER_PROMPT_CHAR_LIMIT : MEMORY_PROMPT_CHAR_LIMIT;
+		const full = readMemoryFile(agentDir, target).trim();
+		const { entries } = parseMemoryBody(full);
+		if (entries.length === 0) continue;
 
-	if (userEntries.length > 0) {
-		parts.push(`<user_profile path="${USER_FILE}">\n${user}\n</user_profile>`);
+		let content = full;
+		let marker = "";
+		if (full.length > budget) {
+			// Truncate on an entry boundary so the injected block never ends with
+			// a dangling half-bullet, and tell the model more exists.
+			let cut = 0;
+			for (const entry of entries) {
+				const lineEnd = full.indexOf(`- ${entry.text}`, cut) + entry.text.length + 2;
+				if (lineEnd > budget) break;
+				cut = lineEnd;
+			}
+			if (cut === 0) cut = Math.min(budget, full.length);
+			content = full.slice(0, cut).trimEnd();
+			const remaining = entries.length - entries.filter((e) => content.includes(e.text)).length;
+			marker = `\n… (${remaining} more entries in ${file} — read via the memory tool)`;
+		}
+		const tag = target === "user" ? "user_profile" : "agent_memory";
+		parts.push(`<${tag} path="${file}">\n${content}${marker}\n</${tag}>`);
 	}
-	if (memEntries.length > 0) {
-		parts.push(`<agent_memory path="${MEMORY_FILE}">\n${mem}\n</agent_memory>`);
-	}
+
 	if (parts.length === 0) return "";
 	return `\n\n<porcupine_memory>\n${parts.join("\n\n")}\n</porcupine_memory>`;
 }
