@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [0.1.69] - 2026-08-14
+
+### Added
+
+- **Every run traceable (model-visible == logged)**: sessions now record `system_prompt` entries (the assembled system prompt, snapshotted whenever it changes, with a sha1 `promptHash`) and `request_header` entries (the exact model, thinking level, prompt hash, and tool catalog per step). Replaying a session reconstructs what the model actually saw, not just what it replied. New session-format types documented in `docs/session-format.md`.
+- **`inspect_runtime` tool**: read-only report over the live runtime (active tools and schemas, slash commands, loaded extensions, extension hooks, and the extension API surface), wired through `sdk.ts` so the agent can author correct extension code instead of guessing from docs.
+- **Repeat-tool guard**: identical consecutive tool calls with the same arguments trigger escalating advisory context at 3, 5, and 8 repetitions (steered into the model's next step as a hidden reminder). It observes and advises; it never vetoes or rewrites.
+- **Tool-result pruning**: oversized tool results are deterministically cut to a bounded head, a truncation marker, and a tail (16k/8k/2k defaults) before they enter context and the session log.
+- **Extension unload contract**: every registration (`on`, `registerTool`, `registerCommand`, `registerShortcut`, `registerFlag`, renderers) now returns a disposer; unloading or reloading an extension unwinds all its registrations (no leaked tools, commands, or listeners). Documented in `docs/extensions.md`.
+- **Keyless snapshot gate**: `npm run test:snapshot` replays committed byte-exact fixtures of the assembled system prompt without API keys; `test:snapshot:record` refreshes them. Prompt drift now fails tests instead of shipping.
+- **Minimal benchmark preset**: `PORCUPINE_BENCHMARK=1` pins the system prompt to a fixed persona with no memory, personality, stacks, or project context. `benchmarks/rig/minimal.py` is a stdlib-only driver (fresh workspace and session id per task) documented in `benchmarks/rig/README-minimal.md`.
+- **Disjoint cache accounting**: `/usage` now surfaces uncached input, cache-read, and cache-write separately (the split already existed in pricing; named views and surfacing are new).
+
+### Changed
+
+- **Injection hygiene**: project-context frame tags (`</project_instructions>`, `</project_context>`, `<project_context`) are escaped in injected AGENTS.md/CLAUDE.md content so repository text cannot close the sanctioned block, and the block states project instructions do not override system, developer, or direct user instructions.
+- **Monotonic hardline policy**: the hardline and flagged command lists are frozen at load; a denial can only be tightened, never loosened by a confirm callback, mode switch, extension, or config.
+- **Orthogonal bash reporting**: the bash tool reports `timedOut`, `aborted`, and `signal` as independent fields alongside `exitCode` (a process can time out and still exit 0), and only annotates the model-facing result when the distinction changes meaning.
+- **Benchmark reproducibility**: `benchmarks/rig/score-tbench.py` now defaults to the committed `benchmarks/tbench/results/` (was machine-local paths); re-scoring committed data gives 42 PASS / 10 FAIL / 37 unscored = 42/52 = 80.8%. `benchmarks/tbench/README.md` was corrected with an honest history note for the previous 45/54 figure.
+- **Containerization doc**: adds the native-first rationale (sandboxing by default turns a usable agent into a showpiece; the permission dial is the safety model that keeps an agent practical).
+
 ## [0.1.68] - 2026-08-14
 
 ### Security
