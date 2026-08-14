@@ -1,7 +1,7 @@
 {
   "name": "porcupine-extension-custom-provider-gitlab-duo",
   "private": true,
-  "version": "0.1.67",
+  "version": "0.1.68",
   "type": "module",
   "scripts": {
     "clean": "echo 'nothing to clean'",
