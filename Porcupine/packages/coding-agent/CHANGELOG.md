@@ -1,6 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+
+- **Native per-command write-fence under Auto Mode**: in Auto Mode, approved bash now runs under an OS-level write fence, layered under the fail-closed LLM gate (defense-in-depth). Writes are allowed only to the workspace, the system temp directory, and standard home state/cache dirs (`~/.npm`, `~/.cache`, `~/.config`, `~/.local`, `~/.ssh`, and on macOS `~/Library/Caches` and `~/Library/Application Support`); everything else is denied by the operating system. Backends: macOS Seatbelt (`sandbox-exec`, verified), Linux bwrap (bubblewrap), and Windows restricted token via an optional `porcupine-sandbox.exe` helper (reference implementation in `native/windows/`, pending a Windows build). Where the backend or its binary is unavailable, bash falls back to the native shell with a one-time warning; Ask/Normal modes are unchanged. Implemented in `src/core/sandbox/*` and wired live in `src/core/agent-session.ts`.
+
+### Changed
+
+- **Agent contract**: PROMPT.md / PERSONALITY.md reframe Porcupine as a Safe Autonomous AI Agent (coding is one faculty, not the identity); capability routing is now capability_search-first on real work ("knowing `web_search`/`bash` is not a skip"); interaction-mode semantics are spelled out per mode with explicit hardline vs flagged lists (force-push and destructive SQL are flagged, not hardline). AGENTS.md was trimmed of product-manual duplication, including a leaked absolute repo path.
+- **Prompt loader**: PERSONALITY.md and PROMPT.md are no longer injected multiple times (macOS was loading each three times; deduplicated by inode).
+- **Docs and skill**: `docs/security.md` and `docs/containerization.md` document the write-fence (containerization now lists it as a lighter, fourth isolation pattern), and `skills/meta/auto-mode/SKILL.md` teaches the agent how to recognize a fence denial (`Operation not permitted`) versus a real error.
+
 ## [0.1.66] - 2026-08-13
+
 
 ### Security
 

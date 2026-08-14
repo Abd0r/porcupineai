@@ -114,6 +114,7 @@ import { ModelRegistry } from "./model-registry.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
+import { createSandboxedBashOperations } from "./sandbox/index.ts";
 import type { BranchSummaryEntry, CompactionEntry, SessionEntry, SessionManager } from "./session-manager.ts";
 import { CURRENT_SESSION_VERSION, getLatestCompactionEntry, type SessionHeader } from "./session-manager.ts";
 import {
@@ -3280,6 +3281,23 @@ export class AgentSession {
 			return callback ? callback(title, message) : Promise.resolve(false);
 		};
 
+		// Auto Mode: approved bash runs under a native OS write-fence (Seatbelt on
+		// macOS), composable with the fail-closed LLM gate. Ask/Normal stay native.
+		// The fence allows writes to the workspace, temp, and standard home
+		// state/cache dirs, denying everything else.
+		const sandboxedBashOps = createSandboxedBashOperations({
+			mode: "workspace-write",
+			workspace: this._cwd,
+			shellPath,
+		});
+		const nativeBashOps = createLocalBashOperations({ shellPath });
+		const bashOperations: BashOperations = {
+			exec: (command, cwd, opts) => {
+				const ops = this._interactionMode === "auto" ? sandboxedBashOps : nativeBashOps;
+				return ops.exec(command, cwd, opts);
+			},
+		};
+
 		const baseToolDefinitions = this._baseToolsOverride
 			? Object.fromEntries(
 					Object.entries(this._baseToolsOverride).map(([name, tool]) => [
@@ -3289,7 +3307,7 @@ export class AgentSession {
 				)
 			: createAllToolDefinitions(this._cwd, {
 					read: { autoResizeImages },
-					bash: { commandPrefix: shellCommandPrefix, shellPath, commandGuard },
+					bash: { commandPrefix: shellCommandPrefix, shellPath, commandGuard, operations: bashOperations },
 					edit: { confirmMutation },
 					write: { confirmMutation },
 					subagent: {

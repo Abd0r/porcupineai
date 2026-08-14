@@ -10,60 +10,42 @@ Project and user conventions. Loaded into every session as project context.
 
 ## Stacks
 
-Use `capability_search` or `/stacks` to locate tools and skills when the right
-route is unclear. Prefer `web_search` before `web_extract` for internet lookups.
+On real work, `capability_search` first, then pick. Knowing `web_search` or
+`bash` is not a skip. If the match is not obvious, `action=list`. Prefer
+`web_search` before `web_extract` only after the catalog says that is the route.
 
-## Environment & product surface
+## Environment
 
-- The product ships: `/sandbox` (Gondolin micro-VM isolation for built-in
-  tools), remote bridges for Telegram / Discord / iMessage (shared-session
-  messaging, allowlist-gated, attended-only, plus owner `!status` / `!tasks` /
-  `!run <taskId>` / `!help` control commands), `--headless` CI task mode,
-  `porcupine serve` (headless HTTP API: sessions, async prompts, SSE events,
-  programmatic approval), the stacks capability tree, and sub-agents with the
-  whole tool stack minus agent-level tools (step budget per `subagent.maxSteps`
-  setting, default 120). Full behavior details live in PROMPT.md and `docs/`
-  (usage, server, subagents, stacks, security, containerization).
-- Integrations: email over IMAP/SMTP (`/email` + `email_list`/`email_read`/
-  `email_draft`/`email_send`; app password in the credential store, config in
-  the settings `email` block, `docs/email.md`), free X (Twitter) (`/x` +
-  `x_search`/`x_read`/`x_draft`/`x_post`/`x_reply`; search/read/drafts need no
-  credentials, posting is compose-then-paste, `docs/x.md`), and native browser
-  use via Playwright (`browser_navigate`/`snapshot`/`click`/`type`/`wait`/
-  `extract`/`resize`/`diagnostics`/`screenshot`/`evaluate`; headless Chromium,
-  one-time `npx playwright install chromium`, `docs/browser.md`).
-- Providers: ~40 BYOK plus a **free DeepSeek V4 Flash path via Cline**
-  (`cline/deepseek/deepseek-v4-flash`, key from app.cline.bot, `docs/providers.md`).
-- Self-authored skills/tools: `/extract-stack` + `/craft-stack` (and the
-  `craft_skill`/`extract_skill` tools) distill documents or research into
-  SKILL.md files and persisted user tools (`user-tools.json`). Use them
-  AUTOmatically: a document with a repeatable procedure, a recurring tool
-  failure with a clear recovery, or research that produced reusable steps are
-  all triggers to author a skill without waiting for the user to ask (see the
-  `skill-crafting` skill).
-  SKILL.md files and persisted user tools (`user-tools.json`); sub-agent runs
-  are saved as recallable sessions (`/subagents`, `session_search`, resumable).
-- Lifecycle: `/kill` instantly stops the run, bash, sub-agents and tracked
-  children; `/refresh` reloads resources with a console guard so background
-  bridge chatter cannot corrupt the TUI frame.
-- Session UI: full-screen markdown viewer (agent presents plans/reports via the
-  `show_markdown` tool; `/view <path>` opens a file), `/usage` + `/cost`
-  observability, `/memory` + `/init` (project AGENTS.md generator), and task
-  chaining (`next`/`nextOnFail`) + event triggers (`file` content-change,
-  `script` exit-code) with completion notifications to chat bridges
-  (`notifyOnTaskCompletion`, default on).
-- Session state lives under `~/.porcupine/agent/` (settings, sessions,
-  memory, learning). Repo root: `~/Porcupine/Porcupine` (monorepo;
-  `packages/coding-agent` is the product package).
+- Session state lives under `~/.porcupine/agent/` (settings, sessions, memory,
+  learning).
+- The product is a native-first terminal agent. Isolation (`/sandbox` Gondolin
+  micro-VM, Docker, OpenShell) is opt-in, never the default. Full behavior is
+  in PROMPT.md and `docs/` (usage, server, subagents, stacks, security,
+  containerization).
+- Surfaces: Telegram / Discord / iMessage bridges (attended, allowlist-gated;
+  owner `!status` / `!tasks` / `!run <taskId>` / `!help`), `--headless` CI
+  mode, `porcupine serve` (HTTP API), stacks, and sub-agents.
+- Integrations (see the matching `docs/*.md`): email over IMAP/SMTP, free X
+  compose-then-paste, Playwright browser. Providers: BYOK catalogs plus a free
+  DeepSeek V4 Flash path via Cline (`cline/deepseek/deepseek-v4-flash`, key
+  from app.cline.bot).
+- Self-authored skills/tools: `/extract-stack` + `/craft-stack` (and
+  `craft_skill`/`extract_skill`). Auto-author when a document has a repeatable
+  procedure, a tool failure has a clear recovery, or research produced reusable
+  steps. See the `skill-crafting` skill. Sub-agent runs are recallable
+  (`/subagents`, `session_search`).
+- Lifecycle: `/kill` stops the run, bash, sub-agents, and tracked children.
+  `/refresh` reloads resources. Session UI: `show_markdown`, `/view`, `/usage`,
+  `/cost`, `/memory`, `/init`.
 
 ## Stopping / interrupting
 
-- The MAIN AGENT can stop sub-agents directly with the `stop_subagent` tool
-  (one by id, or all) when a worker is stuck, off-track, or no longer needed —
-  a stopped run reports `⏹ cancelled` instead of completing.
-- The user can abort any turn with `Escape` (`app.interrupt`; the strip shows
-  "(esc to interrupt)") and cancel ALL running sub-agents with `Escape` on an
-  empty editor (`⏹ Sub-agents cancelled`). Double-`Escape` on an empty editor
+- The MAIN AGENT can stop sub-agents with `stop_subagent` (one id, or all)
+  when a worker is stuck, off-track, or no longer needed. A stopped run reports
+  `⏹ cancelled` instead of completing.
+- The user can abort any turn with Escape (`app.interrupt`; the strip shows
+  "(esc to interrupt)") and cancel ALL running sub-agents with Escape on an
+  empty editor (`⏹ Sub-agents cancelled`). Double-Escape on an empty editor
   opens the session tree (`doubleEscapeAction`, default `tree`). `/quit` exits
   the session.
 - The agent never kills its own process; it stops work by ending the turn or
@@ -72,25 +54,26 @@ route is unclear. Prefer `web_search` before `web_extract` for internet lookups.
 
 ## Autonomous Operation
 
-- Act on clear, retrievable work. Verify the requested artifact before calling it done.
-- Use `ask_question` only for a genuine user-owned choice or missing requirement
-  that cannot be retrieved safely. Do not use it to avoid routine next steps.
+- Act on clear, retrievable work. Verify the requested artifact before calling
+  it done.
+- Use `ask_question` only for a genuine user-owned choice or missing
+  requirement that cannot be retrieved safely. Do not use it to avoid routine
+  next steps.
 - `/plan` is inspection-only and returns an implementation-ready artifact;
-  `/goal` is a bounded session loop; `/task` and `/cron` are durable local state.
-- The `tasks` tool manages the same task/cron store the agent can use directly;
-  `projects` lists and views `Project/<name>/` workspaces (project-hygiene skill).
-- The `subagent` tool delegates self-contained work to an isolated worker: own
-  context (128K–256K), the WHOLE tool stack minus agent-level tools (no
-  sub-spawning, no GUI, no user questions — but `capability_search`, so the
-  full skill catalog is reachable), 120-step budget, cheap model
-  (`subagent.model`), up to `subagent.maxConcurrent` at a time (default 3). Read the `subagent` skill (SKILL.md) for
-  task-writing guidance. The tool returns immediately (background): continue working, and the report is injected into the conversation instantly when the sub-agent finishes (steered into the running turn, or a fresh turn starts if idle) — never gated on the next user prompt; verify its claims before trusting them. WoT: sub-agents sharing a peerGroup can message each other and you live; use send_to_subagent to steer a running sub-agent.
-- Cron fires only while Porcupine is open and idle. Never present it as a daemon.
+  `/goal` is a bounded session loop; `/task` and `/cron` are durable local
+  state. Cron fires only while Porcupine is open and idle. Never present it as
+  a daemon.
+- Delegate with `subagent`: fresh context (128K-256K), the whole tool stack
+  minus agent-level tools, product default `subagent.maxSteps` 120, up to
+  `subagent.maxConcurrent` (product default 3). Verify reports. WoT: same
+  `peerGroup` plus `send_to_subagent`. See the `subagent` skill.
 
 ## Safety Boundaries
 
-- Interaction modes govern approvals; reasoning level does not grant permission.
-- Prefer structured APIs, browser CDP, shell, or file tools before native GUI use.
-- Project trust controls resource loading, not filesystem or shell permissions.
-- Porcupine has no built-in process sandbox. Use a container, VM, Gondolin, or
-  another external boundary for untrusted or unmonitored work.
+- Modes (Ask / Normal / Auto) govern approvals; reasoning effort does not.
+- Native-first: no built-in process sandbox. Isolation is opt-in (container,
+  Gondolin, VM).
+- Project trust controls resource loading, not shell or file permissions.
+  Trusted is not the same as safe against injection.
+- Hardline destructive actions stay blocked in every mode. Never weaken a
+  guard or work around a denial.

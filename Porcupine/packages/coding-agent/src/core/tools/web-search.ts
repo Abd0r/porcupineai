@@ -2,13 +2,15 @@
  * Free-tier web search tool for Porcupine.
  *
  * Primary Tool Search cascade (first non-empty success wins):
- *  1. SearXNG  — SEARXNG_URL / PORCUPINE_SEARXNG_URL or http://127.0.0.1:8888
- *  2. Brave    — BRAVE_API_KEY / BRAVE_SEARCH_API_KEY (free tier; skipped if unset)
- *  3. DuckDuckGo Instant Answer + lite HTML (no key)
- *  4. Wikipedia OpenSearch (no key)
- *  5. Mojeek HTML (no key)
+ *  1. SearXNG   — SEARXNG_URL / PORCUPINE_SEARXNG_URL or http://127.0.0.1:8888
+ *  2. Websurfx  — WEBSURFX_URL / PORCUPINE_WEBSURFX_URL (skipped if unset)
+ *  3. DDGS      — DDGS_URL / PORCUPINE_DDGS_URL (deedy5/ddgs API, skipped if unset)
+ *  4. Brave     — BRAVE_API_KEY / BRAVE_SEARCH_API_KEY (skipped if unset)
+ *  5. DuckDuckGo Instant Answer + lite HTML (no key)
+ *  6. Wikipedia OpenSearch (no key)
+ *  7. Mojeek HTML (no key)
  *
- * Override order: PORCUPINE_WEB_SEARCH_ORDER=searxng,brave,duckduckgo,wikipedia,mojeek
+ * Override order: PORCUPINE_WEB_SEARCH_ORDER=searxng,websurfx,ddgs,brave,duckduckgo,wikipedia,mojeek
  * No paid-only backends. Never invents results.
  */
 
@@ -25,7 +27,7 @@ const webSearchSchema = Type.Object({
 	backend: Type.Optional(
 		Type.String({
 			description:
-				"Optional backend force: searxng | brave | duckduckgo | wikipedia | mojeek | auto (default cascade)",
+				"Optional backend force: searxng | websurfx | ddgs | brave | duckduckgo | wikipedia | mojeek | auto (default cascade)",
 		}),
 	),
 });
@@ -46,11 +48,13 @@ export interface WebSearchToolDetails {
 	count: number;
 }
 
-export type BackendName = "searxng" | "brave" | "duckduckgo" | "wikipedia" | "mojeek";
+export type BackendName = "searxng" | "websurfx" | "ddgs" | "brave" | "duckduckgo" | "wikipedia" | "mojeek";
 
-/** Default cascade — SearXNG first, then Brave, then free public fallbacks. */
+/** Default cascade — local/optional hops first, then keyed Brave, then free public fallbacks. */
 export const DEFAULT_WEB_SEARCH_ORDER: readonly BackendName[] = [
 	"searxng",
+	"websurfx",
+	"ddgs",
 	"brave",
 	"duckduckgo",
 	"wikipedia",
@@ -90,7 +94,7 @@ async function fetchText(url: string, init?: RequestInit, timeoutMs = 12_000): P
 			...init,
 			signal: controller.signal,
 			headers: {
-				"User-Agent": "Porcupine/0.83 (+free-web-search; cascade SearXNG>Brave>DDG)",
+				"User-Agent": "Porcupine/0.83 (+free-web-search; cascade SearXNG>Websurfx>DDGS>Brave>DDG)",
 				Accept: "application/json, text/html;q=0.9,*/*;q=0.8",
 				...(init?.headers ?? {}),
 			},
@@ -112,6 +116,18 @@ function resolveSearxngBase(): string {
 
 function hasBraveKey(): boolean {
 	return Boolean(process.env.BRAVE_API_KEY || process.env.BRAVE_SEARCH_API_KEY);
+}
+
+function resolveWebsurfxBase(): string | undefined {
+	const raw = process.env.WEBSURFX_URL || process.env.PORCUPINE_WEBSURFX_URL;
+	const base = raw?.replace(/\/$/, "").trim();
+	return base || undefined;
+}
+
+function resolveDdgsBase(): string | undefined {
+	const raw = process.env.DDGS_URL || process.env.PORCUPINE_DDGS_URL;
+	const base = raw?.replace(/\/$/, "").trim();
+	return base || undefined;
 }
 
 /**
@@ -144,6 +160,49 @@ async function searchSearxng(query: string, limit: number): Promise<WebSearchHit
 			url: r.url || "",
 			snippet: (r.content || "").slice(0, 400),
 			backend: "searxng",
+		}));
+}
+
+async function searchWebsurfx(query: string, limit: number): Promise<WebSearchHit[]> {
+	const base = resolveWebsurfxBase();
+	if (!base) throw new Error("no WEBSURFX_URL");
+	// Websurfx JSON is NOT SearXNG-shaped (issue neon-mmd/websurfx#797 closed).
+	// Contract: GET /search?q=&json=true → { results: [{ title, url, description }] }
+	const url = `${base}/search?q=${encodeURIComponent(query)}&json=true`;
+	const body = await fetchText(url, undefined, 6_000);
+	const data = JSON.parse(body) as {
+		results?: Array<{ title?: string; url?: string; description?: string; content?: string }>;
+	};
+	return (data.results ?? [])
+		.filter((r) => r.url && r.title)
+		.slice(0, limit)
+		.map((r) => ({
+			title: r.title || r.url || "",
+			url: r.url || "",
+			snippet: (r.description || r.content || "").slice(0, 400),
+			backend: "websurfx",
+		}));
+}
+
+async function searchDdgs(query: string, limit: number): Promise<WebSearchHit[]> {
+	const base = resolveDdgsBase();
+	if (!base) throw new Error("no DDGS_URL");
+	// deedy5/ddgs FastAPI: GET /search/text?query=&max_results=
+	// results are { title, href, body } (Python text() dicts wrapped in { results }).
+	const url = `${base}/search/text?query=${encodeURIComponent(query)}&max_results=${limit}`;
+	const body = await fetchText(url, undefined, 8_000);
+	const data = JSON.parse(body) as {
+		results?: Array<{ title?: string; href?: string; url?: string; body?: string; content?: string }>;
+	};
+	const rows = Array.isArray(data) ? data : (data.results ?? []);
+	return rows
+		.filter((r) => (r.href || r.url) && r.title)
+		.slice(0, limit)
+		.map((r) => ({
+			title: r.title || r.href || r.url || "",
+			url: r.href || r.url || "",
+			snippet: (r.body || r.content || "").slice(0, 400),
+			backend: "ddgs",
 		}));
 }
 
@@ -277,6 +336,8 @@ async function searchMojeek(query: string, limit: number): Promise<WebSearchHit[
 
 const BACKEND_FNS: Record<BackendName, (q: string, n: number) => Promise<WebSearchHit[]>> = {
 	searxng: searchSearxng,
+	websurfx: searchWebsurfx,
+	ddgs: searchDdgs,
 	brave: searchBrave,
 	duckduckgo: searchDuckDuckGo,
 	wikipedia: searchWikipedia,
@@ -284,6 +345,8 @@ const BACKEND_FNS: Record<BackendName, (q: string, n: number) => Promise<WebSear
 };
 
 function shouldSkipBackend(name: BackendName): string | undefined {
+	if (name === "websurfx" && !resolveWebsurfxBase()) return "no WEBSURFX_URL";
+	if (name === "ddgs" && !resolveDdgsBase()) return "no DDGS_URL";
 	if (name === "brave" && !hasBraveKey()) return "no BRAVE_API_KEY";
 	return undefined;
 }
@@ -352,8 +415,8 @@ export function createWebSearchToolDefinition(): ToolDefinition<
 		name: "web_search",
 		label: "web_search",
 		description:
-			"Search the public web via free cascade: SearXNG → Brave (if BRAVE_API_KEY) → DuckDuckGo → Wikipedia → Mojeek. First success wins. Prefer this over inventing facts. Returns titles, URLs, snippets.",
-		promptSnippet: "Free web search cascade (SearXNG → Brave → DDG → Wikipedia → Mojeek)",
+			"Search the public web via free cascade: SearXNG → Websurfx (if WEBSURFX_URL) → DDGS (if DDGS_URL) → Brave (if BRAVE_API_KEY) → DuckDuckGo Instant Answer → Wikipedia → Mojeek. First success wins. Prefer this over inventing facts. Returns titles, URLs, snippets.",
+		promptSnippet: "Free web search cascade (SearXNG → Websurfx → DDGS → Brave → DDG → Wikipedia → Mojeek)",
 		promptGuidelines: [
 			"Use web_search when you need current or external information — this is the primary internet tool.",
 			"Cascade order is automatic; do not pick a backend unless the user asks or one is broken.",

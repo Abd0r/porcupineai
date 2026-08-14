@@ -215,7 +215,7 @@ export function createMcpToolGuard(options: McpToolGuardOptions): McpToolGuard {
 	};
 }
 
-const MCP_AUTO_SYSTEM_PROMPT = `You are a safety classifier for MCP (Model Context Protocol) tool calls invoked by a coding agent.
+const MCP_AUTO_SYSTEM_PROMPT = `You are a safety classifier for MCP (Model Context Protocol) tool calls invoked by an AI agent.
 
 Rules:
 - DENY destructive, irreversible, or data-exfiltrating tool calls: destructive SQL, writes that escape the server's working directory, credential reads, and network exfiltration.

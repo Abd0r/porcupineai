@@ -355,8 +355,8 @@ export function formatSkillsForPrompt(skills: Skill[]): string {
 
 	const lines = [
 		"\n\nThe following skills provide specialized instructions for specific tasks.",
-		"Load a skill only when the current task clearly matches its description - never on chit-chat or unrelated turns.",
-		"Use the read tool to load a skill's file when needed. Do not preload or search all skills every turn.",
+		"On real work, capability_search first to pick the best skill, then read that SKILL.md. Skip skills only on chit-chat.",
+		"Do not skip the catalog because a generic tool (web_search, bash, read) already looks sufficient.",
 		"When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.",
 		"",
 		"<available_skills>",

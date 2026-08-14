@@ -19,7 +19,7 @@ Free, tool-first research method for questions the codebase cannot answer. Compl
 
 1. **Grep first.** If the answer may already live in the repo (docs, a dependency's types, README), use `grep`/`find`/`read` before spending web calls.
 
-2. **Query, don't guess.** Run `web_search` with a tight, keyword-specific query (e.g. `vite 5 requireNode breaking change` not `would vite 5 break us?`). The tool cascades SearXNG → Brave → DuckDuckGo → Wikipedia → Mojeek (first success wins, `backend=auto`). If the first query misses, rephrase using terms actually used by the target docs rather than shotgun-searching.
+2. **Query, don't guess.** Run `web_search` with a tight, keyword-specific query (e.g. `vite 5 requireNode breaking change` not `would vite 5 break us?`). The tool cascades SearXNG → Websurfx → DDGS → Brave → DuckDuckGo → Wikipedia → Mojeek (first success wins, `backend=auto`). If the first query misses, rephrase using terms actually used by the target docs rather than shotgun-searching.
 
 3. **Extract only concrete URLs.** Never invent a URL. `web_extract` on URLs the search actually returned, or URLs you can verify exist. Prefer:
    - **Primary sources**: upstream docs, the project's official README/releases/changelog on GitHub (via a real search hit), language/packaging specs, vendor docs.

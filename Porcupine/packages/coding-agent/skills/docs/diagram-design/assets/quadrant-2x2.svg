@@ -1,0 +1,41 @@
+<svg viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg" role="img" font-family="system-ui, -apple-system, sans-serif">
+  <title>Impact vs Effort quadrant</title>
+  <desc>A 2x2 positioning chart: impact on the vertical axis, effort on the horizontal. Four quadrants labelled quick wins, big bets, fill-ins, and avoid.</desc>
+
+  <!-- Plot area background -->
+  <rect x="100" y="90" width="650" height="600" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+
+  <!-- Quadrant tints -->
+  <rect x="100" y="90"  width="325" height="300" fill="#e8f0fd"/>
+  <rect x="425" y="90"  width="325" height="300" fill="#e6f4ec"/>
+  <rect x="100" y="390" width="325" height="300" fill="#fdf3e2"/>
+  <rect x="425" y="390" width="325" height="300" fill="#fdeaea"/>
+
+  <!-- Center divider lines -->
+  <line x1="425" y1="90" x2="425" y2="690" stroke="#111827" stroke-width="1"/>
+  <line x1="100" y1="390" x2="750" y2="390" stroke="#111827" stroke-width="1"/>
+
+  <!-- Quadrant labels -->
+  <text x="115" y="120" font-size="22" font-weight="600" fill="#111827">Quick wins</text>
+  <text x="440" y="120" font-size="22" font-weight="600" fill="#111827">Big bets</text>
+  <text x="115" y="420" font-size="22" font-weight="600" fill="#111827">Fill-ins</text>
+  <text x="440" y="420" font-size="22" font-weight="600" fill="#111827">Avoid</text>
+
+  <!-- Axis labels -->
+  <text x="425" y="725" font-size="18" fill="#6b7280" text-anchor="middle">Effort →</text>
+  <text x="45" y="390" font-size="18" fill="#6b7280" text-anchor="middle" transform="rotate(-90 45 390)">Impact →</text>
+  <text x="750" y="80" font-size="14" fill="#6b7280" text-anchor="end">high</text>
+  <text x="750" y="680" font-size="14" fill="#6b7280" text-anchor="end">low</text>
+
+  <!-- Example items: circle + label -->
+  <circle cx="220" cy="220" r="9" fill="#2f6fed"/>
+  <text x="240" y="226" font-size="16" fill="#111827">Example item A</text>
+  <circle cx="540" cy="230" r="9" fill="#188a4e"/>
+  <text x="560" y="236" font-size="16" fill="#111827">Example item B</text>
+
+  <!-- Legend -->
+  <g transform="translate(100 760)">
+    <circle cx="6" cy="-4" r="6" fill="#2f6fed"/>
+    <text x="18" y="0" font-size="13" fill="#6b7280">accent = internal / primary</text>
+  </g>
+</svg>

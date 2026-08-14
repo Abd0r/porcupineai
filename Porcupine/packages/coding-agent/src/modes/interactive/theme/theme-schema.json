@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Porcupine Coding Agent Theme",
-  "description": "Theme schema for Porcupine coding agent",
+  "description": "Theme schema for Porcupine AI agent",
   "type": "object",
   "required": ["name", "colors"],
   "properties": {

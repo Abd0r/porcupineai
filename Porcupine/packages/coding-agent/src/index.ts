@@ -206,6 +206,18 @@ export {
 	DefaultResourceLoader,
 	loadProjectContextFiles,
 } from "./core/resource-loader.ts";
+export type { SandboxWriteMode } from "./core/sandbox/index.ts";
+// Native per-command sandbox (OS-level write-fence under Auto Mode)
+export {
+	buildBwrapArgs,
+	buildSeatbeltProfile,
+	buildWindowsHelperArgs,
+	createSandboxedBashOperations,
+	defaultWritableStateDirs,
+	isBwrapAvailable,
+	isSeatbeltSupported,
+	isWindowsHelperAvailable,
+} from "./core/sandbox/index.ts";
 // SDK for programmatic usage
 export {
 	AgentSessionRuntime,

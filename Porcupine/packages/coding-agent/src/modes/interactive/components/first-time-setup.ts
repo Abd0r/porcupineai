@@ -53,7 +53,7 @@ export class FirstTimeSetupComponent extends Container {
 		this.addChild(new Text(theme.fg("accent", SETUP_LOGO_LINES.join("\n")), 1, 0));
 		this.addChild(new Spacer(1));
 		this.addChild(
-			new Text(theme.fg("accent", theme.bold(`Welcome to ${APP_NAME}, the minimal coding agent.`)), 1, 0),
+			new Text(theme.fg("accent", theme.bold(`Welcome to ${APP_NAME}, a Safe Autonomous AI Agent.`)), 1, 0),
 		);
 		this.addChild(new Spacer(1));
 

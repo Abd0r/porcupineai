@@ -10,6 +10,6 @@ describe("Auto Mode autonomy directive", () => {
 
 	it("keeps hardline destructive boundaries explicit in the directive", () => {
 		expect(AUTO_MODE_AUTONOMY_DIRECTIVE).toContain("rm -rf /");
-		expect(AUTO_MODE_AUTONOMY_DIRECTIVE).toContain("force-push");
+		expect(AUTO_MODE_AUTONOMY_DIRECTIVE).toContain("Force-push");
 	});
 });
