@@ -34,6 +34,7 @@ See [examples/extensions/](../examples/extensions/) for working implementations.
 - [Extension Locations](#extension-locations)
 - [Available Imports](#available-imports)
 - [Writing an Extension](#writing-an-extension)
+  - [Unload Contract](#unload-contract)
   - [Extension Styles](#extension-styles)
 - [Events](#events)
   - [Lifecycle Overview](#lifecycle-overview)
@@ -222,6 +223,15 @@ This pattern makes the fetched models available during normal startup and to `po
 Extension factories may run in invocations that never start a session. Do not start background resources such as processes, sockets, file watchers, or timers from the factory.
 
 Defer background resource startup until `session_start` or the command/tool/event that needs the resource. Register an idempotent `session_shutdown` handler to close any session-scoped resources you start.
+
+### Unload Contract
+
+Every registration is an effect with a disposer. A clean unload unwinds all of an extension's effects so nothing leaks across reload or teardown.
+
+- **Every registration returns a disposer.** `on`, `registerTool`, `registerCommand`, `registerShortcut`, `registerFlag`, `registerMessageRenderer`, `registerMarkdownTransformer`, and `registerEntryRenderer` each return an `() => void` that unregisters just that one effect. Existing extensions that ignore the return value keep working unchanged.
+- **Unload / reload unwinds all registrations.** When an extension is unloaded, reloaded, or the runtime is torn down, every collected disposer runs in reverse registration order. Tools, slash commands, shortcuts, flags, event listeners, and renderers are all removed; the per-extension collections (tools, commands, shortcuts, flags, handlers, renderers) are emptied and flag defaults seeded in the shared runtime are released.
+- **Dispose un-scoped resources in your own cleanup.** Collect and dispose timers, streams, file watchers, sockets, or subscriptions you opened inside a command, tool, or event handler. Registrations are unwound for you, but anything you hold directly (intervals, open handles, global subscriptions on `api.events`) belongs in your own cleanup. A good home is an idempotent `session_shutdown` handler, which runs before the extension's registrations are unwound on reload.
+- **`api.dispose()`** unwinds every registration the calling extension made and runs all of its collected disposers. `ExtensionRunner.unloadExtension(path)` and `ExtensionRunner.disposeAll()` expose the same unwinding at the runner level for the product and tooling.
 
 ### Extension Styles
 

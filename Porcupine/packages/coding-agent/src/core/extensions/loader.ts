@@ -234,30 +234,50 @@ function createExtensionAPI(
 	cwd: string,
 	eventBus: EventBus,
 ): ExtensionAPI {
+	const trackDisposer = (disposer: () => void): (() => void) => {
+		extension.disposers.push(disposer);
+		return disposer;
+	};
+
 	const api = {
-		// Registration methods - write to extension
-		on(event: string, handler: HandlerFn): void {
+		// Registration methods - write to extension, return unregister disposers.
+		// Each disposer is also collected on the extension so unload/reload/teardown
+		// can unwind ALL registrations at once (see Extension.disposers).
+		on(event: string, handler: HandlerFn): () => void {
 			runtime.assertActive();
 			const list = extension.handlers.get(event) ?? [];
 			list.push(handler);
 			extension.handlers.set(event, list);
+			return trackDisposer(() => {
+				extension.handlers.set(
+					event,
+					(extension.handlers.get(event) ?? []).filter((h) => h !== handler),
+				);
+			});
 		},
 
-		registerTool(tool: ToolDefinition): void {
+		registerTool(tool: ToolDefinition): () => void {
 			runtime.assertActive();
 			extension.tools.set(tool.name, {
 				definition: tool,
 				sourceInfo: extension.sourceInfo,
 			});
 			runtime.refreshTools();
+			return trackDisposer(() => {
+				extension.tools.delete(tool.name);
+				runtime.refreshTools();
+			});
 		},
 
-		registerCommand(name: string, options: Omit<RegisteredCommand, "name" | "sourceInfo">): void {
+		registerCommand(name: string, options: Omit<RegisteredCommand, "name" | "sourceInfo">): () => void {
 			runtime.assertActive();
 			extension.commands.set(name, {
 				name,
 				sourceInfo: extension.sourceInfo,
 				...options,
+			});
+			return trackDisposer(() => {
+				extension.commands.delete(name);
 			});
 		},
 
@@ -267,36 +287,58 @@ function createExtensionAPI(
 				description?: string;
 				handler: (ctx: import("./types.ts").ExtensionContext) => Promise<void> | void;
 			},
-		): void {
+		): () => void {
 			runtime.assertActive();
 			extension.shortcuts.set(shortcut, { shortcut, extensionPath: extension.path, ...options });
+			return trackDisposer(() => {
+				extension.shortcuts.delete(shortcut);
+			});
 		},
 
 		registerFlag(
 			name: string,
 			options: { description?: string; type: "boolean" | "string"; default?: boolean | string },
-		): void {
+		): () => void {
 			runtime.assertActive();
+			const setDefaultHere = options.default !== undefined && !runtime.flagValues.has(name);
 			extension.flags.set(name, { name, extensionPath: extension.path, ...options });
-			if (options.default !== undefined && !runtime.flagValues.has(name)) {
+			if (setDefaultHere && options.default !== undefined) {
 				runtime.flagValues.set(name, options.default);
 			}
+			return trackDisposer(() => {
+				extension.flags.delete(name);
+				// Remove the default we seeded only if nobody else re-seeded it.
+				if (setDefaultHere && runtime.flagValues.get(name) === options.default) {
+					runtime.flagValues.delete(name);
+				}
+			});
 		},
 
-		registerMessageRenderer<T>(customType: string, renderer: MessageRenderer<T>): void {
+		registerMessageRenderer<T>(customType: string, renderer: MessageRenderer<T>): () => void {
 			runtime.assertActive();
 			extension.messageRenderers.set(customType, renderer as MessageRenderer);
+			return trackDisposer(() => {
+				extension.messageRenderers.delete(customType);
+			});
 		},
 
-		registerMarkdownTransformer(transformer: MarkdownTransformer): void {
+		registerMarkdownTransformer(transformer: MarkdownTransformer): () => void {
 			runtime.assertActive();
 			extension.markdownTransformer = transformer;
+			return trackDisposer(() => {
+				if (extension.markdownTransformer === transformer) {
+					delete extension.markdownTransformer;
+				}
+			});
 		},
 
-		registerEntryRenderer<T>(customType: string, renderer: EntryRenderer<T>): void {
+		registerEntryRenderer<T>(customType: string, renderer: EntryRenderer<T>): () => void {
 			runtime.assertActive();
 			extension.entryRenderers ??= new Map();
 			extension.entryRenderers.set(customType, renderer as EntryRenderer);
+			return trackDisposer(() => {
+				extension.entryRenderers?.delete(customType);
+			});
 		},
 
 		// Flag access - checks extension registered it, reads from runtime
@@ -304,6 +346,15 @@ function createExtensionAPI(
 			runtime.assertActive();
 			if (!extension.flags.has(name)) return undefined;
 			return runtime.flagValues.get(name);
+		},
+
+		// Unwind every registration this extension made (tools, commands, listeners,
+		// shortcuts, flags, renderers) and run all collected cleanup disposers.
+		dispose(): void {
+			runtime.assertActive();
+			for (const disposer of extension.disposers.splice(0)) {
+				disposer();
+			}
 		},
 
 		// Action methods - delegate to shared runtime
@@ -457,6 +508,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		commands: new Map(),
 		flags: new Map(),
 		shortcuts: new Map(),
+		disposers: [],
 	};
 }
 

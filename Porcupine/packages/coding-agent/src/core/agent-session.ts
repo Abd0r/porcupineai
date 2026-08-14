@@ -13,6 +13,7 @@
  * Modes use this class and add their own I/O layer on top.
  */
 
+import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -56,8 +57,10 @@ import {
 	classifyAdaptiveReasoning,
 } from "../porcupine/adaptive-reasoning.ts";
 import { guardBashCommand } from "../porcupine/auto-mode.ts";
+import { createRepeatToolGuard } from "../porcupine/repeat-tool-guard.ts";
 import { persistSubagentSession } from "../porcupine/subagent-sessions.ts";
 import { createComposedToolDefinition, listToolPolicies } from "../porcupine/tool-policy.ts";
+import { pruneToolResultContent } from "../porcupine/tool-result-pruner.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { sleep } from "../utils/sleep.ts";
@@ -692,11 +695,20 @@ export class AgentSession {
 	private _baseSystemPrompt = "";
 	private _baseSystemPromptOptions!: BuildSystemPromptOptions;
 	private _systemPromptOverride?: string;
+	/** Hash of the last system_prompt entry logged to the session (dedupe). */
+	private _lastLoggedPromptHash = "";
 	/**
 	 * Full skills catalog in the system prompt. After context compaction we drop it
 	 * to a short stub so the catalog does not re-inflate the window.
 	 */
 	private _includeSkillsCatalog = true;
+
+	/**
+	 * Consecutive-identical-tool-call loop breaker (dsh repeat-tool-reminder).
+	 * Observes every tool call; at [3,5,8] identical calls it steers an advisory
+	 * into the model's next step. Never vetoes or rewrites.
+	 */
+	private readonly _repeatToolGuard = createRepeatToolGuard({ exclude: ["todo_write"] });
 
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
@@ -753,6 +765,9 @@ export class AgentSession {
 		// Composed tool policies (tools.porcupine.json) register even with zero
 		// MCP servers configured.
 		this._syncMcpTools();
+
+		// Traceability: record the assembled prompt (model-visible == logged).
+		this._recordSystemPromptIfChanged("session-start");
 	}
 
 	get modelRuntime(): ModelRuntime {
@@ -973,16 +988,35 @@ export class AgentSession {
 		this.agent.prepareNextTurnWithContext = async (turn, signal) => {
 			const previousSnapshot = await previousPrepareNextTurnWithContext?.(turn, signal);
 			const previousContext = previousSnapshot?.context ?? turn.context;
+			const systemPrompt = this._systemPromptOverride ?? this._baseSystemPrompt;
+			const nextModel = this.agent.state.model;
+			const nextThinkingLevel = this.agent.state.thinkingLevel;
+
+			// Traceability: the exact dispatch envelope is logged per step, and the
+			// assembled prompt is snapshotted whenever it changes (model-visible ==
+			// logged, the dsh invariant). Never throws: logging must not break a step.
+			try {
+				this._recordSystemPromptIfChanged("step");
+				this.sessionManager.appendRequestHeader({
+					model: nextModel?.id ?? "unknown",
+					provider: (nextModel as { provider?: string } | undefined)?.provider,
+					thinkingLevel: nextThinkingLevel ?? "off",
+					promptHash: createHash("sha1").update(systemPrompt).digest("hex"),
+					toolNames: this.agent.state.tools.map((t) => t.name),
+				});
+			} catch {
+				// Best-effort: a persistence failure must not block the model request.
+			}
 
 			return {
 				...previousSnapshot,
 				context: {
 					...previousContext,
-					systemPrompt: this._systemPromptOverride ?? this._baseSystemPrompt,
+					systemPrompt,
 					tools: this.agent.state.tools.slice(),
 				},
-				model: this.agent.state.model,
-				thinkingLevel: this.agent.state.thinkingLevel,
+				model: nextModel,
+				thinkingLevel: nextThinkingLevel,
 			};
 		};
 	}
@@ -1069,6 +1103,26 @@ export class AgentSession {
 		// Emit to extensions first
 		await this._emitExtensionEvent(event);
 
+		// Loop breaker: observe identical consecutive tool calls and steer an
+		// advisory (hidden custom message) before the next step when a threshold
+		// fires. Best-effort: the agent loop must never break because of it.
+		if (event.type === "tool_execution_start") {
+			try {
+				const advisory = this._repeatToolGuard.observe(event.toolName, event.args);
+				if (advisory) {
+					this.agent.steer({
+						role: "custom",
+						customType: "repeat_tool_reminder",
+						content: [{ type: "text", text: advisory }],
+						display: false,
+						timestamp: Date.now(),
+					});
+				}
+			} catch {
+				// Advisories never break the session.
+			}
+		}
+
 		// Notify all listeners
 		this._emit(event.type === "agent_end" ? { ...event, willRetry: this._willRetryAfterAgentEnd(event) } : event);
 
@@ -1088,6 +1142,13 @@ export class AgentSession {
 				event.message.role === "assistant" ||
 				event.message.role === "toolResult"
 			) {
+				// Tool-result hygiene (dsh tool-result-pruner): oversized text in a
+				// tool result is cut to a bounded head/marker/tail before it enters
+				// the session and the next model request. In-place, deterministic,
+				// and never marks the result as an error.
+				if (event.message.role === "toolResult" && Array.isArray(event.message.content)) {
+					pruneToolResultContent(event.message.content);
+				}
 				// Regular LLM message - persist as SessionMessageEntry
 				this.sessionManager.appendMessage(event.message);
 			}
@@ -1406,6 +1467,7 @@ export class AgentSession {
 		// Rebuild base system prompt with new tool set
 		this._baseSystemPrompt = this._rebuildSystemPrompt(validToolNames);
 		this.agent.state.systemPrompt = this._systemPromptOverride ?? this._baseSystemPrompt;
+		this._recordSystemPromptIfChanged("tools");
 	}
 
 	/** Whether compaction or branch summarization is currently running */
@@ -1524,6 +1586,9 @@ export class AgentSession {
 			toolSnippets,
 			promptGuidelines,
 			autoMode,
+			// Benchmark pin (dsh minimal preset): PORCUPINE_BENCHMARK=1 replaces
+			// the whole prompt with a fixed persona so runs are byte-stable.
+			minimalPrompt: process.env.PORCUPINE_BENCHMARK === "1",
 		};
 		return buildSystemPrompt(this._baseSystemPromptOptions);
 	}
@@ -1537,6 +1602,25 @@ export class AgentSession {
 		this._baseSystemPrompt = this._rebuildSystemPrompt(this.getActiveToolNames());
 		if (!this._systemPromptOverride) {
 			this.agent.state.systemPrompt = this._baseSystemPrompt;
+		}
+		this._recordSystemPromptIfChanged("compaction");
+	}
+
+	/**
+	 * Log the effective system prompt as a durable system_prompt entry, but only
+	 * when its sha1 changed since the last logged snapshot (model-visible ==
+	 * logged; the dsh request-header invariant). Never throws.
+	 */
+	private _recordSystemPromptIfChanged(reason: string): void {
+		try {
+			const prompt = this._systemPromptOverride ?? this._baseSystemPrompt;
+			if (!prompt) return;
+			const hash = createHash("sha1").update(prompt).digest("hex");
+			if (hash === this._lastLoggedPromptHash) return;
+			this._lastLoggedPromptHash = hash;
+			this.sessionManager.appendSystemPrompt(prompt, hash, reason);
+		} catch {
+			// Best-effort traceability; logging must never break the session.
 		}
 	}
 
@@ -1766,6 +1850,7 @@ export class AgentSession {
 				this._systemPromptOverride = undefined;
 				this.agent.state.systemPrompt = this._baseSystemPrompt;
 			}
+			this._recordSystemPromptIfChanged("override");
 		} catch (error) {
 			preflightResult?.(false);
 			throw error;
@@ -2975,6 +3060,7 @@ export class AgentSession {
 		this._resourceLoader.extendResources(extensionPaths);
 		this._baseSystemPrompt = this._rebuildSystemPrompt(this.getActiveToolNames());
 		this.agent.state.systemPrompt = this._baseSystemPrompt;
+		this._recordSystemPromptIfChanged("refresh");
 	}
 
 	private buildExtensionResourcePaths(entries: Array<{ path: string; extensionPath: string }>): Array<{

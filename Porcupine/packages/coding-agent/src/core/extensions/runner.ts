@@ -448,6 +448,38 @@ export class ExtensionRunner {
 		return this.extensions.map((e) => e.path);
 	}
 
+	/**
+	 * Unwind every registration (tools, commands, shortcuts, flags, listeners,
+	 * renderers) for a specific extension and remove it from the loaded set.
+	 * Returns the number of extensions unloaded for the given path.
+	 */
+	unloadExtension(path: string): number {
+		const remaining: Extension[] = [];
+		let unloaded = 0;
+		for (const ext of this.extensions) {
+			if (ext.path === path) {
+				for (const disposer of ext.disposers.splice(0)) disposer();
+				unloaded++;
+			} else {
+				remaining.push(ext);
+			}
+		}
+		this.extensions = remaining;
+		return unloaded;
+	}
+
+	/**
+	 * Unwind every registration for all loaded extensions (teardown / full unload).
+	 * Callers that replace the runner with a fresh instance should invoke this on
+	 * the outgoing runner so plugins leave no leaked tools, commands, or listeners.
+	 */
+	disposeAll(): void {
+		for (const ext of this.extensions) {
+			for (const disposer of ext.disposers.splice(0)) disposer();
+		}
+		this.extensions = [];
+	}
+
 	/** Get all registered tools from all extensions (first registration per name wins). */
 	getAllRegisteredTools(): RegisteredTool[] {
 		const toolsByName = new Map<string, RegisteredTool>();

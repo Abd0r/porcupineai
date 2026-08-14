@@ -103,6 +103,7 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 			"extract_skill",
 			"find",
 			"grep",
+			"inspect_runtime",
 			"literature",
 			"ls",
 			"mcp_resources",

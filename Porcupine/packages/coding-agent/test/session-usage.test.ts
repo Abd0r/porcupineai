@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
-import { formatCostSummary, SessionUsageTracker } from "../src/core/session-usage.ts";
+import { formatCostSummary, formatUsageTable, SessionUsageTracker } from "../src/core/session-usage.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createInMemoryModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
 import { createTestResourceLoader } from "./utilities.ts";
@@ -111,6 +111,38 @@ describe("SessionUsageTracker", () => {
 		const totals = tracker.getTotals();
 		expect(totals.cost).toBeCloseTo(0.3, 10);
 	});
+
+	it("populates the disjoint cache split from named provider fields", () => {
+		const tracker = new SessionUsageTracker();
+		const usage = createUsage(100, 20);
+		// The provider reports the split explicitly; the short cacheRead/cacheWrite fields
+		// are left at their defaults to prove the named views are honored independently.
+		usage.cacheReadTokens = 40;
+		usage.cacheWriteTokens = 10;
+		tracker.record(usage, { provider: "anthropic", model: "claude-sonnet-4-5" });
+
+		const turn = tracker.turns[0];
+		const totals = tracker.getTotals();
+		// Disjoint: uncached input stays separate from cache-read and cache-write.
+		expect(turn.input).toBe(100);
+		expect(turn.output).toBe(20);
+		expect(turn.cacheRead).toBe(40);
+		expect(turn.cacheWrite).toBe(10);
+		expect(totals.input).toBe(100);
+		expect(totals.cacheRead).toBe(40);
+		expect(totals.cacheWrite).toBe(10);
+	});
+
+	it("falls back to canonical cacheRead/cacheWrite fields when named views are absent", () => {
+		const tracker = new SessionUsageTracker();
+		const usage = createUsage(100);
+		usage.cacheRead = 30;
+		usage.cacheWrite = 5;
+		tracker.record(usage);
+		const totals = tracker.getTotals();
+		expect(totals.cacheRead).toBe(30);
+		expect(totals.cacheWrite).toBe(5);
+	});
 });
 
 describe("AgentSession /usage and /cost rendering", () => {
@@ -183,5 +215,26 @@ describe("formatCostSummary", () => {
 		const output = formatCostSummary(totals, perModel, totals.cost > 0);
 		expect(output).toContain("estimate");
 		expect(output).toContain("anthropic/claude-sonnet-4-5: $0.3000");
+	});
+});
+
+describe("formatUsageTable disjoint split surface", () => {
+	it("renders uncached input, cache read, and cache write as separate columns", () => {
+		const tracker = new SessionUsageTracker();
+		const usage = createUsage(100, 20);
+		usage.cacheReadTokens = 40;
+		usage.cacheWriteTokens = 10;
+		tracker.record(usage, { provider: "anthropic", model: "claude-sonnet-4-5" });
+		const totals = tracker.getTotals();
+		tracker.getPerModel();
+		const output = formatUsageTable(tracker.turns, totals, tracker.turnCount, 170);
+
+		// Headers clearly separate the disjoint buckets.
+		expect(output).toContain("Cache Rd");
+		expect(output).toContain("Cache Wr");
+		// Uncached input (100) appears disjoint from cache read (40) and cache write (10).
+		expect(output).toContain("100");
+		expect(output).toContain("40");
+		expect(output).toContain("10");
 	});
 });

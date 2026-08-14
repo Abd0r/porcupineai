@@ -10,6 +10,12 @@ import { createUsageTotals, type UsageTotals } from "./usage-totals.ts";
  * rebuilt from the same persisted entries. The ai package already attributes a
  * concrete cost to every usage record (Usage.cost.total), so this module reuses
  * that value rather than reimplementing per-model pricing.
+ *
+ * Token accounting is disjoint: `input` holds uncached prompt tokens, and cache
+ * activity is counted separately in `cacheRead`/`cacheWrite` (or the named
+ * `cacheReadTokens`/`cacheWriteTokens` views when a provider reports them). Both
+ * the /usage table and the /cost summary surface this split; it is an estimate,
+ * not a bill, and falls back to token-only reporting when a model has no cost config.
  */
 
 /** One recorded model/tool turn within the session. */
@@ -49,6 +55,10 @@ export class SessionUsageTracker {
 	/** Record one usage sample as a new turn. Returns the recorded turn. */
 	record(usage: Usage, meta: SessionUsageMeta = {}): SessionTurnUsage {
 		this._counter += 1;
+		// Prefer the named disjoint-split views when a provider reports them; they are
+		// disjoint from `input` (uncached) and fall back to the canonical short fields.
+		const cacheRead = usage.cacheReadTokens ?? usage.cacheRead;
+		const cacheWrite = usage.cacheWriteTokens ?? usage.cacheWrite;
 		const turn: SessionTurnUsage = {
 			turn: this._counter,
 			provider: meta.provider,
@@ -56,8 +66,8 @@ export class SessionUsageTracker {
 			responseModel: meta.responseModel,
 			input: usage.input,
 			output: usage.output,
-			cacheRead: usage.cacheRead,
-			cacheWrite: usage.cacheWrite,
+			cacheRead,
+			cacheWrite,
 			cost: usage.cost.total,
 		};
 		this._turns.push(turn);

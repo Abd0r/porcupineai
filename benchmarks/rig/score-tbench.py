@@ -39,11 +39,16 @@ def collect(paths):
     return results
 
 def main():
-    base = os.path.expanduser("~")
-    results = collect([
-        f"{base}/benchmark-rig/archive-tbench/*.json",
-        f"{base}/tbench-results/*/*/result.json",
-    ])
+    import argparse
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    parser = argparse.ArgumentParser(description="Score Terminal-Bench 2.1 results")
+    parser.add_argument(
+        "--results-dir",
+        default=os.path.join(repo_root, "benchmarks", "tbench", "results"),
+        help="Directory of result.json files (default: committed benchmarks/tbench/results)",
+    )
+    args = parser.parse_args()
+    results = collect([os.path.join(args.results_dir, "*.json")])
     kinds = Counter()
     passes = 0
     fails = 0

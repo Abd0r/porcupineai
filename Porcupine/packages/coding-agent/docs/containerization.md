@@ -2,7 +2,25 @@
 
 Porcupine runs with all permissions by default, but in some cases, you will want to have more control over what directories Porcupine can write to and which accesses it has.
 
-There are two general options. You can either
+## Why sandboxing is not native
+
+Porcupine is native-first on purpose. Sandboxing by default is one of the worst things you can do to an agent you actually want to use: it kills the agent's practical usage and turns it into a showpiece.
+
+An agent you use every day does real work in your real environment. It installs packages with your package manager, runs your test suite against your databases, talks to your git remotes, reads your browser session, and calls your internal services with your credentials. Every one of those actions crosses a boundary that a default sandbox has to either allow or deny.
+
+If the sandbox allows them, it is not a safety boundary, it is ceremony. If it denies them, the agent stops at the first real task and waits: mount this, configure that, approve this one exception. What you are left with is an agent that can read a project and edit files inside a cage, but cannot actually do the job. That is a showpiece, not a worker.
+
+The safety model that keeps an agent practical is the permission dial, not the cage:
+
+- **Ask / Normal / Auto** choose what may run without asking (see [security.md](security.md)).
+- The **fail-closed safety gate** and the **hardline list** keep destructive actions blocked in every mode.
+- The **native per-command write-fence** (Auto Mode) confines shell writes to the workspace and standard cache dirs without a VM or container.
+
+Those guardrails run on the host, where the agent is useful. Real isolation stays available exactly where it belongs: untrusted or unmonitored work, with a one-command opt-in (`/sandbox on` for the Gondolin micro-VM) or a whole-process container when you want the strongest boundary.
+
+Native-first is not an omission. It is the difference between an agent you use and an agent you show people.
+
+There are two general options for when you do want isolation. You can either
 1. run the the whole `porcupine` process inside an isolated environment, or
 2. run `porcupine` on the host and route tool execution into an isolated environment.
 
