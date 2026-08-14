@@ -224,11 +224,17 @@ describe("AgentSession bash and persistence characterization", () => {
 
 		const entries = harness.sessionManager.getEntries();
 		expect(entries.map((entry) => entry.type)).toEqual([
+			// Traceability: the assembled system prompt is snapshotted at session
+			// start, and each agent step logs a request_header dispatch envelope
+			// (the faux harness calls prepareNextTurn per continuation).
+			"system_prompt",
 			"custom_message",
 			"message",
 			"message",
 			"message",
+			"request_header",
 			"message",
+			"request_header",
 		]);
 		expect(harness.session.messages.map((message) => message.role)).toEqual([
 			"custom",

@@ -1,4 +1,18 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+
+// The default prompt embeds the shipped doc paths (getReadmePath/getDocsPath/
+// getExamplesPath), which resolve to the package install location and differ
+// per machine. Pin them so the committed fixtures replay byte-exact anywhere.
+vi.mock("../../src/config.ts", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../src/config.ts")>();
+	return {
+		...actual,
+		getReadmePath: () => "/fixed/readme.md",
+		getDocsPath: () => "/fixed/docs",
+		getExamplesPath: () => "/fixed/examples",
+	};
+});
+
 import {
 	buildCasePrompt,
 	installClockLifecycle,

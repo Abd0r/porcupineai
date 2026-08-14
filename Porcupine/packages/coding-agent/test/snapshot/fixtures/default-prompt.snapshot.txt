@@ -28,9 +28,9 @@ Guidelines:
 - When discussing goals, plans, tasks, or Cron: goals are bounded session loops; Plan mode is inspection-only and produces an implementation-ready artifact; task history is durable; Cron only fires while the interactive session is open and idle. Do not imply a daemon, closed-terminal execution, isolated workers, or unattended privileged automation.
 
 Porcupine documentation (read only when the user asks about Porcupine itself, its SDK, extensions, themes, skills, or TUI):
-- Main documentation: /Users/syedabdurrehman/Porcupine/Porcupine/packages/coding-agent/README.md
-- Additional docs: /Users/syedabdurrehman/Porcupine/Porcupine/packages/coding-agent/docs
-- Examples: /Users/syedabdurrehman/Porcupine/Porcupine/packages/coding-agent/examples (extensions, custom tools, SDK)
+- Main documentation: /fixed/readme.md
+- Additional docs: /fixed/docs
+- Examples: /fixed/examples (extensions, custom tools, SDK)
 - When reading product docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory
 - When asked about: extensions (docs/extensions.md, examples/extensions/), themes (docs/themes.md), skills (docs/skills.md), prompt templates (docs/prompt-templates.md), TUI components (docs/tui.md), keybindings (docs/keybindings.md), SDK integrations (docs/sdk.md), custom providers (docs/custom-provider.md), adding models (docs/models.md), packages (docs/packages.md), environment variables (docs/environment-variables.md)
 - When working on product topics, read the docs and examples, and follow .md cross-references before implementing
