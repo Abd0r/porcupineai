@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.68] - 2026-08-14
+
 ### Security
 
 - **Native per-command write-fence under Auto Mode**: in Auto Mode, approved bash now runs under an OS-level write fence, layered under the fail-closed LLM gate (defense-in-depth). Writes are allowed only to the workspace, the system temp directory, and standard home state/cache dirs (`~/.npm`, `~/.cache`, `~/.config`, `~/.local`, `~/.ssh`, and on macOS `~/Library/Caches` and `~/Library/Application Support`); everything else is denied by the operating system. Backends: macOS Seatbelt (`sandbox-exec`, verified), Linux bwrap (bubblewrap), and Windows restricted token via an optional `porcupine-sandbox.exe` helper (reference implementation in `native/windows/`, pending a Windows build). Where the backend or its binary is unavailable, bash falls back to the native shell with a one-time warning; Ask/Normal modes are unchanged. Implemented in `src/core/sandbox/*` and wired live in `src/core/agent-session.ts`.
