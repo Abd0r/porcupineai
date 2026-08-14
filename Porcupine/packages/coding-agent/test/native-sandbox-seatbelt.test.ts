@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { buildSeatbeltProfile, createSandboxedBashOperations, isSeatbeltSupported } from "../src/core/sandbox/index.ts";
@@ -18,8 +18,8 @@ const hasSandboxExec = (() => {
 
 const scratch: string[] = [];
 
-function makeScratch(prefix: string): string {
-	const dir = mkdtempSync(join("/private/tmp", prefix));
+function makeScratch(base: string, prefix: string): string {
+	const dir = mkdtempSync(join(base, prefix));
 	scratch.push(dir);
 	return dir;
 }
@@ -42,8 +42,8 @@ describe("seatbelt write-fence profile", () => {
 		expect(profile).toContain("(allow file-write*");
 	});
 
-	it("canonicalizes /tmp symlinks (/tmp -> /private/tmp)", () => {
-		const dir = makeScratch("ws-link-");
+	it("canonicalizes the workspace path in the profile", () => {
+		const dir = makeScratch(tmpdir(), "ws-link-");
 		const profile = buildSeatbeltProfile("workspace-write", dir, "/tmp")!;
 		expect(profile).toContain(realpathSync(dir));
 	});
@@ -62,8 +62,11 @@ describe("seatbelt write-fence execution", () => {
 	it.skipIf(!isSeatbeltSupported() || !hasSandboxExec)(
 		"allows writes inside the workspace and denies writes outside it",
 		async () => {
-			const workspace = makeScratch("porcupine-ws-");
-			const outside = makeScratch("porcupine-out-");
+			const workspace = makeScratch(tmpdir(), "porcupine-ws-");
+			// "outside" must be writable on disk but NOT under the fence's allow
+			// list (workspace + tmpdir + home state dirs). The home root qualifies
+			// on every platform; the home state subdirs (.npm/.cache/...) do not.
+			const outside = makeScratch(homedir(), "porcupine-out-");
 			const ops = createSandboxedBashOperations({ mode: "workspace-write", workspace });
 
 			let out = "";
@@ -89,7 +92,7 @@ describe("seatbelt write-fence execution", () => {
 	it.skipIf(!isSeatbeltSupported() || !hasSandboxExec)(
 		"read-only mode denies writes even inside the workspace",
 		async () => {
-			const workspace = makeScratch("porcupine-ro-");
+			const workspace = makeScratch(tmpdir(), "porcupine-ro-");
 			const ops = createSandboxedBashOperations({ mode: "read-only", workspace });
 
 			const denied = await ops.exec(`echo nope > "${workspace}/c.txt"`, workspace, {
@@ -108,7 +111,8 @@ describe("platform fallback", () => {
 	});
 
 	it("tmpdir is used for the temp allowance", () => {
-		const profile = buildSeatbeltProfile("workspace-write", "/ws", tmpdir())!;
-		expect(profile).toContain("/var/folders");
+		const tmp = tmpdir();
+		const profile = buildSeatbeltProfile("workspace-write", "/ws", tmp)!;
+		expect(profile).toContain(realpathSync(tmp));
 	});
 });
