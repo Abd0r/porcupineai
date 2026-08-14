@@ -57,9 +57,16 @@ async function createCloudflareRuntime(): Promise<{ modelRuntime: ModelRuntime; 
 }
 
 describe("ModelRegistry Cloudflare compat streaming", () => {
+	// Pick the first openai-completions (workers-ai upstream) model from the live
+	// catalog rather than a hardcoded id: models.dev drops/renames Cloudflare
+	// models (e.g. workers-ai/@cf/moonshotai/kimi-k2.5 was removed), which made
+	// a pinned id flaky on CI builds that regenerate provider data.
+	const cloudflareCompatModel = (modelRuntime: ModelRuntime) =>
+		modelRuntime.getModels("cloudflare-ai-gateway").find((m) => m.api === "openai-completions");
+
 	it("materializes the Cloudflare endpoint through ModelRuntime streaming", async () => {
 		const { modelRuntime } = await createCloudflareRuntime();
-		const model = modelRuntime.getModel("cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.5");
+		const model = cloudflareCompatModel(modelRuntime);
 		expect(model).toBeDefined();
 
 		resetApiProviders();
@@ -75,7 +82,9 @@ describe("ModelRegistry Cloudflare compat streaming", () => {
 
 	it("materializes the Cloudflare endpoint after extension-style auth resolution", async () => {
 		const { modelRegistry } = await createCloudflareRuntime();
-		const model = modelRegistry.find("cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.5");
+		const model = modelRegistry
+			.getAll()
+			.find((m) => m.provider === "cloudflare-ai-gateway" && m.api === "openai-completions");
 		expect(model).toBeDefined();
 
 		resetApiProviders();
