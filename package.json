@@ -64,14 +64,5 @@
     "@porcupineai/client",
     "@porcupineai/protocol",
     "@porcupineai/tui"
-  ],
-  "files": [
-    "Porcupine/packages/coding-agent/dist",
-    "Porcupine/packages/coding-agent/package.json",
-    "Porcupine/packages/coding-agent/skills",
-    "Porcupine/packages/coding-agent/agent-home",
-    "LICENSE",
-    "SECURITY.md",
-    "CONTRIBUTING.md"
   ]
 }
