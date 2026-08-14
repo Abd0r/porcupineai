@@ -558,6 +558,7 @@ Examples: `stacks/web/search/web_search`, `stacks/vcs/playbook/git-basics`.
 
 - `ask_question` — ask the user a structured multiple-choice or free-text question when guessing would be unsafe. If the user does not answer within 3 minutes, the tool reports a timeout (distinct from a cancel) and the agent may re-ask or continue working.
 - `capability_search` — agent-facing menu for all tools and skills (`list`, `search`, `view`); it is read-only and does not mutate a live toolset.
+- `inspect_runtime` — read-only report over the LIVE runtime: active tools and their schemas, registered slash commands, loaded extensions and their registration kinds, extension hooks, and the extension API surface. The agent uses it to write correct extension code instead of guessing from docs; every field comes from the live registries, never static examples.
 - `tasks` — durable local tasks and cron routines (`list`, `create`, `show`, `run`, `pause`, `resume`, `cancel`, `schedule_list`, `schedule_add`, `schedule_pause`, `schedule_resume`, `schedule_remove`); `run` queues a claimed run for the next idle moment.
 - `projects` — read-only list/search/view of canonical `Project/<name>/` workspaces (see Project Workspaces below).
 - `literature` — durable local literature store for scientific research (`add`, `list`, `search`, `show`, `update`, `remove`). Record papers with title, DOI/URL, authors, year, venue, evidence grade (`A` peer-reviewed/replicated … `D` unverified), status (`to-read` → `reading` → `reviewed` → `incorporated`), notes, and evidence. Deduplicates by DOI and refuses secret-looking content; the store lives in the agent home so references survive across projects and sessions.
@@ -728,7 +729,7 @@ cat README.md | porcupine -p "Summarize this text"
 | `--no-builtin-tools`, `-nbt`           | Disable built-in tools but keep extension/custom tools enabled |
 | `--no-tools`, `-nt`                    | Disable all tools                                              |
 
-Built-in tools: `ask_question`, `read`, `bash`, `edit`, `write`, `grep`, `find`, `ls`, `web_search`, `web_extract`, `computer_use`, `capability_search`, `memory`, `session_search`, `tasks`, `projects`, `literature`, `subagent`.
+Built-in tools: `ask_question`, `read`, `bash`, `edit`, `write`, `grep`, `find`, `ls`, `web_search`, `web_extract`, `computer_use`, `capability_search`, `inspect_runtime`, `memory`, `session_search`, `tasks`, `projects`, `literature`, `subagent`.
 
 ### Resource Options
 

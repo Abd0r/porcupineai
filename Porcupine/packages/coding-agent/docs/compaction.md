@@ -24,6 +24,10 @@ Both use the same structured summary format and track file operations cumulative
 
 ## Compaction
 
+### Tool-result pruning before context
+
+Before a tool result is persisted and fed to the next model request, oversized text content is deterministically cut to a bounded head, a truncation marker, and a tail (`src/porcupine/tool-result-pruner.ts`, default 16k threshold / 8k head / 2k tail). This is a hygiene pass: it never marks a result as an error and never touches image or audio blocks. It keeps long command or file output from inflating the window before compaction ever needs to run.
+
 ### When It Triggers
 
 Auto-compaction triggers when:

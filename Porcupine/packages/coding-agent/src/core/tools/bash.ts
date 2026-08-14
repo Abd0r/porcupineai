@@ -63,7 +63,13 @@ export interface BashOperations {
 	 * @param command The command to execute
 	 * @param cwd Working directory
 	 * @param options Execution options
-	 * @returns Promise resolving to exit code (null if killed)
+	 * @returns Promise resolving to the execution outcome. exitCode is null if
+	 * the process did not exit normally (killed by signal or never exited).
+	 * timedOut / aborted / signal are independent of exitCode: a process can
+	 * time out and still exit 0 (it trapped and handled the signal), so these
+	 * fields must be read orthogonally rather than inferred from exitCode.
+	 * All new fields are optional for backward compatibility with callers that
+	 * only supply exitCode.
 	 */
 	exec: (
 		command: string,
@@ -74,7 +80,17 @@ export interface BashOperations {
 			timeout?: number;
 			env?: NodeJS.ProcessEnv;
 		},
-	) => Promise<{ exitCode: number | null }>;
+	) => Promise<BashExecResult>;
+}
+
+export interface BashExecResult {
+	exitCode: number | null;
+	/** True if the caller-supplied timeout fired before the process exited. */
+	timedOut?: boolean;
+	/** True if the process was aborted via the AbortSignal (signal abort). */
+	aborted?: boolean;
+	/** Signal name if the process was terminated by a signal; otherwise null/undefined. */
+	signal?: string | null;
 }
 
 /**
@@ -112,11 +128,17 @@ export function createLocalBashOperations(options?: { shellPath?: string }): Bas
 			if (child.pid) trackDetachedChildPid(child.pid);
 			let timedOut = false;
 			let timeoutHandle: NodeJS.Timeout | undefined;
+			let killSignal: string | null = null;
 			const onAbort = () => {
 				if (child.pid) killProcessTree(child.pid);
 			};
 
 			try {
+				// Capture the signal name (if any) so it can be reported orthogonally
+				// from exitCode. A process terminated by a signal exits with null code.
+				child.once("exit", (_code, sig) => {
+					if (sig) killSignal = sig;
+				});
 				// Set timeout if provided.
 				if (timeoutMs !== undefined) {
 					timeoutHandle = setTimeout(() => {
@@ -144,7 +166,12 @@ export function createLocalBashOperations(options?: { shellPath?: string }): Bas
 				if (signal?.aborted) {
 					throw new Error("aborted");
 				}
-				return { exitCode };
+				return {
+					exitCode,
+					timedOut: timedOut || false,
+					aborted: signal?.aborted ?? false,
+					signal: killSignal,
+				};
 			} finally {
 				if (child.pid) untrackDetachedChildPid(child.pid);
 				if (timeoutHandle) clearTimeout(timeoutHandle);
@@ -477,15 +504,42 @@ export function createBashToolDefinition(
 			const appendStatus = (text: string, status: string) => `${text ? `${text}\n\n` : ""}${status}`;
 
 			try {
-				let exitCode: number | null;
+				let execResult: BashExecResult;
 				try {
-					const result = await ops.exec(spawnContext.command, spawnContext.cwd, {
+					execResult = await ops.exec(spawnContext.command, spawnContext.cwd, {
 						onData: handleData,
 						signal,
 						timeout,
 						env: spawnContext.env,
 					});
-					exitCode = result.exitCode;
+					const exitCode = execResult.exitCode;
+					const snapshot = await finishOutput();
+					const { text: outputText, details } = formatOutput(snapshot);
+
+					// Report the outcome orthogonally. exitCode alone conflates "killed by
+					// signal" (null code) with "timed out yet exited 0", so only append a
+					// status when it changes meaning versus a clean success.
+					if (exitCode !== 0 && exitCode !== null) {
+						throw new Error(appendStatus(outputText, `Command exited with code ${exitCode}`));
+					}
+					if (execResult.signal) {
+						throw new Error(appendStatus(outputText, `Process killed by signal ${execResult.signal}`));
+					}
+					if (execResult.timedOut) {
+						throw new Error(appendStatus(outputText, "Command timed out"));
+					}
+					if (execResult.aborted) {
+						throw new Error(appendStatus(outputText, "Command aborted"));
+					}
+					return {
+						content: [
+							{
+								type: "text",
+								text: guardStatus ? appendStatus(outputText, guardStatus) : outputText,
+							},
+						],
+						details,
+					};
 				} catch (err) {
 					const snapshot = await finishOutput();
 					const { text } = formatOutput(snapshot, "");
@@ -498,21 +552,6 @@ export function createBashToolDefinition(
 					}
 					throw err;
 				}
-
-				const snapshot = await finishOutput();
-				const { text: outputText, details } = formatOutput(snapshot);
-				if (exitCode !== 0 && exitCode !== null) {
-					throw new Error(appendStatus(outputText, `Command exited with code ${exitCode}`));
-				}
-				return {
-					content: [
-						{
-							type: "text",
-							text: guardStatus ? appendStatus(outputText, guardStatus) : outputText,
-						},
-					],
-					details,
-				};
 			} finally {
 				clearUpdateTimer();
 			}

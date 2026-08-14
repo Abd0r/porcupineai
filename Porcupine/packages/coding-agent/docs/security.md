@@ -36,6 +36,8 @@ This is intentional. Porcupine is designed to operate on local source trees, inv
 
 Project trust is only an input-loading guard. It prevents a repository from silently changing porcupine's settings or extensions before you approve it. It does not make untrusted code, untrusted prompts, or untrusted model output safe. Prompt injection from repository files, comments, documentation, context files, or build output is expected local-agent risk and cannot be reliably prevented by porcupine.
 
+Injected context is hardened against frame-breaking: content loaded from `AGENTS.md`/`CLAUDE.md` has its frame tags escaped (`</project_instructions>`, `</project_context>`, `<project_context`), so repository text cannot close the sanctioned block and inject instructions outside it, and the block states that project instructions do not override system, developer, or direct user instructions.
+
 ## Interaction Modes and the Fail-Closed Gate
 
 Interaction modes choose how tool actions are approved, independent of reasoning settings: **Ask** confirms every bash command and file mutation, **Normal** confirms flagged bash (file edits run directly), and **Auto** permits safe operations while routing flagged bash through a fail-closed LLM safety gate. In every mode, hardline destructive actions (`rm -rf /`, disk format, raw-device writes, fork bombs, power-off, kill-all) remain blocked. Force-push and destructive SQL are flagged, not hardline. Auto mode is autonomy, not a permission upgrade: it never makes destructive actions unrestricted, and it runs only while an interactive session is open and attended.
@@ -48,6 +50,17 @@ Interaction modes choose how tool actions are approved, independent of reasoning
 - **Outside the workspace** (home, other repos, system areas): stays flagged — confirmed in Normal, LLM-gated in Auto.
 - **Protected paths**: root, system directories (`/etc`, `/usr`, `/bin`, `/sbin`, `/var`, `/Library`, `/System`, `/Applications`) and anything in the `safety.protectedPaths` setting are hardline-blocked in every mode, even inside the workspace. Deleting the working directory itself (`rm -rf .`) is always blocked.
 - Path equivalences (`rm -rf //`, `rm -rf /./`, `rm -rf -- /`, quoted roots) are normalized before matching, and executing a script the agent just wrote is content-scanned with the same detector (no write-then-execute bypass).
+
+### Monotonic hardline policy
+
+The hardline and flagged command lists are **frozen at load** (`HARDLINE_RULES` / `DANGEROUS_RULES` in `src/porcupine/auto-mode.ts`). Extensions, listeners, and config cannot add, remove, or weaken them: a denial can only be tightened, never loosened by a later registration. A hardline decision is returned before any human confirm or LLM gate is consulted, so a confirming user or an approved Auto verdict can never override it.
+
+### Loop hygiene (advisory, never a veto)
+
+Two guardrails keep runaway loops from burning the window without ever blocking legitimate work:
+
+- **Repeat-tool guard**: identical consecutive tool calls with the same arguments trigger escalating advisory context at 3, 5, and 8 repetitions (steered into the model's next step as a hidden reminder, `src/porcupine/repeat-tool-guard.ts`). Bookkeeping tools such as `todo_write` are excluded. It observes and advises; it never cancels or rewrites a call.
+- **Tool-result pruning**: oversized tool results are deterministically cut to a head, a marker, and a tail before they enter context (see [Compaction](compaction.md#tool-result-pruning-before-context)).
 
 ### Native per-command write-fence (Auto Mode)
 

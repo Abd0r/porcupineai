@@ -374,10 +374,23 @@ export interface ToolCall {
 }
 
 export interface Usage {
+	/** Uncached input prompt tokens. Disjoint from `cacheRead`/`cacheWrite`: providers that report cache activity never double count these buckets. Equivalent to `inputTokens` in the disjoint-split naming. */
 	input: number;
 	output: number;
+	/** Prompt tokens served from cache without being re-billed (cache hit). Disjoint from `input`. */
 	cacheRead: number;
+	/** Prompt tokens written into the cache (cache creation). Disjoint from `input`. */
 	cacheWrite: number;
+	/**
+	 * Named views over the disjoint cache split, present when the underlying provider
+	 * reports them explicitly. When set they equal `cacheRead`/`cacheWrite` and are
+	 * mutually disjoint from `input` (uncached). Present so /usage and /cost surfacing
+	 * can label the buckets unambiguously instead of re-deriving semantics from the
+	 * shorter `cacheRead`/`cacheWrite` names. Additive and backward compatible: callers
+	 * that already read `cacheRead`/`cacheWrite` are unaffected.
+	 */
+	cacheReadTokens?: number;
+	cacheWriteTokens?: number;
 	/** Subset of `cacheWrite` written with 1h retention. Only Anthropic reports this split. */
 	cacheWrite1h?: number;
 	/**

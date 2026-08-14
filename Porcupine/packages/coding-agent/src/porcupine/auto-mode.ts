@@ -267,6 +267,19 @@ const DANGEROUS: Array<{ re: RegExp; key: string; description: string }> = [
 	},
 ];
 
+// Monotonic policy (dsh guard semantics): the hardline and flagged lists are
+// frozen at load and never modified by extensions, listeners, or config. A
+// denial can only be tightened, never loosened by a later registration.
+Object.freeze(HARDLINE);
+Object.freeze(DANGEROUS);
+for (const rule of HARDLINE) Object.freeze(rule);
+for (const rule of DANGEROUS) Object.freeze(rule);
+
+/** Frozen hardline rule list, exported read-only for tests. */
+export const HARDLINE_RULES: readonly { re: RegExp; key: string; description: string }[] = HARDLINE;
+/** Frozen flagged rule list, exported read-only for tests. */
+export const DANGEROUS_RULES: readonly { re: RegExp; key: string; description: string }[] = DANGEROUS;
+
 export function detectDangerousCommandRaw(command: string): DangerousMatch | null {
 	const text = command ?? "";
 	for (const rule of HARDLINE) {

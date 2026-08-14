@@ -247,6 +247,11 @@ import {
 } from "./email.ts";
 import { createFindTool, createFindToolDefinition, type FindToolOptions } from "./find.ts";
 import { createGrepTool, createGrepToolDefinition, type GrepToolOptions } from "./grep.ts";
+import {
+	createInspectRuntimeTool,
+	createInspectRuntimeToolDefinition,
+	type InspectRuntimeToolOptions,
+} from "./inspect-runtime.ts";
 import { createLiteratureTool, createLiteratureToolDefinition, type LiteratureToolOptions } from "./literature.ts";
 import { createLsTool, createLsToolDefinition, type LsToolOptions } from "./ls.ts";
 import { createMcpResourcesToolDefinition, createUnavailableMcpResourcesToolDefinition } from "./mcp-resources.ts";
@@ -266,6 +271,20 @@ import {
 	createExtractSkillToolDefinition,
 } from "./skill-tools.ts";
 
+export {
+	createInspectRuntimeTool,
+	createInspectRuntimeToolDefinition,
+	EXTENSION_API_SURFACE,
+	EXTENSION_HOOKS,
+	type InspectRuntimeToolDetails,
+	type InspectRuntimeToolInput,
+	type InspectRuntimeToolOptions,
+	type RuntimeInspectCommand,
+	type RuntimeInspectExtension,
+	type RuntimeInspectState,
+	type RuntimeInspectTool,
+	registerRuntimeInspector,
+} from "./inspect-runtime.ts";
 export {
 	type CraftSkillToolInput,
 	createCraftSkillTool,
@@ -350,7 +369,8 @@ export type ToolName =
 	| "browser_wait"
 	| "browser_diagnostics"
 	| "extract_skill"
-	| "craft_skill";
+	| "craft_skill"
+	| "inspect_runtime";
 export const allToolNames: Set<ToolName> = new Set([
 	"ask_question",
 	"read",
@@ -395,6 +415,7 @@ export const allToolNames: Set<ToolName> = new Set([
 	"browser_diagnostics",
 	"extract_skill",
 	"craft_skill",
+	"inspect_runtime",
 ]);
 
 export interface ToolsOptions {
@@ -418,6 +439,7 @@ export interface ToolsOptions {
 	mcpResources?: import("./mcp-resources.ts").McpResourcesToolOptions;
 	x?: XToolsOptions;
 	email?: EmailToolOptions;
+	inspectRuntime?: InspectRuntimeToolOptions;
 }
 
 export function createToolDefinition(toolName: ToolName, cwd: string, options?: ToolsOptions): ToolDef {
@@ -531,6 +553,7 @@ export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): R
 		mcp_resources: options?.mcpResources
 			? createMcpResourcesToolDefinition(options.mcpResources)
 			: createUnavailableMcpResourcesToolDefinition(),
+		inspect_runtime: createInspectRuntimeToolDefinition(options?.inspectRuntime),
 		x_search: createXSearchToolDefinition(options?.x),
 		x_read: createXReadToolDefinition(options?.x),
 		x_draft: createXDraftToolDefinition(options?.x),
@@ -645,6 +668,7 @@ export function createAllTools(cwd: string, options?: ToolsOptions): Record<Tool
 				? createMcpResourcesToolDefinition(options.mcpResources)
 				: createUnavailableMcpResourcesToolDefinition(),
 		),
+		inspect_runtime: createInspectRuntimeTool(options?.inspectRuntime),
 		x_search: createXSearchTool(options?.x),
 		x_read: createXReadTool(options?.x),
 		x_draft: createXDraftTool(options?.x),

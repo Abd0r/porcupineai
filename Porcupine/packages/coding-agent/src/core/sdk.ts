@@ -32,6 +32,8 @@ import {
 	createReadOnlyTools,
 	createReadTool,
 	createWriteTool,
+	type RuntimeInspectState,
+	registerRuntimeInspector,
 	type ToolName,
 	withFileMutationQueue,
 } from "./tools/index.ts";
@@ -425,9 +427,55 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	});
 	const extensionsResult = resourceLoader.getExtensions();
 
+	// Wire the always-available inspect_runtime tool to the LIVE registries.
+	// Reading through the extensionRunnerRef keeps it live across extension reloads
+	// (a fresh runner swaps into the ref without reinstalling this provider).
+	registerRuntimeInspector((): RuntimeInspectState => {
+		const runner = extensionRunnerRef.current;
+		const extensions = extensionsResult.extensions;
+		return {
+			getTools: () =>
+				session.getAllTools().map((tool) => ({
+					name: tool.name,
+					description: tool.description,
+					parametersDescription: schemaPropertyNames(tool.parameters),
+				})),
+			getCommands: () => {
+				if (!runner) return [];
+				return runner.getRegisteredCommands().map((command) => ({ name: command.invocationName }));
+			},
+			getExtensions: () =>
+				extensions.map((extension) => ({
+					path: extension.path,
+					registrations: describeExtensionRegistrations(extension),
+				})),
+		};
+	});
+
 	return {
 		session,
 		extensionsResult,
 		modelFallbackMessage,
 	};
+}
+
+function schemaPropertyNames(parameters: unknown): string | undefined {
+	if (typeof parameters !== "object" || parameters === null) return undefined;
+	const props = (parameters as { properties?: Record<string, unknown> }).properties;
+	if (!props || typeof props !== "object") return undefined;
+	const names = Object.keys(props);
+	return names.length === 0 ? undefined : names.join(", ");
+}
+
+function describeExtensionRegistrations(extension: import("./extensions/types.ts").Extension): string[] {
+	const kinds: string[] = [];
+	if (extension.tools.size > 0) kinds.push("tools");
+	if (extension.commands.size > 0) kinds.push("commands");
+	if (extension.shortcuts.size > 0) kinds.push("shortcuts");
+	if (extension.flags.size > 0) kinds.push("flags");
+	if (extension.handlers.size > 0) kinds.push(`events:${[...extension.handlers.keys()].join(",")}`);
+	if (extension.messageRenderers.size > 0) kinds.push("message_renderers");
+	if (extension.entryRenderers && extension.entryRenderers.size > 0) kinds.push("entry_renderers");
+	if (extension.markdownTransformer) kinds.push("markdown_transformer");
+	return kinds;
 }

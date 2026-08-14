@@ -83,6 +83,7 @@ These variables are read by Porcupine itself:
 | `PORCUPINE_SKIP_VERSION_CHECK` | Disable the latest-version request |
 | `PORCUPINE_TELEMETRY` | Override install/update telemetry and provider attribution headers: `1`/`true`/`yes` or `0`/`false`/`no` |
 | `PORCUPINE_CACHE_RETENTION` (legacy `PORCUPINE_CACHE_RETENTION` / `PI_CACHE_RETENTION`) | Set to `long` for extended provider prompt caching where supported |
+| `PORCUPINE_BENCHMARK` | Set to `1` to pin the system prompt to the fixed benchmark persona ("You are a helpful software engineer assistant.") with no memory, personality, stacks, or project context. Used by benchmark drivers so runs are byte-stable across machines |
 | `PORCUPINE_SHARE_VIEWER_URL` (legacy `PI_SHARE_VIEWER_URL`) | Override the base URL used by `/share` |
 | `PORCUPINE_HARDWARE_CURSOR` (legacy `PI_HARDWARE_CURSOR`) | Set to `1` to show the hardware cursor; see [Terminal setup](terminal-setup.md) |
 | `PORCUPINE_TELEGRAM_TOKEN` | Bot token from @BotFather; when set, the interactive TUI starts the Telegram bridge (messages mirror into the shared session)

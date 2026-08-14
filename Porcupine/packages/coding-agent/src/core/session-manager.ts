@@ -164,6 +164,34 @@ export interface SessionInfoEntry extends SessionEntryBase {
 }
 
 /**
+ * Assembled system prompt snapshot for traceability (model-visible == logged).
+ * Never projects into LLM context; it records what the model actually saw.
+ */
+export interface SystemPromptEntry extends SessionEntryBase {
+	type: "system_prompt";
+	/** Full assembled system prompt text. */
+	prompt: string;
+	/** sha1 hex of `prompt` so replay can verify a rebuild matches. */
+	promptHash: string;
+	/** Why the prompt was (re)written: session-start | tools | compaction | refresh | model | mode | override */
+	reason: string;
+}
+
+/**
+ * Per-step request envelope for traceability: the exact model, thinking level,
+ * prompt hash, and tool catalog a step was dispatched with. Never projects into
+ * LLM context; it is a durable replay artifact.
+ */
+export interface RequestHeaderEntry extends SessionEntryBase {
+	type: "request_header";
+	model: string;
+	provider?: string;
+	thinkingLevel: string;
+	promptHash: string;
+	toolNames: string[];
+}
+
+/**
  * Custom message entry for extensions to inject messages into LLM context.
  * Use customType to identify your extension's entries.
  *
@@ -193,7 +221,9 @@ export type SessionEntry =
 	| CustomEntry
 	| CustomMessageEntry
 	| LabelEntry
-	| SessionInfoEntry;
+	| SessionInfoEntry
+	| SystemPromptEntry
+	| RequestHeaderEntry;
 
 /** Raw file entry (includes header) */
 export type FileEntry = SessionHeader | SessionEntry;
@@ -1263,7 +1293,15 @@ export class SessionManager {
 		// the file right after appending) must write synchronously: messages,
 		// compactions and branch summaries. Only the true transient entries
 		// (thinking level/model changes, labels) batch into the debounced flush.
-		if (entry.type === "message" || entry.type === "compaction" || entry.type === "branch_summary") {
+		// system_prompt/request_header are traceability records; they must be on
+		// disk before a reader or crash, like messages.
+		if (
+			entry.type === "message" ||
+			entry.type === "compaction" ||
+			entry.type === "branch_summary" ||
+			entry.type === "system_prompt" ||
+			entry.type === "request_header"
+		) {
 			// Persist with immediate flush so the entry is on disk before any reader looks.
 			this._persist(entry, { immediate: true });
 		} else {
@@ -1364,6 +1402,38 @@ export class SessionManager {
 			parentId: this.leafId,
 			timestamp: new Date().toISOString(),
 			name: sanitizedName,
+		};
+		this._appendEntry(entry);
+		return entry.id;
+	}
+
+	/**
+	 * Append an assembled system prompt snapshot (model-visible == logged).
+	 * Callers should write only when the prompt actually changed, keyed by hash.
+	 * Returns entry id.
+	 */
+	appendSystemPrompt(prompt: string, promptHash: string, reason: string): string {
+		const entry: SystemPromptEntry = {
+			type: "system_prompt",
+			id: generateId(this.byId),
+			parentId: this.leafId,
+			timestamp: new Date().toISOString(),
+			prompt,
+			promptHash,
+			reason,
+		};
+		this._appendEntry(entry);
+		return entry.id;
+	}
+
+	/** Append a per-step request header (replayable dispatch envelope). Returns entry id. */
+	appendRequestHeader(header: Omit<RequestHeaderEntry, "type" | "id" | "parentId" | "timestamp">): string {
+		const entry: RequestHeaderEntry = {
+			type: "request_header",
+			id: generateId(this.byId),
+			parentId: this.leafId,
+			timestamp: new Date().toISOString(),
+			...header,
 		};
 		this._appendEntry(entry);
 		return entry.id;

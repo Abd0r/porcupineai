@@ -303,6 +303,24 @@ Session metadata (e.g., user-defined display name). Set via `/name`, `--name` / 
 
 The session name is displayed in the session selector (`/resume`) instead of the first message when set.
 
+### SystemPromptEntry
+
+Traceability record of the assembled system prompt (model-visible == logged). Written when the effective prompt changes (session start, tool-set change, compaction, refresh, extension override). It is a durable replay artifact and never projects into LLM context.
+
+```json
+{"type":"system_prompt","id":"l2m3n4o5","parentId":"k1l2m3n4","timestamp":"2024-12-03T14:36:00.000Z","prompt":"You are ...","promptHash":"<sha1 hex>","reason":"session-start"}
+```
+
+`promptHash` is the sha1 hex of `prompt`; a replay can rebuild the prompt and verify the hash to confirm the exact bytes the model saw. `reason` is one of `session-start | tools | compaction | refresh | model | mode | override | step`.
+
+### RequestHeaderEntry
+
+Per-step dispatch envelope: the exact model, thinking level, prompt hash, and tool catalog a step was sent with. Written once per step. Never projects into LLM context.
+
+```json
+{"type":"request_header","id":"m3n4o5p6","parentId":"l2m3n4o5","timestamp":"2024-12-03T14:36:05.000Z","model":"deepseek-v4-flash","provider":"deepseek","thinkingLevel":"high","promptHash":"<sha1 hex>","toolNames":["read","bash","edit","write"]}
+```
+
 ## Tree Structure
 
 Entries form a tree:

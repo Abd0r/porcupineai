@@ -67,6 +67,13 @@ control (**Ask** confirms everything, **Normal** asks on flagged commands,
   rendered viewer (`show_markdown` tool), and `/view <path>` opens any file.
 - **Observability** — `/usage` (per-turn tokens) and `/cost` (estimated cost)
   right in the session.
+- **Every run traceable** — sessions log the assembled system prompt (`system_prompt`
+  entries with a prompt hash) and the per-step dispatch envelope (`request_header`),
+  so a replay reconstructs exactly what the model saw. Benchmark runs pin the
+  prompt to a fixed persona via `PORCUPINE_BENCHMARK=1` (`benchmarks/rig/minimal.py`).
+- **Runtime introspection** — `inspect_runtime` reports the live tool/command/
+  extension registries so the agent writes correct extension code instead of
+  guessing from docs.
 - **`/memory` + `/init`** — see what the agent learned about you, and generate
   a project AGENTS.md that never clobbers your edits.
 - **`porcupine serve`** — headless HTTP API (sessions, async prompts, SSE

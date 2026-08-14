@@ -142,4 +142,6 @@ See [Compaction](compaction.md) for branch summarization internals and extension
 
 Session files are JSONL and contain message entries, model changes, thinking-level changes, labels, compactions, branch summaries, and extension entries.
 
+**Traceability (model-visible == logged):** sessions also record `system_prompt` entries (the assembled system prompt, snapshotted whenever it changes, with a sha1 `promptHash`) and `request_header` entries (the exact model, thinking level, prompt hash, and tool catalog per step). Replay a session and you can reconstruct what the model actually saw, not just what it replied. These entries never enter LLM context.
+
 For parsers, extensions, SDK usage, and the full SessionManager API, see [Session Format](session-format.md).
