@@ -1103,15 +1103,22 @@ export class DefaultResourceLoader implements ResourceLoader {
 	private discoverPersonalityFiles(): string[] {
 		const out: string[] = [];
 		const orderedNames = [...PERSONALITY_PROMPT_NAMES];
+		// Case-insensitive filesystems (macOS APFS/HFS) treat PERSONALITY.md,
+		// Personality.md, and personality.md as the same inode. Dedup by inode
+		// so the always-on layer is injected once, not once per spelling.
+		const seenInodes = new Set<string>();
 		const pick = (dir: string) => {
 			for (const name of orderedNames) {
 				const filePath = join(dir, name);
 				try {
-					if (existsSync(filePath) && statSync(filePath).isFile()) {
-						out.push(filePath);
-					}
+					const st = statSync(filePath);
+					if (!st.isFile()) continue;
+					const key = `${st.dev}:${st.ino}`;
+					if (seenInodes.has(key)) continue;
+					seenInodes.add(key);
+					out.push(filePath);
 				} catch {
-					// ignore
+					// ignore missing / unreadable
 				}
 			}
 		};
@@ -1119,13 +1126,7 @@ export class DefaultResourceLoader implements ResourceLoader {
 		if (this.settingsManager.isProjectTrusted()) {
 			pick(join(this.cwd, CONFIG_DIR_NAME));
 		}
-		const seen = new Set<string>();
-		return out.filter((p) => {
-			const key = resolvePath(p);
-			if (seen.has(key)) return false;
-			seen.add(key);
-			return true;
-		});
+		return out;
 	}
 
 	private isUnderPath(target: string, root: string): boolean {

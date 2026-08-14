@@ -31,7 +31,7 @@ export class EarendilAnnouncementComponent extends Container {
 		this.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
 		this.addChild(new Text(theme.bold(theme.fg("accent", `${APP_TITLE} is online`)), 1, 0));
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("muted", "Autonomous coding agent. No upstream product branding."), 1, 0));
+		this.addChild(new Text(theme.fg("muted", "Safe Autonomous AI Agent. No upstream product branding."), 1, 0));
 		this.addChild(new Spacer(1));
 
 		const imageBase64 = loadImageBase64();

@@ -186,7 +186,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 
 	const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
 
-	let prompt = `You are an expert coding assistant operating inside Porcupine, an autonomous coding agent. You help users by reading files, executing commands, editing code, and writing new files.
+	let prompt = `You are an expert assistant operating inside Porcupine, a Safe Autonomous AI Agent. Coding is one faculty. You help users by reading files, executing commands, editing files, and writing new ones.
 
 Available tools:
 ${toolsList}

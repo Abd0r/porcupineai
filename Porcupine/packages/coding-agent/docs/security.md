@@ -38,7 +38,7 @@ Project trust is only an input-loading guard. It prevents a repository from sile
 
 ## Interaction Modes and the Fail-Closed Gate
 
-Interaction modes choose how tool actions are approved, independent of reasoning settings: **Ask** confirms every bash command and file mutation, **Normal** confirms flagged operations, and **Auto** permits safe operations while routing flagged bash through a fail-closed LLM safety gate. In every mode, hardline destructive actions (`rm -rf /`, force-push, credential deletion, etc.) remain blocked. Auto mode is autonomy, not a permission upgrade: it never makes destructive actions unrestricted, and it runs only while an interactive session is open and attended.
+Interaction modes choose how tool actions are approved, independent of reasoning settings: **Ask** confirms every bash command and file mutation, **Normal** confirms flagged bash (file edits run directly), and **Auto** permits safe operations while routing flagged bash through a fail-closed LLM safety gate. In every mode, hardline destructive actions (`rm -rf /`, disk format, raw-device writes, fork bombs, power-off, kill-all) remain blocked. Force-push and destructive SQL are flagged, not hardline. Auto mode is autonomy, not a permission upgrade: it never makes destructive actions unrestricted, and it runs only while an interactive session is open and attended.
 
 ### Recursive deletes: intent from scope
 
@@ -48,6 +48,22 @@ Interaction modes choose how tool actions are approved, independent of reasoning
 - **Outside the workspace** (home, other repos, system areas): stays flagged — confirmed in Normal, LLM-gated in Auto.
 - **Protected paths**: root, system directories (`/etc`, `/usr`, `/bin`, `/sbin`, `/var`, `/Library`, `/System`, `/Applications`) and anything in the `safety.protectedPaths` setting are hardline-blocked in every mode, even inside the workspace. Deleting the working directory itself (`rm -rf .`) is always blocked.
 - Path equivalences (`rm -rf //`, `rm -rf /./`, `rm -rf -- /`, quoted roots) are normalized before matching, and executing a script the agent just wrote is content-scanned with the same detector (no write-then-execute bypass).
+
+### Native per-command write-fence (Auto Mode)
+
+In Auto Mode, in addition to the fail-closed LLM gate, approved bash runs under a native OS-level **write fence**. It is a write fence, not full isolation: the command keeps read, execute, and network access, but the operating system denies file writes outside the allowed set.
+
+Allowed writable locations:
+
+- the workspace (the session's cwd)
+- the system temp directory
+- standard home state/cache dirs (`~/.npm`, `~/.cache`, `~/.config`, `~/.local`, `~/.ssh`, and on macOS `~/Library/Caches` and `~/Library/Application Support`)
+
+Everything else — other projects, `~/Library`, system directories, arbitrary paths — is denied.
+
+Backends: macOS **Seatbelt** (`sandbox-exec`), Linux **bwrap** (bubblewrap), Windows **restricted token** (via an optional `porcupine-sandbox.exe` helper). Where the native backend or its required binary is unavailable, bash falls back to the native shell with a one-time warning; the LLM gate still applies in every case.
+
+This fence is defense-in-depth under the gate, not a replacement for it, and not a substitute for real isolation (see [Running Untrusted or Unmonitored Work](#running-untrusted-or-unmonitored-work)). It confines writes only — not reads, process execution, or network.
 
 ## MCP (Model Context Protocol) Servers
 

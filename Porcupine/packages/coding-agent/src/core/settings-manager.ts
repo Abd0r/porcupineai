@@ -21,11 +21,11 @@ export interface CompactionSettings {
 export interface SubagentSettings {
 	/** Provider/model spec for sub-agents, e.g. "opencode-go/deepseek-v4-flash". Unset = parent model. */
 	model?: string;
-	/** Max tool-call steps per sub-agent run. Default 30. */
+	/** Max tool-call steps per sub-agent run. Default 120. */
 	maxSteps?: number;
 	/** Sub-agent context window in tokens (clamped 128K–256K). Default 256000. */
 	contextWindow?: number;
-	/** Max concurrent sub-agents. Default 1. */
+	/** Max concurrent sub-agents. Default 3. */
 	maxConcurrent?: number;
 }
 

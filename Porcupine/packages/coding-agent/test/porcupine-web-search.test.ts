@@ -6,12 +6,16 @@ import { resolveActivityFromToolName } from "../src/porcupine/activity-status.ts
 describe("free web tools", () => {
 	const prevOrder = process.env.PORCUPINE_WEB_SEARCH_ORDER;
 	const prevBrave = process.env.BRAVE_API_KEY;
+	const prevDdgs = process.env.PORCUPINE_DDGS_URL;
 
 	afterEach(() => {
 		if (prevOrder === undefined) delete process.env.PORCUPINE_WEB_SEARCH_ORDER;
 		else process.env.PORCUPINE_WEB_SEARCH_ORDER = prevOrder;
 		if (prevBrave === undefined) delete process.env.BRAVE_API_KEY;
 		else process.env.BRAVE_API_KEY = prevBrave;
+		if (prevDdgs === undefined) delete process.env.PORCUPINE_DDGS_URL;
+		else process.env.PORCUPINE_DDGS_URL = prevDdgs;
+		delete process.env.DDGS_URL;
 	});
 
 	it("registers web_search and web_extract definitions", () => {
@@ -24,8 +28,16 @@ describe("free web tools", () => {
 		expect((search.promptSnippet ?? "").toLowerCase()).toContain("cascade");
 	});
 
-	it("default cascade is SearXNG → Brave → DDG → Wikipedia → Mojeek", () => {
-		expect([...DEFAULT_WEB_SEARCH_ORDER]).toEqual(["searxng", "brave", "duckduckgo", "wikipedia", "mojeek"]);
+	it("default cascade is SearXNG → Websurfx → DDGS → Brave → DDG → Wikipedia → Mojeek", () => {
+		expect([...DEFAULT_WEB_SEARCH_ORDER]).toEqual([
+			"searxng",
+			"websurfx",
+			"ddgs",
+			"brave",
+			"duckduckgo",
+			"wikipedia",
+			"mojeek",
+		]);
 		delete process.env.PORCUPINE_WEB_SEARCH_ORDER;
 		expect(resolveWebSearchOrder()).toEqual([...DEFAULT_WEB_SEARCH_ORDER]);
 	});
@@ -43,15 +55,17 @@ describe("free web tools", () => {
 	it("live cascade returns real hits (SearXNG if up, else free public backends)", async () => {
 		delete process.env.BRAVE_API_KEY;
 		delete process.env.BRAVE_SEARCH_API_KEY;
-		process.env.PORCUPINE_WEB_SEARCH_ORDER = "searxng,brave,duckduckgo,wikipedia,mojeek";
+		process.env.PORCUPINE_WEB_SEARCH_ORDER = "searxng,websurfx,ddgs,brave,duckduckgo,wikipedia,mojeek";
 		const result = await runFreeWebSearch("OpenAI", 5, "auto");
 		expect(result.hits.length).toBeGreaterThan(0);
 		expect(result.hits[0]!.url).toMatch(/^https?:\/\//);
-		expect(["searxng", "brave", "duckduckgo", "wikipedia", "mojeek"]).toContain(result.backend);
-		// If cascade walked past searxng without a Brave key, brave must be skipped not tried
+		expect(["searxng", "websurfx", "ddgs", "brave", "duckduckgo", "wikipedia", "mojeek"]).toContain(result.backend);
+		// Optional hops without config must skip, not fail the cascade.
 		if (result.tried.includes("duckduckgo") || result.tried.includes("wikipedia")) {
 			expect(result.skipped.some((s) => s.startsWith("brave"))).toBe(true);
 			expect(result.tried).not.toContain("brave");
+			expect(result.skipped.some((s) => s.startsWith("ddgs"))).toBe(true);
+			expect(result.tried).not.toContain("ddgs");
 		}
 	}, 20_000);
 });

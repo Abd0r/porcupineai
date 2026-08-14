@@ -1,6 +1,6 @@
 ---
 name: free-web-search
-description: Free internet search via SearXNG→Brave→DDG cascade.
+description: Free internet search via SearXNG→Websurfx→DDGS→Brave→DDG cascade.
 stack: web
 ---
 
@@ -16,10 +16,12 @@ Primary internet path for Porcupine. Built-in tools, free backends only.
 ## Cascade order (`web_search`, backend=auto)
 
 1. **SearXNG** — `SEARXNG_URL` or `PORCUPINE_SEARXNG_URL` (default `http://127.0.0.1:8888`)
-2. **Brave** — only if `BRAVE_API_KEY` set
-3. **DuckDuckGo** — Instant Answer + lite HTML
-4. **Wikipedia** — OpenSearch
-5. **Mojeek** — HTML results
+2. **Websurfx** — only if `WEBSURFX_URL` or `PORCUPINE_WEBSURFX_URL` is set
+3. **DDGS** — only if `DDGS_URL` or `PORCUPINE_DDGS_URL` is set (deedy5/ddgs `/search/text`)
+4. **Brave** — only if `BRAVE_API_KEY` set
+5. **DuckDuckGo** — Instant Answer + lite HTML (no key)
+6. **Wikipedia** — OpenSearch
+7. **Mojeek** — HTML results
 
 ## When to use
 

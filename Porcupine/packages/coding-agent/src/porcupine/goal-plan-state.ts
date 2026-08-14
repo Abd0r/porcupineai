@@ -120,7 +120,7 @@ export function buildPlanPrompt(objective: string, artifactPath: string): string
 }
 
 const GOAL_JUDGE_SYSTEM_PROMPT = [
-	"You are a strict completion judge for an autonomous coding agent.",
+	"You are a strict completion judge for a Safe Autonomous AI Agent.",
 	'Reply only with one JSON object: {"verdict":"done|continue|blocked","reason":"one sentence"}.',
 	"done requires concrete evidence in the final response that the stated goal is fully satisfied.",
 	"blocked applies only when progress requires user input or an external blocker cannot be resolved now.",

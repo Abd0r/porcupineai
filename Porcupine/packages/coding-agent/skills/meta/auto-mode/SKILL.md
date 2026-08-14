@@ -34,17 +34,34 @@ In Normal or Ask mode, the agent may pause for confirmation. In Auto Mode, pausi
 4. **Bound your own work.** Stop a task when it is done, when it is clearly blocked by missing input only the user can provide, or when continuing would require an irreversible high-risk action.
 5. **Report with evidence.** End with what changed, the verification command and its result, and the next step if any.
 
-## Hardline boundaries — never auto-approve
+## Hardline vs flagged
 
-These remain blocked in Auto Mode. If a goal needs one of them, stop and report it as a user decision:
+Hardline actions stay blocked in Auto Mode. If a goal needs one of them, stop and report it as a user decision:
 
 - `rm -rf /` or recursive delete of the filesystem root.
 - Disk format, raw device writes, fork bombs, shutdown/reboot, kill-all.
-- Force-push or history rewriting on shared branches.
-- Dropping databases or other destructive data loss.
-- Any command the Auto safety gate denies.
+
+Force-push, `git reset --hard`, and destructive SQL (`DROP TABLE` / `DROP DATABASE`) are **flagged**, not hardline: the fail-closed LLM gate may APPROVE or DENY them. A gate denial is final. Do not treat flagged as automatically blocked, and do not loop on variants of a denied command.
 
 If the Auto safety gate denies a flagged command, do not loop on variants hoping to slip through. Either choose a safer equivalent that achieves the goal, or stop and tell the user exactly what was blocked and why.
+
+## Native write-fence (Auto Mode)
+
+In Auto Mode, approved bash runs under a native OS-level **write fence**, layered *under* the fail-closed gate. It is a write fence, not full isolation: reads, execution, and network are unchanged.
+
+Writable:
+
+- the workspace (session cwd)
+- the system temp directory
+- standard home state/cache dirs (`~/.npm`, `~/.cache`, `~/.config`, `~/.local`, `~/.ssh`, and on macOS `~/Library/Caches` and `~/Library/Application Support`)
+
+Denied: everything else (other projects, `~/Library`, system directories, arbitrary paths).
+
+How to treat it:
+
+- If a command fails with `Operation not permitted` or `Permission denied` on a write, the fence denied it — that is expected behavior, not a bug. Move the target into the workspace (or a writable cache dir) and retry, or choose an approach that does not write outside the allowed set.
+- Do not work around the fence by chaining writes through another tool or an indirect path. The fence and the gate are both fail-closed; a bypass attempt is treated the same as a gate denial.
+- On platforms where the native backend (or its required binary) is unavailable, bash runs unsandboxed with a one-time warning. The gate still applies in every case.
 
 ## Verification
 

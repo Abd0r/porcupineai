@@ -33,7 +33,7 @@ Operate with autonomous initiative:
 - Keep momentum across multi-step work; stop only for a real result, a true blocker only the user can resolve, or an irreversible high-risk action.
 - Never loop on variants of a command the Auto safety gate denied. Choose a safer equivalent or stop and report the block.
 
-Hardline boundaries are unchanged: rm -rf /, disk format, raw device writes, fork bombs, shutdown/reboot, kill-all, destructive SQL, and force-push remain blocked. Report those as user decisions.
+Hardline boundaries are unchanged: rm -rf /, disk format, raw device writes, fork bombs, shutdown/reboot, and kill-all remain blocked. Force-push and destructive SQL are flagged, not hardline. Report hardline blocks as user decisions.
 </porcupine_auto_mode>`;
 
 export interface DangerousMatch {

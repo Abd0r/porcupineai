@@ -35,6 +35,31 @@ describe("PROMPT.md / PERSONALITY.md loading", () => {
 		expect(sources.some((p) => p.endsWith("PROMPT.md"))).toBe(true);
 	});
 
+	it("loads PERSONALITY.md and PROMPT.md once on a case-insensitive filesystem", async () => {
+		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-agent-"));
+		const cwd = mkdtempSync(join(tmpdir(), "porcupine-cwd-"));
+		writeFileSync(join(agentDir, "PROMPT.md"), "PROMPT_ONCE");
+		writeFileSync(join(agentDir, "PERSONALITY.md"), "PERSONALITY_ONCE");
+
+		const settingsManager = SettingsManager.create(cwd, agentDir);
+		const loader = new DefaultResourceLoader({
+			cwd,
+			agentDir,
+			settingsManager,
+			noExtensions: true,
+			noSkills: true,
+			noPromptTemplates: true,
+			noThemes: true,
+			noContextFiles: true,
+		});
+		await loader.reload();
+
+		const append = loader.getAppendSystemPrompt().join("\n\n");
+		expect(append.split("PERSONALITY_ONCE").length - 1).toBe(1);
+		expect(append.split("PROMPT_ONCE").length - 1).toBe(1);
+		expect(loader.getAppendSystemPromptSources()).toHaveLength(2);
+	});
+
 	it("still accepts legacy mixed-case Prompt.md", async () => {
 		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-agent-"));
 		const cwd = mkdtempSync(join(tmpdir(), "porcupine-cwd-"));

@@ -32,5 +32,5 @@ Generated capabilities follow the standard frontmatter: `name`, `description`, `
 ## Details
 
 - Extraction reads `.md`/`.txt` natively and `.pdf` via `pdftotext` (install poppler: `brew install poppler`).
-- Crafting uses the free web search cascade (SearXNG → Brave → DuckDuckGo → Wikipedia → Mojeek) and extracts top hits into source notes before writing. Pre-gathered research can be passed instead of re-searching.
+- Crafting uses the free web search cascade (SearXNG → Websurfx → DDGS → Brave → DuckDuckGo → Wikipedia → Mojeek) and extracts top hits into source notes before writing. Pre-gathered research can be passed instead of re-searching.
 - See `skills/meta/skill-crafting/SKILL.md` for the procedure the agent follows (it is itself a discoverable skill).

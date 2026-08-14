@@ -13,6 +13,7 @@ There are two general options. You can either
 | Gondolin extension | Built-in tools and `!` commands | Local micro-VM isolation while keeping auth on host | See [`examples/extensions/gondolin/`](../examples/extensions/gondolin/). |
 | Plain Docker | Whole `porcupine` process in a local container | Simple local isolation | Provider API keys enter the container. |
 | OpenShell | Whole `porcupine` process in a policy-controlled sandbox | Local or remote managed sandbox | Requires an OpenShell gateway |
+| Native per-command write-fence | Shell file writes outside the workspace/temp (Auto Mode) | Lightweight OS-level write fence, no VM or container | On automatically in Auto Mode; see [security.md](security.md) |
 
 Extensions run wherever the `porcupine` process runs. If you run host `porcupine` with a tool-routing extension, other custom extension tools still run on the host unless they also delegate their operations.
 

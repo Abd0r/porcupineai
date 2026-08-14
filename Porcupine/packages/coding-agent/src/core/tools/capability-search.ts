@@ -111,12 +111,12 @@ export function createCapabilitySearchToolDefinition(
 		name: "capability_search",
 		label: "capability_search",
 		description:
-			"Search the live catalog of Porcupine tools and skills. action=list shows the menu; action=search finds capabilities by task/name/stack; action=view loads one selected skill's full SKILL.md. Search before guessing a tool or skill name.",
-		promptSnippet: "Discover/search/view all tools and skills",
+			"Search the live catalog of Porcupine tools and skills. On real work, call this BEFORE web_search, bash, or read. Knowing a familiar tool is not a skip. action=search finds by task/name/stack; action=list shows every live tool and skill; action=view loads one SKILL.md.",
+		promptSnippet: "Catalog first: search/list/view tools and skills",
 		promptGuidelines: [
-			"Use capability_search when you need to discover a tool or skill instead of guessing its name.",
-			"action=list shows the capability menu; action=search accepts task words, tool/skill names, or stack:vcs.",
-			"action=view loads the selected skill only. It does not enable or change toolsets mid-conversation.",
+			"On real work, capability_search first. Knowing web_search, bash, or read is not a reason to skip the catalog.",
+			"action=search for the task. If the match is not obvious, action=list. action=view loads one skill's SKILL.md.",
+			"Do not guess a tool or skill name. A familiar generic tool is not the best tool.",
 		],
 		parameters: capabilitySearchSchema,
 		async execute(_toolCallId, args) {
