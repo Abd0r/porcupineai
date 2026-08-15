@@ -2,9 +2,19 @@
 
 ## [Unreleased]
 
+## [0.1.70] - 2026-08-15
+
 ### Added
 
 - **`/trace` trajectory view**: surfaces the per-step traceability already logged (system prompt snapshots + request_header envelopes) as a bounded human-readable report. `"/trace"` shows the last step, `"/trace <n>"` a specific step (full effective prompt, model, thinking level, tool catalog, prompt hash, timestamp), and `"/trace all"` one line per step. Reuses the full-screen markdown viewer.
+- **Persistent FTS session search**: the SQLite FTS5 index was already durable (file-backed, migrations); session search is now bounded with a default `LIMIT 100`, with a durability/migration/limit/ordering test suite (`packages/storage/sqlite-node`).
+- **Voice notes on Telegram**: voice/audio messages are detected, downloaded, transcribed on-device (Moonshine STT), and submitted as the session prompt through the same path as text. Download or transcription failures reply with a clear error instead of crashing; empty transcriptions are never injected as empty prompts.
+- **Home Assistant via MCP**: example config (`examples/mcp-home-assistant/`, Streamable HTTP + stdio), a `home-assistant` skill with fail-closed guidance (read-first, least-privilege, explicit approval before `call_service`), and a docs section in `docs/mcp.md`.
+- **Multi-session `porcupine serve`**: per-session endpoints (`GET/POST /session`, `?session=` selector), per-session SSE isolation, per-session approval routing, and a global lifecycle channel (`GET /events`). Backward compatible with the single-session surface; documented in `docs/server.md`.
+- **Proactive initiative (attended)**: `remind_me` model-facing tool, `/remind` command, and `/goal remind <duration>` goal nudges. Reminders persist as session entries, fire only while the interactive session is open and idle, and deliver through the existing task-completion bridge notification path.
+- **Free-model auto-discovery**: the free Cline model (`deepseek/deepseek-v4-flash`, cost 0) is now the auto-selected default when Cline is available and no saved default exists (was pointing at the paid `anthropic/claude-sonnet-4-6`).
+- **Memory write guard**: autonomous `USER.md`/`MEMORY.md` writes now get the same snapshot + content-hash rollback protection as skill refinement (a rollback refuses to clobber a later independent edit).
+- **Durable MCP approvals**: approvals persist to `agentDir/mcp-approvals.json` (atomic write, read-on-load, corrupt-file recovery), keeping the content-hash rug-pull check (CVE-2025-54136) intact; fixed the `APPOVE` typo in the auto-classify reply contract.
 
 ## [0.1.69] - 2026-08-14
 
