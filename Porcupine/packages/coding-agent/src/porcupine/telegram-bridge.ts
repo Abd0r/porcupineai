@@ -15,9 +15,11 @@
  * Long polling via the Bot API (plain fetch, no SDK, no webhook infra).
  */
 
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { AgentMessage } from "@porcupineai/agent-core";
 import type { AssistantMessage } from "@porcupineai/ai";
@@ -30,6 +32,7 @@ import {
 	type RemoteCommandDescriptor,
 	resolveRemoteCommand,
 } from "./remote-slash-commands.ts";
+import { transcribeSpeech } from "./voice/stt.ts";
 
 export interface TelegramBridgeOptions {
 	/** Bot token from @BotFather. */
@@ -64,6 +67,12 @@ export interface TelegramBridgeOptions {
 	 * to send back. Wired by the interactive mode to the shared session.
 	 */
 	dispatch?: (commandLine: string) => Promise<RemoteSlashResult>;
+	/**
+	 * Transcribe an incoming voice/audio attachment into session prompt text.
+	 * Defaults to ffmpeg WAV decode + on-device Moonshine STT. Injectable so
+	 * tests can mock transcription without loading the STT runtime.
+	 */
+	transcribeAudio?: (audio: Buffer) => Promise<string>;
 }
 
 interface TelegramMessage {
@@ -85,6 +94,8 @@ interface TelegramUpdate {
 }
 
 const API = "https://api.telegram.org/bot";
+/** Base URL for file downloads: `file/bot<token>/<file_path>`. */
+const API_FILE = "https://api.telegram.org/file/bot";
 
 /**
  * Match a pending remote prompt against the turn's last user message.
@@ -160,6 +171,56 @@ export function extractMediaMarkers(text: string): { clean: string; paths: strin
 		.join("\n")
 		.trim();
 	return { clean, paths };
+}
+
+/** True when a Telegram message carries a voice/audio attachment (a voice
+ * note or a generic audio file) so it can be transcribed instead of ignored. */
+export function isVoiceMessage(message: unknown): boolean {
+	const m = message as { voice?: unknown; audio?: unknown };
+	return m?.voice !== undefined || m?.audio !== undefined;
+}
+
+/** file_id of a voice/audio attachment, or undefined when there is none. */
+export function extractVoiceFileId(message: unknown): string | undefined {
+	const m = message as { voice?: { file_id?: string }; audio?: { file_id?: string } };
+	const voice = m?.voice?.file_id;
+	if (typeof voice === "string" && voice.length > 0) return voice;
+	const audio = m?.audio?.file_id;
+	return typeof audio === "string" && audio.length > 0 ? audio : undefined;
+}
+
+/**
+ * Default voice-note-to-text for the telegram bridge: decode the incoming
+ * audio to a 16 kHz mono WAV via ffmpeg (a system dependency of the voice
+ * stack, used the same way as microphone capture), then run Moonshine STT.
+ * Missing/invalid audio or ffmpeg surfaces a diagnostic so the caller can
+ * reply instead of crashing.
+ */
+async function transcribeTelegramAudio(audio: Buffer): Promise<string> {
+	const dir = mkdtempSync(join(tmpdir(), "porcupine-tg-voice-"));
+	const input = join(dir, "input.audio");
+	const wav = join(dir, "voice.wav");
+	writeFileSync(input, audio);
+	let text: string;
+	try {
+		const result = spawnSync(
+			"ffmpeg",
+			["-hide_banner", "-loglevel", "error", "-y", "-i", input, "-ac", "1", "-ar", "16000", "-f", "wav", wav],
+			{ timeout: 30_000 },
+		);
+		if (result.status !== 0) {
+			const stderr = (Array.isArray(result.stderr) ? Buffer.concat(result.stderr) : (result.stderr ?? ""))
+				.toString()
+				.trim();
+			throw new Error(stderr || "ffmpeg could not decode the voice note (is it installed? brew install ffmpeg)");
+		}
+		const wavBytes = readFileSync(wav);
+		if (wavBytes.length === 0) throw new Error("ffmpeg produced no audio from the voice note");
+		text = await transcribeSpeech(wavBytes);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+	return text;
 }
 
 function parseUpdate(raw: unknown): TelegramUpdate[] {
@@ -278,6 +339,27 @@ export class TelegramBridge {
 			body: form,
 		});
 		if (response.ok === false) throw new Error(`Telegram API sendDocument failed: HTTP ${response.status}`);
+	}
+
+	/** Resolve file_path for a file_id and download the raw bytes (Bot API). */
+	private async downloadVoiceFile(fileId: string): Promise<Buffer> {
+		const payload = (await this.api("getFile", { file_id: fileId })) as {
+			result?: { file_path?: string };
+		};
+		const filePath = payload?.result?.file_path;
+		if (!filePath) {
+			throw new Error("Telegram did not return a file path for the voice note");
+		}
+		const url = `${API_FILE}${this.options.token}/${filePath}`;
+		const response = await (this.options.fetchImpl ?? fetch)(url);
+		if (!response.ok) {
+			throw new Error(`Telegram file download failed: HTTP ${response.status}`);
+		}
+		const bytes = Buffer.from(await response.arrayBuffer());
+		if (bytes.length === 0) {
+			throw new Error("Telegram voice note came back empty");
+		}
+		return bytes;
 	}
 
 	/** Combined confirmation: Telegram Approve/Deny buttons race the TUI dialog. */
@@ -713,7 +795,14 @@ export class TelegramBridge {
 			return;
 		}
 		const text = message.text?.trim();
-		if (!text) return;
+		if (!text) {
+			// A voice/audio attachment is transcribed and submitted as a prompt;
+			// other attachment-only messages (photos, files, stickers) are ignored.
+			if (isVoiceMessage(message)) {
+				await this.handleVoiceMessage(chatId, userId, message);
+			}
+			return;
+		}
 
 		// A pending free-text answer (ask_question input) consumes this message.
 		// The pending request is bound to the chat that asked — a reply from a
@@ -773,6 +862,57 @@ export class TelegramBridge {
 		} catch (error) {
 			// Roll back the pending entry and tell the user — otherwise every later
 			// TUI-originated response would leak to Telegram via the stuck entry.
+			const index = this.pendingTelegram.findIndex(
+				(entry) => entry.chatId === chatId && entry.userId === userId && entry.text === text,
+			);
+			if (index !== -1) this.pendingTelegram.splice(index, 1);
+			await this.sendText(
+				chatId,
+				`⚠️ Could not start the task: ${error instanceof Error ? error.message : String(error)}`,
+			).catch(() => {});
+		}
+	}
+
+	/**
+	 * Transcribe an incoming Telegram voice/audio note and submit the result as
+	 * a session prompt through the same path typed messages use (same contract:
+	 * pending-turn record + followUp prompt). Never throws: transcription or
+	 * download failures reply with a clear error instead of crashing the poll.
+	 */
+	private async handleVoiceMessage(
+		chatId: number,
+		userId: number | undefined,
+		message: TelegramMessage,
+	): Promise<void> {
+		const fileId = extractVoiceFileId(message);
+		if (!fileId) return; // malformed attachment; nothing to transcribe
+		void this.api("sendChatAction", { chat_id: String(chatId), action: "typing" }).catch(() => {});
+
+		let text: string | undefined;
+		try {
+			const bytes = await this.downloadVoiceFile(fileId);
+			const transcribe = this.options.transcribeAudio ?? transcribeTelegramAudio;
+			text = (await transcribe(bytes)).trim();
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error);
+			await this.sendText(chatId, `⚠️ Voice transcription failed: ${reason}`).catch(() => {});
+			return;
+		}
+
+		// Transcription was a no-op (silence / unrecognized speech): do not inject
+		// an empty prompt into the session — tell the user instead.
+		if (!text) {
+			await this.sendText(
+				chatId,
+				"⚠️ I could not hear any speech in that voice note. Please retry or type your message.",
+			).catch(() => {});
+			return;
+		}
+
+		this.pendingTelegram.push({ chatId, userId, text });
+		try {
+			await this.options.prompt(text, { streamingBehavior: "followUp" });
+		} catch (error) {
 			const index = this.pendingTelegram.findIndex(
 				(entry) => entry.chatId === chatId && entry.userId === userId && entry.text === text,
 			);

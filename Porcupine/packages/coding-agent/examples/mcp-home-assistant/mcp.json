@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "homeassistant": {
+      "type": "streamableHttp",
+      "url": "${HASS_URL:-http://homeassistant.local:8123}/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${HOME_ASSISTANT_TOKEN}"
+      },
+      "enabled": true,
+      "allow": [
+        "assist",
+        "get_states",
+        "get_state",
+        "call_service"
+      ]
+    }
+  }
+}

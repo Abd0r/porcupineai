@@ -27,6 +27,8 @@ export interface SqliteSessionSearchOptions {
 	env: Pick<SqliteSessionRepositoryEnv, "absolutePath" | "createDir">;
 	sqlite: SqliteDatabaseFactory;
 	databasePath: string;
+	/** Hard cap on how many entry hits a single search returns (100 by default). */
+	defaultLimit?: number;
 }
 
 async function tableExists(db: SqliteDatabase, name: string): Promise<boolean> {
@@ -61,10 +63,12 @@ END;
 /** SQLite FTS search over a co-located canonical session database. */
 class SqliteSessionSearch implements SessionSearch<SqliteSessionMetadata> {
 	private readonly options: SqliteSessionSearchOptions;
+	private readonly defaultLimit: number;
 	private databasePath: string | undefined;
 
 	constructor(options: SqliteSessionSearchOptions) {
 		this.options = options;
+		this.defaultLimit = options.defaultLimit ?? 100;
 	}
 
 	private async getDatabasePath(): Promise<string> {
@@ -104,12 +108,13 @@ class SqliteSessionSearch implements SessionSearch<SqliteSessionMetadata> {
 			const query = `"${text.replaceAll('"', '""')}"`;
 			const rows = await db
 				.prepare(
-					"SELECT s.id, s.created_at, s.metadata, s.cwd, s.parent_session_id, s.active_leaf_id, se.id AS entry_id, se.timestamp, bm25(session_search_fts) AS score FROM session_search_fts JOIN session_entries se ON se.rowid = session_search_fts.rowid JOIN sessions s ON s.id = se.session_id WHERE session_search_fts MATCH ? AND (? IS NULL OR s.cwd = ?) ORDER BY score",
+					"SELECT s.id, s.created_at, s.metadata, s.cwd, s.parent_session_id, s.active_leaf_id, se.id AS entry_id, se.timestamp, bm25(session_search_fts) AS score FROM session_search_fts JOIN session_entries se ON se.rowid = session_search_fts.rowid JOIN sessions s ON s.id = se.session_id WHERE session_search_fts MATCH ? AND (? IS NULL OR s.cwd = ?) ORDER BY score LIMIT ?",
 				)
 				.all<SessionRow & { entry_id: string; timestamp: string; score: number }>(
 					query,
 					options.cwd ?? null,
 					options.cwd ?? null,
+					this.defaultLimit,
 				);
 			const path = await this.getDatabasePath();
 			return rows.map((row) => ({

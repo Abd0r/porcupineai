@@ -27,6 +27,9 @@ describe("goal and plan command state", () => {
 		expect(parseGoalCommand("/goal clear")).toEqual({ kind: "clear" });
 		expect(parseGoalCommand("/goal show")).toEqual({ kind: "status" });
 		expect(parseGoalCommand("/goal stop")).toEqual({ kind: "clear" });
+		expect(parseGoalCommand("/goal remind 10m")).toEqual({ kind: "remind", durationMs: 600_000 });
+		expect(parseGoalCommand("/goal remind 2h")).toEqual({ kind: "remind", durationMs: 7_200_000 });
+		expect(parseGoalCommand("/goal remind nope")).toEqual({ kind: "invalid", message: expect.any(String) });
 	});
 
 	it("parses non-executing plan commands", () => {

@@ -7,6 +7,7 @@ import { lockDirSync } from "../core/sync-lock.ts";
 import { inferLearningStack } from "./capability-learning.ts";
 import { checkRollback, recordSkillUse } from "./evidence-counter.ts";
 import { extractUserPatternsHeuristic, memoryPath, mutateMemory, readMemoryFile } from "./memory-store.ts";
+import { createUserWriteGuard } from "./memory-write-guard.ts";
 
 export type LearningProposalKind = "memory" | "skill" | "tool";
 export type LearningProposalStatus = "proposed" | "activated" | "rejected" | "archived";
@@ -541,13 +542,20 @@ export async function processPostTurnLearning(
 	};
 	const userText = observation.userText.trim();
 	if (userText) {
+		const userAdapters = createNodeUserPatternLearningAdapters({
+			rootDir: agentDir,
+			async extract(message) {
+				return extractUserPatternsHeuristic(message);
+			},
+		});
+		// Snapshot + content-hash guard USER.md before autonomous user-pattern writes
+		// so a rollback refuses to clobber a later independent edit.
+		const userWriteGuard = createUserWriteGuard(agentDir, (relative) => join(agentDir, relative));
 		const userLearner = new UserPatternLearningLoop(
-			createNodeUserPatternLearningAdapters({
-				rootDir: agentDir,
-				async extract(message) {
-					return extractUserPatternsHeuristic(message);
-				},
-			}),
+			{
+				...userAdapters,
+				writeUserFile: userWriteGuard.wrapUserWrite(userAdapters.writeUserFile.bind(userAdapters)),
+			},
 			{ minimumConfidence: 0.85 },
 		);
 		const result = await userLearner.learn(userText);

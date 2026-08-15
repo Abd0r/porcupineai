@@ -13,6 +13,7 @@
  *   - restart-with-backoff on unexpected child exit.
  */
 
+import { join } from "node:path";
 import type { AgentToolResult, ToolExecutionMode } from "@porcupineai/agent-core";
 import type { Model } from "@porcupineai/ai";
 import type { TSchema } from "typebox";
@@ -32,8 +33,23 @@ import {
 import { type LoadedMcpConfig, loadMcpConfig } from "./config.ts";
 import { createOAuthProvider, McpOAuthKeyringCache, type McpOAuthTokenCache } from "./oauth.ts";
 import { mapPromptInfo, mapPromptMessages, mapResourceInfo, mapResourceReadText } from "./resources.ts";
-import { createMcpToolGuard, InMemoryMcpApprovalStore, type McpApprovalStore, type McpToolGuard } from "./security.ts";
+import {
+	createMcpToolGuard,
+	FileMcpApprovalStore,
+	InMemoryMcpApprovalStore,
+	type McpApprovalStore,
+	type McpToolGuard,
+} from "./security.ts";
 import type { McpServerHealth, McpServerStatus, ResolvedMcpServer } from "./types.ts";
+
+/**
+ * Default approval store: file-backed when an agent dir is available so
+ * approvals survive restarts, falling back to per-session in-memory otherwise.
+ */
+function defaultApprovalStore(agentDir: string | undefined): McpApprovalStore {
+	if (agentDir) return new FileMcpApprovalStore(join(agentDir, "mcp-approvals.json"));
+	return new InMemoryMcpApprovalStore();
+}
 
 /** Registrar the session implements to push MCP tools into the live registry. */
 export interface McpToolRegistrar {
@@ -57,7 +73,7 @@ export interface McpManagerOptions {
 	modelRuntime: ModelRuntime;
 	getModel: () => Model<any> | undefined;
 	registrar: McpToolRegistrar;
-	/** In-memory approval store; defaults to a fresh instance per manager. */
+	/** Approval store; defaults to a file-backed store at agentDir/mcp-approvals.json. */
 	approvalStore?: McpApprovalStore;
 	/** OAuth token cache; defaults to a file cache at ~/.porcupine/agent. */
 	oauthCache?: McpOAuthTokenCache;
@@ -97,7 +113,7 @@ export class McpManager {
 
 	constructor(options: McpManagerOptions) {
 		this.options = options;
-		this.approvalStore = options.approvalStore ?? new InMemoryMcpApprovalStore();
+		this.approvalStore = options.approvalStore ?? defaultApprovalStore(options.agentDir);
 		this.oauthCache = options.oauthCache ?? new McpOAuthKeyringCache(options.agentDir);
 		this.guard = createMcpToolGuard({
 			modelRuntime: options.modelRuntime,

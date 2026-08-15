@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "homeassistant": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "mcp-proxy", "${HASS_URL:-http://homeassistant.local:8123}/api/mcp"],
+      "env": {
+        "MCP_PROXY_HEADERS": "{\"Authorization\":\"Bearer ${HOME_ASSISTANT_TOKEN}\"}"
+      },
+      "enabled": true,
+      "allow": [
+        "assist",
+        "get_states",
+        "get_state",
+        "call_service"
+      ]
+    }
+  }
+}

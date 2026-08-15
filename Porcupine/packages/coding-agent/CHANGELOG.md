@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`/trace` trajectory view**: surfaces the per-step traceability already logged (system prompt snapshots + request_header envelopes) as a bounded human-readable report. `"/trace"` shows the last step, `"/trace <n>"` a specific step (full effective prompt, model, thinking level, tool catalog, prompt hash, timestamp), and `"/trace all"` one line per step. Reuses the full-screen markdown viewer.
+
 ## [0.1.69] - 2026-08-14
 
 ### Added

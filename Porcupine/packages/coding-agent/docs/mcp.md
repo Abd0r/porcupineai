@@ -45,6 +45,39 @@ Servers are declared in two layered files (project overrides global):
 - **`enabled: false`** disables a server (project config can disable a global
   one).
 
+## Example integration: Home Assistant
+
+Porcupine can control a smart home through Home Assistant's official MCP
+Server integration, which exposes Streamable HTTP at `/api/mcp`. Enable the
+integration in Home Assistant (Settings → Devices & services), expose the
+entities you want managed, then declare the server in `mcp.json`.
+
+```jsonc
+{
+  "mcpServers": {
+    "homeassistant": {
+      "type": "streamableHttp",
+      "url": "${HASS_URL:-http://homeassistant.local:8123}/api/mcp",
+      "headers": { "Authorization": "Bearer ${HOME_ASSISTANT_TOKEN}" },
+      "enabled": true,
+      "allow": ["assist", "get_states", "get_state", "call_service"]
+    }
+  }
+}
+```
+
+- Set `HOME_ASSISTANT_TOKEN` (a long-lived access token) and `HASS_URL` (your
+  instance base URL) as environment variables — keep the token out of the file.
+- If you prefer a local stdio process, run the endpoint through `mcp-proxy` with
+  `npx` (see `examples/mcp-home-assistant/mcp.stdio.json`).
+- **Fail-closed**: start `allow` with read-only tools (`get_states`, `get_state`)
+  and add `call_service` deliberately — it changes device state. Confirmations
+  follow the usual mode policy and destructive actions stay blocked.
+- Run `/mcp status` after connecting to list the live tool names (they vary by
+  server/version) and `/mcp reload` to pick up config changes.
+- See `skills/web/home-assistant` for the safe usage workflow and the
+  `examples/mcp-home-assistant/` directory for copy-paste configs.
+
 ## Slash commands
 
 | Command | What it does |
