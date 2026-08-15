@@ -41,7 +41,7 @@ export const defaultModelPerProvider: Record<KnownProvider, string> = {
 	together: "moonshotai/Kimi-K2.6",
 	opencode: "kimi-k2.6",
 	"opencode-go": "kimi-k2.6",
-	cline: "anthropic/claude-sonnet-4-6",
+	cline: "deepseek/deepseek-v4-flash",
 	"kimi-coding": "kimi-for-coding",
 	"cloudflare-workers-ai": "@cf/moonshotai/kimi-k2.6",
 	"cloudflare-ai-gateway": "workers-ai/@cf/moonshotai/kimi-k2.6",

@@ -147,6 +147,7 @@ import { buildPersonalityReminder, isTrivialChatTurn, userRequestedPlanning } fr
 import { writeProjectContext } from "../../porcupine/project-init.ts";
 import { formatProjectsCommandOutput } from "../../porcupine/project-search.ts";
 import { runRefiner } from "../../porcupine/refiner.ts";
+import { parseRemindCommand, REMINDERS_SESSION_ENTRY, ReminderEngine } from "../../porcupine/reminders.ts";
 import {
 	dispatchRemoteSlash,
 	type RemoteCommandContext,
@@ -281,6 +282,14 @@ import {
 	theme,
 } from "./theme/theme.ts";
 import { InteractiveThemeController } from "./theme/theme-controller.ts";
+import {
+	extractTrajectory,
+	formatTraceAll,
+	formatTraceStep,
+	parseTraceSelection,
+	resolveTraceStep,
+	TRACE_NO_DATA_MESSAGE,
+} from "./trace-command.ts";
 
 /** Interface for components that can be expanded/collapsed */
 interface Expandable {
@@ -624,6 +633,8 @@ export class InteractiveMode {
 	private goalTurnInFlight = false;
 	/** True only while the just-finished turn is producing a /plan artifact. */
 	private planTurnInFlight = false;
+	/** Session-local attended reminders (fires only while open + idle, via bridge fan-out). */
+	private reminderEngine: ReminderEngine | undefined;
 
 	// Tool output expansion state
 	private toolOutputExpanded = false;
@@ -1032,6 +1043,7 @@ export class InteractiveMode {
 		this.isInitialized = true;
 		this.refreshCapabilityTree();
 		this.restoreGoalPlanState();
+		this.initReminderEngine();
 		this.cronTimer = setInterval(() => this.tickCronSchedules(), 15_000);
 
 		await this.themeController.applyFromSettings();
@@ -3920,6 +3932,11 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/trace" || text.startsWith("/trace ")) {
+				this.handleTraceCommand(text);
+				this.editor.setText("");
+				return;
+			}
 			if (text === "/changelog") {
 				this.handleChangelogCommand();
 				this.editor.setText("");
@@ -4003,6 +4020,12 @@ export class InteractiveMode {
 			if (text.startsWith("/mcpp:")) {
 				this.editor.setText("");
 				await this.handleMcpPromptCommand(text);
+				return;
+			}
+			const remindCommand = parseRemindCommand(text);
+			if (remindCommand) {
+				this.editor.setText("");
+				this.handleRemindCommand(remindCommand);
 				return;
 			}
 			const goalCommand = parseGoalCommand(text);
@@ -4718,6 +4741,7 @@ export class InteractiveMode {
 		) {
 			return;
 		}
+		this.tickReminders();
 		const [schedule] = this.taskStore.claimDueSchedules(new Date(), 1);
 		if (schedule) {
 			void this.runStoredTask(schedule.taskId, {
@@ -6516,6 +6540,76 @@ export class InteractiveMode {
 			this.showError(`Could not save plan artifact: ${message}`);
 		}
 	}
+
+	/** Restore reminders persisted as session custom entries so they survive /resume. */
+	private restoreReminders(): void {
+		const engine = this.reminderEngine;
+		if (!engine) return;
+		for (const entry of this.sessionManager.getBranch().slice().reverse()) {
+			if (entry.type === "custom" && entry.customType === REMINDERS_SESSION_ENTRY) {
+				engine.fromEntries(entry.data);
+				return;
+			}
+		}
+	}
+
+	/** Persist the current reminders as a session custom entry. */
+	private persistReminders(): void {
+		const engine = this.reminderEngine;
+		if (!engine) return;
+		this.sessionManager.appendCustomEntry(REMINDERS_SESSION_ENTRY, engine.toEntries());
+	}
+
+	/**
+	 * Initialize the session-local reminder engine. Its notify reuses the exact
+	 * task-completion chat-bridge fan-out (notifyOnTaskCompletion + remote
+	 * bridges); with no bridge connected or the setting off, it is a no-op.
+	 * Reminders only ever fire from tickReminders, which is gated on the session
+	 * being open and idle.
+	 */
+	private initReminderEngine(): void {
+		this.reminderEngine = new ReminderEngine({
+			notify: (notification) => {
+				if (!this.settingsManager.getNotifyOnTaskCompletion()) return;
+				if (this.remoteBridges.length === 0) return;
+				for (const bridge of this.remoteBridges) {
+					void bridge.notifyTaskResult(notification.summary);
+				}
+			},
+		});
+		// Recompute on the live taskStore too, so standalone reminder scheduling
+		// shares the same fan-out as a completed task run.
+		this.restoreReminders();
+	}
+
+	/** Fire due reminders only while the session is open and idle. */
+	private tickReminders(): void {
+		if (!this.reminderEngine) return;
+		const fired = this.reminderEngine.tick({
+			activeTaskRun: this.activeTaskRunId !== undefined,
+			streaming: this.session.isStreaming,
+			compacting: this.session.isCompacting,
+			bashRunning: this.session.isBashRunning,
+		});
+		if (fired > 0) this.persistReminders();
+	}
+
+	private handleRemindCommand(command: NonNullable<ReturnType<typeof parseRemindCommand>>): void {
+		if (command.kind === "invalid") {
+			this.showWarning(command.message);
+			return;
+		}
+		const reminder = this.reminderEngine?.schedule({
+			text: command.text,
+			durationMs: command.durationMs,
+			source: "user",
+		});
+		if (reminder) this.persistReminders();
+		this.showStatus(
+			reminder ? `Reminder set. It fires while this session is open and idle.` : "Could not schedule the reminder.",
+		);
+	}
+
 	private handleGoalCommand(command: NonNullable<ReturnType<typeof parseGoalCommand>>): void {
 		if (command.kind === "invalid") {
 			this.showWarning(command.message);
@@ -6535,6 +6629,22 @@ export class InteractiveMode {
 		}
 
 		const current = this.goalPlanState.goal;
+		if (command.kind === "remind") {
+			const nudge = this.reminderEngine?.scheduleGoalNudge({
+				durationMs: command.durationMs,
+				goal: {
+					text: current?.text ?? "(no standing goal)",
+					status: current?.status ?? "no-goal",
+					...(current?.lastVerdict ? { lastVerdict: current.lastVerdict } : {}),
+				},
+			});
+			this.showStatus(
+				nudge
+					? `Goal nudge scheduled. It fires while this session is open and idle.`
+					: "Could not schedule the goal nudge.",
+			);
+			return;
+		}
 		if (command.kind === "pause" || command.kind === "resume") {
 			if (!current) {
 				this.showWarning("No standing goal to update. Use /goal <text> first.");
@@ -9090,6 +9200,43 @@ export class InteractiveMode {
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new Text(info, 1, 0));
 		this.ui.requestRender();
+	}
+
+	private handleTraceCommand(text: string): void {
+		const arg = text.replace(/^\/trace\b/i, "").trim();
+		const selection = parseTraceSelection(arg);
+		if (selection.kind === "invalid") {
+			this.showWarning(selection.reason);
+			this.ui.requestRender();
+			return;
+		}
+
+		const data = extractTrajectory(this.sessionManager.getEntries());
+
+		// Empty session / session started before traceability (no request_headers).
+		if (data.steps.length === 0) {
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(new Text(theme.fg("dim", TRACE_NO_DATA_MESSAGE), 1, 0));
+			this.ui.requestRender();
+			return;
+		}
+
+		if (selection.kind === "all") {
+			this.showMarkdownViewer({ title: "Trajectory - all steps", content: formatTraceAll(data) });
+			return;
+		}
+
+		const resolved = resolveTraceStep(data, selection);
+		if (resolved.kind === "out-of-range") {
+			this.showWarning(`No step ${resolved.requested} in trajectory (${resolved.total} total). Try /trace all.`);
+			this.ui.requestRender();
+			return;
+		}
+
+		this.showMarkdownViewer({
+			title: `Trajectory - step ${resolved.step.stepIndex}`,
+			content: formatTraceStep(data, resolved.step),
+		});
 	}
 
 	private handleChangelogCommand(): void {

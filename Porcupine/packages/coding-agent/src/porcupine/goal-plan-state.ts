@@ -1,6 +1,7 @@
 import type { Model } from "@porcupineai/ai";
 import type { ModelRuntime } from "../core/model-runtime.ts";
 import { classifyWithSessionModel } from "./llm-classify.ts";
+import { parseDuration } from "./reminders.ts";
 import type { TaskGraphView } from "./session-orchestrator.ts";
 
 export const GOAL_PLAN_SESSION_ENTRY = "porcupine.goal-plan-state";
@@ -39,6 +40,7 @@ export type GoalCommand =
 	| { kind: "pause" }
 	| { kind: "resume" }
 	| { kind: "clear" }
+	| { kind: "remind"; durationMs: number }
 	| { kind: "invalid"; message: string };
 
 export type PlanCommand =
@@ -76,6 +78,14 @@ export function parseGoalCommand(text: string): GoalCommand | null {
 		return {
 			kind: args[0] === "stop" || args[0] === "done" ? "clear" : (args[0] as "pause" | "resume" | "clear"),
 		};
+	}
+	// `/goal remind <duration>` — re-fire a nudge back to the standing goal
+	// after a delay. Parsed here so the goal command surface stays self-contained.
+	if (args[0] === "remind") {
+		const durationMs = parseDuration(args.slice(1).join(" "));
+		if (durationMs === undefined)
+			return { kind: "invalid", message: "Usage: /goal remind <duration>  (e.g. /goal remind 10m)" };
+		return { kind: "remind", durationMs };
 	}
 	const value = text
 		.trim()

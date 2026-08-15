@@ -44,17 +44,52 @@ All bodies are JSON. `:id` is the session id returned by `POST /session`.
 
 ### GET /session
 
+Lists every session on the server. Backward compatible with single-session
+mode (still returns one entry).
+
 ```json
-{ "sessions": [{ "id": "session-id" }] }
+{ "sessions": [{"id": "session-id"}, {"id": "another-id"}] }
 ```
 
 ### POST /session
 
-Creates (or returns) a session. Responds `201`:
+Creates (or returns) a session. In multi-session mode you may request a
+specific id; an id that already exists is returned (`200`) instead of
+created. Without an id, the server mints a new session via its session
+provider. Single-session (legacy) mode returns the one session (`201`).
+
+```json
+{ "id": "optional-requested-id" }
+```
+
+Responds `201` (new) or `200` (existing):
 
 ```json
 { "sessionId": "session-id" }
 ```
+
+## Multi-session
+
+`porcupine serve` can run multiple independent sessions concurrently. Each
+session carries its own message stream, status, and confirmation surface; the
+per-`/session/:id/...` routes already scope each request to one session, so
+concurrent sessions never share prompts, approvals, or events.
+
+- `GET /session` lists all sessions.
+- `POST /session` creates (or returns) a session; pass `{"id": "..."}` to
+  request a specific id.
+- Every existing per-session route (`/session/:id/message`, `/status`,
+  `/abort`, `/permissions/:id/response`, `/events`) keeps working unchanged and
+  now resolves against any session id.
+- `?session=<id>` on a per-session route is an optional alternative selector.
+- SSE is per-session: `/session/:id/events` delivers only that session's
+  events. A global lifecycle stream on `GET /events` emits `session_created`
+  and `session_closed` for every session on the server.
+- Approval responses route only to the session that surfaced them.
+
+Existing single-session clients are unaffected: when the server was started
+with one legacy session, `POST /session` returns it and the per-session routes
+resolve against it exactly as before.
 
 ### POST /session/:id/message
 
@@ -122,3 +157,17 @@ curl -sN $BASE/session/$SID/events -H "$AUTH"
 - Loopback-only by default; a token is mandatory for any non-loopback bind.
 - Permission requests still require an explicit `allow` — nothing is
   auto-approved through the API.
+
+## Attended reminders and goal nudges
+
+The interactive session ships session-local, attended reminders. They are
+honest about scope: a reminder (`/remind <duration> <text>`, the model-facing
+`remind_me` tool, or `/goal remind <duration>`) fires only while the
+interactive session is open and idle, and is delivered through the same
+chat-bridge notification fan-out as completed task runs. It is not a daemon
+and does not run on a closed terminal. Firing is gated on the exact idle
+drain eligibility the task scheduler uses; while the session is busy or
+closed, a due reminder simply waits to be delivered on a later idle tick.
+
+Reminders persist as session custom entries, so they survive `/resume`.
+Goal nudges re-fire the standing goal's status back through the same path.

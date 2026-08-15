@@ -18,6 +18,11 @@ Example extensions demonstrating:
 - External integrations (SSH, file watchers, system theme sync)
 - Custom providers (Anthropic with custom streaming, GitLab Duo)
 
+### [mcp-home-assistant/](mcp-home-assistant/)
+Example MCP server config (Streamable HTTP and stdio via `mcp-proxy`) for
+controlling a Home Assistant instance, with setup instructions and a
+permission guide.
+
 ## Documentation
 
 - [SDK Reference](sdk/README.md)

@@ -110,6 +110,7 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 			"memory",
 			"projects",
 			"read",
+			"remind_me",
 			"send_to_subagent",
 			"session_search",
 			"show_markdown",

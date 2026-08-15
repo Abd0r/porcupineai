@@ -44,6 +44,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "copy", description: "Copy last agent message to clipboard" },
 	{ name: "name", description: "Set session display name" },
 	{ name: "session", description: "Show session info and stats" },
+	{
+		name: "trace",
+		description: "Show the model trajectory (per-step prompt hash, model, thinking, tools)",
+		argumentHint: "[<step>|all]",
+	},
 	// anchor: usage-and-cost
 	{ name: "usage", description: "Show per-turn token usage and totals for this session" },
 	{ name: "cost", description: "Show estimated token cost for this session" },
@@ -164,6 +169,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 		name: "plan",
 		description: "Generate and save a capability-aware plan",
 		argumentHint: "<text>|[status|clear]",
+	},
+	{
+		name: "remind",
+		description: "Schedule an attended reminder that fires while this session is open and idle",
+		argumentHint: "<duration> <text>",
 	},
 	{
 		name: "task",

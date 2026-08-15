@@ -9,6 +9,25 @@
  * The server is decoupled from AgentSession via {@link ServeApiSession} so it
  * can be unit-tested with a fake backend; serve-mode adapts a real session
  * via adaptSessionToServeApi before starting the API.
+ *
+ * ## Multi-session
+ *
+ * Since v0.1.69 the API can run multiple independent sessions concurrently.
+ * Pass either a single `session` (legacy behavior — a dedicated legacy
+ * session that POST /session returns) or a `sessions` list plus an optional
+ * `createSession` factory:
+ *
+ *   - `GET /session` lists every session.
+ *   - `POST /session` with an optional `{"id": "..."}` body creates (or
+ *     returns an existing) session; without an id it uses `createSession` or
+ *     falls back to the legacy session.
+ *   - The per-session routes already carry `:id` in the path, so concurrent
+ *     sessions run independently.
+ *
+ * SSE is per-session: `/session/:id/events` fans out events only for that
+ * session. A global lifecycle stream on `/events` carries `session_created`
+ * and `session_closed` events for every session on the server. Approval
+ * responses route only to the session that surfaced the request.
  */
 
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -34,7 +53,14 @@ export interface ServeApiSession {
 }
 
 export interface ServeApiOptions {
-	session: ServeApiSession;
+	/** Legacy single session (backward compatible). When provided and no
+	 * `sessions`/`createSession` are given, this is the only session and POST
+	 * /session returns it. */
+	session?: ServeApiSession;
+	/** Pre-provisioned independent sessions (multi-session mode). */
+	sessions?: readonly ServeApiSession[];
+	/** Factory used by POST /session to mint a new session by optional id. */
+	createSession?: (id?: string) => ServeApiSession;
 	port?: number;
 	host?: string;
 	/** Optional bearer token. When set, every request must carry it. */
@@ -90,40 +116,118 @@ function readBody(req: IncomingMessage): Promise<string> {
 	});
 }
 
+/**
+ * Per-session routing state. Each independent session gets its own SSE client
+ * set, permission responder table, and event/confirm subscriptions so events
+ * and approvals never leak across sessions.
+ */
+interface SessionEndpoint {
+	session: ServeApiSession;
+	sseClients: Set<ServerResponse>;
+	permissionResponders: Map<string, (allow: boolean) => void>;
+	/** Internal bounce listeners re-emitting every session event to `emit`. */
+	eventListeners: Set<(event: unknown) => void>;
+	unsubscribeConfirm: () => void;
+	unsubscribeEvents: () => void;
+}
+
 export function createServeApi(options: ServeApiOptions): ServeApiHandle {
-	const { session, token, version } = options;
-	const sseClients = new Set<ServerResponse>();
-	const permissionResponders = new Map<string, (allow: boolean) => void>();
-	const sessionEvents = new Set<(event: unknown) => void>();
+	const { session, sessions, createSession, token, version } = options;
+	const globalClients = new Set<ServerResponse>();
+	const allSessions = new Map<string, SessionEndpoint>();
+
+	const heartbeat = setInterval(() => {
+		const signal = `: ping\n\n`;
+		for (const client of Array.from(globalClients)) writeSse(client, signal, globalClients);
+		for (const entry of allSessions.values()) {
+			for (const client of Array.from(entry.sseClients)) writeSse(client, signal, entry.sseClients);
+		}
+	}, SSE_HEARTBEAT_MS);
+	heartbeat.unref();
 
 	// Write one SSE payload to a single client, removing it on any failure so a
 	// closed/dropped socket can't throw mid-fan-out and never holds the entry.
-	const writeSse = (client: ServerResponse, chunk: string): void => {
+	function writeSse(client: ServerResponse, chunk: string, clientSet: Set<ServerResponse>): void {
 		try {
 			if (client.writableEnded || client.destroyed) {
-				sseClients.delete(client);
+				clientSet.delete(client);
 				return;
 			}
 			client.write(chunk);
 		} catch {
 			// EPIPE / closed socket — drop the client so it isn't written again.
-			sseClients.delete(client);
+			clientSet.delete(client);
 		}
-	};
+	}
+
+	/** Global lifecycle channel (session_created / session_closed). */
+	function broadcastGlobal(event: unknown): void {
+		const serialized = JSON.stringify(event);
+		for (const client of Array.from(globalClients)) writeSse(client, `data: ${serialized}\n\n`, globalClients);
+	}
 
 	const broadcast = (event: unknown): void => {
-		const serialized = JSON.stringify(event);
-		for (const client of Array.from(sseClients)) {
-			writeSse(client, `data: ${serialized}\n\n`);
+		for (const entry of allSessions.values()) {
+			const serialized = JSON.stringify(event);
+			for (const client of Array.from(entry.sseClients)) {
+				writeSse(client, `data: ${serialized}\n\n`, entry.sseClients);
+			}
 		}
 	};
 
-	const heartbeat = setInterval(() => {
-		for (const client of Array.from(sseClients)) {
-			writeSse(client, `: ping\n\n`);
-		}
-	}, SSE_HEARTBEAT_MS);
-	heartbeat.unref();
+	/**
+	 * Create and subscribe a per-session endpoint. Called for pre-provisioned
+	 * sessions and again whenever POST /session mints a new one.
+	 */
+	function registerSession(sessionToRegister: ServeApiSession): SessionEndpoint {
+		const entry = allSessions.get(sessionToRegister.id);
+		if (entry) return entry;
+
+		const endpoint: SessionEndpoint = {
+			session: sessionToRegister,
+			sseClients: new Set<ServerResponse>(),
+			permissionResponders: new Map<string, (allow: boolean) => void>(),
+			eventListeners: new Set<(event: unknown) => void>(),
+			unsubscribeConfirm: () => {},
+			unsubscribeEvents: () => {},
+		};
+
+		endpoint.unsubscribeConfirm = sessionToRegister.onConfirm((permission, respond) => {
+			const responder: (allow: boolean) => void = (allow) => {
+				endpoint.permissionResponders.delete(permission.id);
+				respond(allow);
+			};
+			endpoint.permissionResponders.set(permission.id, responder);
+			const serialized = JSON.stringify({
+				type: "permission_request",
+				permissionId: permission.id,
+				title: stripAnsi(permission.title),
+				message: stripAnsi(permission.message),
+			});
+			for (const client of Array.from(endpoint.sseClients)) {
+				writeSse(client, `data: ${serialized}\n\n`, endpoint.sseClients);
+			}
+			setTimeout(() => {
+				if (endpoint.permissionResponders.delete(permission.id)) respond(false);
+			}, PERMISSION_TIMEOUT_MS).unref();
+		});
+
+		endpoint.unsubscribeEvents = sessionToRegister.onEvent((event) => {
+			for (const listener of endpoint.eventListeners) listener(event);
+			const serialized = JSON.stringify(event);
+			for (const client of Array.from(endpoint.sseClients)) {
+				writeSse(client, `data: ${serialized}\n\n`, endpoint.sseClients);
+			}
+		});
+
+		allSessions.set(sessionToRegister.id, endpoint);
+		return endpoint;
+	}
+
+	// Backward compatible: a single `session` is the legacy session; POST
+	// /session returns it and every SSR route targets it by id.
+	if (session) registerSession(session);
+	for (const candidate of sessions ?? []) registerSession(candidate);
 
 	const requireAuth = (req: IncomingMessage): boolean => {
 		if (!token) return true;
@@ -179,19 +283,35 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 			const path = url.pathname;
 			const method = (req.method ?? "GET").toUpperCase();
+			const querySessionId = url.searchParams.get("session");
 
-			// SSE stream first: it must hijack the response.
+			// Global session-lifecycle stream. Must hijack the response.
+			if (method === "GET" && path === "/events") {
+				res.writeHead(200, sseHeaders());
+				writeSse(res, `data: ${JSON.stringify({ type: "server_connected" })}\n\n`, globalClients);
+				globalClients.add(res);
+				const onClose = () => globalClients.delete(res);
+				req.on("close", onClose);
+				res.on("close", onClose);
+				return;
+			}
+
+			// Per-session SSE stream first: it must hijack the response.
 			const eventsMatch = /^\/session\/([^/]+)\/events$/.exec(path);
-			if (method === "GET" && eventsMatch && eventsMatch[1] === session.id) {
-				res.writeHead(200, {
-					"content-type": "text/event-stream",
-					"cache-control": "no-cache",
-					connection: "keep-alive",
-					"x-accel-buffering": "no",
-				});
-				res.write(`data: ${JSON.stringify({ type: "server_connected" })}\n\n`);
-				sseClients.add(res);
-				const onClose = () => sseClients.delete(res);
+			if (method === "GET" && eventsMatch) {
+				const entry = allSessions.get(eventsMatch[1]!);
+				if (!entry) {
+					json(res, 404, { error: `no such session: ${eventsMatch[1]}` });
+					return;
+				}
+				res.writeHead(200, sseHeaders());
+				writeSse(
+					res,
+					`data: ${JSON.stringify({ type: "server_connected", sessionId: entry.session.id })}\n\n`,
+					entry.sseClients,
+				);
+				entry.sseClients.add(res);
+				const onClose = () => entry.sseClients.delete(res);
 				req.on("close", onClose);
 				res.on("close", onClose);
 				return;
@@ -203,17 +323,59 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			}
 
 			if (method === "GET" && path === "/session") {
-				json(res, 200, { sessions: [{ id: session.id }] });
+				const list = Array.from(allSessions.values()).map((entry) => ({ id: entry.session.id }));
+				json(res, 200, { sessions: list });
 				return;
 			}
 
 			if (method === "POST" && path === "/session") {
-				json(res, 201, { sessionId: session.id });
+				let requestedId: string | undefined;
+				const raw = await readBody(req);
+				if (raw.trim()) {
+					try {
+						const parsed = JSON.parse(raw) as { id?: unknown };
+						if (parsed.id !== undefined && typeof parsed.id !== "string") {
+							json(res, 400, { error: "id must be a non-empty string" });
+							return;
+						}
+						requestedId = parsed.id as string;
+					} catch {
+						json(res, 400, { error: "invalid JSON body, expected { id?: string }" });
+						return;
+					}
+				}
+				if (requestedId && allSessions.has(requestedId)) {
+					json(res, 200, { sessionId: requestedId });
+					return;
+				}
+				let created: ServeApiSession | undefined;
+				if (createSession) {
+					created = createSession(requestedId ?? undefined);
+				} else if (session && !requestedId) {
+					// Legacy single-session behavior.
+					created = session;
+				}
+				if (!created) {
+					json(res, 500, {
+						error: requestedId
+							? `no session provider can create id ${requestedId}`
+							: "no session provider configured; pass createSession or a single session",
+					});
+					return;
+				}
+				registerSession(created);
+				broadcastGlobal({ type: "session_created", sessionId: created.id });
+				json(res, 201, { sessionId: created.id });
 				return;
 			}
 
 			const messageMatch = /^\/session\/([^/]+)\/message$/.exec(path);
-			if (method === "POST" && messageMatch && messageMatch[1] === session.id) {
+			if (method === "POST" && messageMatch) {
+				const entry = resolveEntry(messageMatch[1]!, querySessionId);
+				if (!entry) {
+					json(res, 404, { error: `no such session: ${messageMatch[1]}` });
+					return;
+				}
 				const raw = await readBody(req);
 				let text: unknown;
 				try {
@@ -226,29 +388,44 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					json(res, 400, { error: "text must be a non-empty string" });
 					return;
 				}
-				await session.sendUserMessage(text);
+				await entry.session.sendUserMessage(text);
 				json(res, 202, { ok: true });
 				return;
 			}
 
 			const abortMatch = /^\/session\/([^/]+)\/abort$/.exec(path);
-			if (method === "POST" && abortMatch && abortMatch[1] === session.id) {
-				await session.abort();
+			if (method === "POST" && abortMatch) {
+				const entry = resolveEntry(abortMatch[1]!, querySessionId);
+				if (!entry) {
+					json(res, 404, { error: `no such session: ${abortMatch[1]}` });
+					return;
+				}
+				await entry.session.abort();
 				json(res, 200, { ok: true });
 				return;
 			}
 
 			const statusMatch = /^\/session\/([^/]+)\/status$/.exec(path);
-			if (method === "GET" && statusMatch && statusMatch[1] === session.id) {
-				json(res, 200, { id: session.id, streaming: session.isStreaming() });
+			if (method === "GET" && statusMatch) {
+				const entry = resolveEntry(statusMatch[1]!, querySessionId);
+				if (!entry) {
+					json(res, 404, { error: `no such session: ${statusMatch[1]}` });
+					return;
+				}
+				json(res, 200, { id: entry.session.id, streaming: entry.session.isStreaming() });
 				return;
 			}
 
 			const permissionMatch = /^\/session\/([^/]+)\/permissions\/([^/]+)\/response$/.exec(path);
-			if (method === "POST" && permissionMatch && permissionMatch[1] === session.id) {
+			if (method === "POST" && permissionMatch) {
+				const entry = resolveEntry(permissionMatch[1]!, querySessionId);
+				if (!entry) {
+					json(res, 404, { error: `no such session: ${permissionMatch[1]}` });
+					return;
+				}
 				let permissionId: string;
 				try {
-					permissionId = decodeURIComponent(permissionMatch[2]);
+					permissionId = decodeURIComponent(permissionMatch[2]!);
 				} catch {
 					json(res, 400, { error: "malformed permission id" });
 					return;
@@ -270,12 +447,12 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				// deleted the entry and auto-denied — so this lookup returns undefined and
 				// we must NOT answer again (avoids a double decision to the confirm
 				// handler).
-				const responder = permissionResponders.get(permissionId);
+				const responder = entry.permissionResponders.get(permissionId);
 				if (!responder) {
 					json(res, 404, { error: "permission request not found or already answered" });
 					return;
 				}
-				permissionResponders.delete(permissionId);
+				entry.permissionResponders.delete(permissionId);
 				responder(allow);
 				json(res, 200, { ok: true });
 				return;
@@ -297,29 +474,25 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 		}
 	});
 
-	// Permission requests flow in from the session confirm callback and surface
-	// as SSE events plus a pending responder keyed by permission id.
-	const unsubscribeConfirm = session.onConfirm((permission, respond) => {
-		const responder: (allow: boolean) => void = (allow) => {
-			permissionResponders.delete(permission.id);
-			respond(allow);
-		};
-		permissionResponders.set(permission.id, responder);
-		broadcast({
-			type: "permission_request",
-			permissionId: permission.id,
-			title: stripAnsi(permission.title),
-			message: stripAnsi(permission.message),
-		});
-		setTimeout(() => {
-			if (permissionResponders.delete(permission.id)) respond(false);
-		}, PERMISSION_TIMEOUT_MS).unref();
-	});
+	// Resolve the per-session route from the path id, falling back to the
+	// `?session=` query param as an alternative selector. This lets callers use
+	// the convenience `?session=<id>` form while the `/session/:id/...` path
+	// remains the primary selector (and stays fully backward compatible).
+	function resolveEntry(pathId: string, queryId: string | null): SessionEndpoint | undefined {
+		const byPath = allSessions.get(pathId);
+		if (byPath) return byPath;
+		if (queryId) return allSessions.get(queryId);
+		return undefined;
+	}
 
-	const unsubscribeSessionEvents = session.onEvent((event) => {
-		for (const listener of sessionEvents) listener(event);
-		broadcast(event);
-	});
+	function sseHeaders(): Record<string, string> {
+		return {
+			"content-type": "text/event-stream",
+			"cache-control": "no-cache",
+			connection: "keep-alive",
+			"x-accel-buffering": "no",
+		};
+	}
 
 	return {
 		port: () => {
@@ -337,12 +510,16 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			}),
 		close: async () => {
 			clearInterval(heartbeat);
-			unsubscribeConfirm();
-			unsubscribeSessionEvents();
-			for (const client of sseClients) {
-				client.end();
+			for (const entry of allSessions.values()) {
+				entry.unsubscribeConfirm();
+				entry.unsubscribeEvents();
 			}
-			sseClients.clear();
+			for (const entry of allSessions.values()) {
+				for (const client of entry.sseClients) client.end();
+			}
+			allSessions.clear();
+			for (const client of globalClients) client.end();
+			globalClients.clear();
 			await new Promise<void>((resolve, reject) => {
 				server.close((error) => (error ? reject(error) : resolve()));
 			});

@@ -16,6 +16,9 @@
  *   - Hard-line destructive MCP calls are denied in ALL modes.
  */
 
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { Model } from "@porcupineai/ai";
 import { classifyWithSessionModel } from "../../porcupine/llm-classify.ts";
 import type { ModelRuntime } from "../model-runtime.ts";
@@ -177,7 +180,7 @@ export function createMcpToolGuard(options: McpToolGuardOptions): McpToolGuard {
 						modelRuntime,
 						model,
 						system: MCP_AUTO_SYSTEM_PROMPT,
-						user: `Tool: ${ctx.mcpToolName}\nArgs: ${JSON.stringify(ctx.arguments, null, 2)}\n\nReply exactly APPOVE or DENY.`,
+						user: `Tool: ${ctx.mcpToolName}\nArgs: ${JSON.stringify(ctx.arguments, null, 2)}\n\nReply exactly APPROVE or DENY.`,
 					});
 					if (/APPROVE|approve/i.test(verdict)) {
 						options.approvalStore.approve(ctx.server.serverKey, ctx.server.contentHash);
@@ -233,5 +236,70 @@ export class InMemoryMcpApprovalStore implements McpApprovalStore {
 
 	approve(serverKey: string, contentHash: string): void {
 		this.approved.set(serverKey, contentHash);
+	}
+}
+
+/**
+ * File-backed approval store bound to content hashes.
+ *
+ * Approvals survive process restarts (a fresh instance reads the same JSON
+ * store) while preserving the content-hash rug-pull check: each approval is
+ * keyed by the server key and stores the content hash, so a server whose
+ * config changed is not treated as pre-approved (CVE-2025-54136). The backing
+ * file is written atomically so a crash cannot leave a partial store.
+ */
+export class FileMcpApprovalStore implements McpApprovalStore {
+	private approved = new Map<string, string>();
+	private readonly filePath: string;
+
+	constructor(filePath: string) {
+		this.filePath = filePath;
+		this.load();
+	}
+
+	getApprovedHash(serverKey: string): string | undefined {
+		return this.approved.get(serverKey);
+	}
+
+	approve(serverKey: string, contentHash: string): void {
+		const next = new Map<string, string>(this.approved);
+		next.set(serverKey, contentHash);
+		this.persist(next);
+		this.approved = next;
+	}
+
+	/** Read the persistable approvals from disk (best-effort, fails to empty). */
+	private load(): void {
+		try {
+			if (!existsSync(this.filePath)) return;
+			const raw = JSON.parse(readFileSync(this.filePath, "utf8")) as Record<string, string> | null;
+			this.approved = new Map(Object.entries(raw ?? {}));
+		} catch {
+			// Unreadable or corrupt store — start empty rather than block MCP use.
+			this.approved = new Map<string, string>();
+		}
+	}
+
+	/** Write the store atomically; on failure keep the in-memory state usable. */
+	private persist(approvals: Map<string, string>): void {
+		try {
+			mkdirSync(dirname(this.filePath), { recursive: true });
+			const temporary = join(dirname(this.filePath), `.${randomUUID()}.tmp`);
+			try {
+				writeFileSync(temporary, `${JSON.stringify(Object.fromEntries(approvals), null, 2)}\n`, {
+					encoding: "utf8",
+					mode: 0o600,
+				});
+				renameSync(temporary, this.filePath);
+			} finally {
+				try {
+					rmSync(temporary, { force: true });
+				} catch {
+					// Best-effort cleanup.
+				}
+			}
+		} catch {
+			// Persistence failure is non-fatal: the in-memory copy already updated.
+		}
 	}
 }

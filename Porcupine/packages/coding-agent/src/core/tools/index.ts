@@ -297,6 +297,11 @@ export {
 } from "./skill-tools.ts";
 
 import {
+	createRemindMeTool,
+	createRemindMeToolDefinition,
+	type RemindMeToolOptions,
+} from "../../porcupine/remind-me-tool.ts";
+import {
 	createSendToSubagentToolDefinition,
 	createStopSubagentToolDefinition,
 	createSubagentToolDefinition,
@@ -348,6 +353,7 @@ export type ToolName =
 	| "send_to_subagent"
 	| "stop_subagent"
 	| "mcp_resources"
+	| "remind_me"
 	| "show_markdown"
 	| "x_search"
 	| "x_read"
@@ -393,6 +399,7 @@ export const allToolNames: Set<ToolName> = new Set([
 	"send_to_subagent",
 	"stop_subagent",
 	"mcp_resources",
+	"remind_me",
 	"show_markdown",
 	"x_search",
 	"x_read",
@@ -431,6 +438,7 @@ export interface ToolsOptions {
 	memory?: MemoryToolOptions;
 	session_search?: SessionSearchToolOptions;
 	tasks?: TasksToolOptions;
+	remind?: RemindMeToolOptions;
 	projects?: ProjectsToolOptions;
 	literature?: LiteratureToolOptions;
 	subagent?: SubagentToolOptions;
@@ -484,6 +492,7 @@ export function createCodingToolDefinitions(cwd: string, options?: ToolsOptions)
 		createProjectsToolDefinition(options?.projects),
 		createSessionSearchToolDefinition({ cwd, ...options?.session_search }),
 		createTasksToolDefinition(options?.tasks),
+		createRemindMeToolDefinition(options?.remind),
 		createLiteratureToolDefinition(options?.literature),
 		createShowMarkdownToolDefinition(cwd),
 		createXSearchToolDefinition(options?.x),
@@ -539,6 +548,7 @@ export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): R
 		projects: createProjectsToolDefinition(options?.projects),
 		session_search: createSessionSearchToolDefinition({ cwd, ...options?.session_search }),
 		tasks: createTasksToolDefinition(options?.tasks),
+		remind_me: createRemindMeToolDefinition(options?.remind),
 		literature: createLiteratureToolDefinition(options?.literature),
 		show_markdown: createShowMarkdownToolDefinition(cwd),
 		subagent: options?.subagent
@@ -593,6 +603,7 @@ export function createCodingTools(cwd: string, options?: ToolsOptions): Tool[] {
 		createProjectsTool(options?.projects),
 		createSessionSearchTool({ cwd, ...options?.session_search }),
 		createTasksTool(options?.tasks),
+		createRemindMeTool(options?.remind),
 		createLiteratureTool(options?.literature),
 		createShowMarkdownTool(cwd),
 		createXSearchTool(options?.x),
@@ -648,6 +659,7 @@ export function createAllTools(cwd: string, options?: ToolsOptions): Record<Tool
 		projects: createProjectsTool(options?.projects),
 		session_search: createSessionSearchTool({ cwd, ...options?.session_search }),
 		tasks: createTasksTool(options?.tasks),
+		remind_me: createRemindMeTool(options?.remind),
 		literature: createLiteratureTool(options?.literature),
 		show_markdown: createShowMarkdownTool(cwd),
 		subagent: wrapToolDefinition(

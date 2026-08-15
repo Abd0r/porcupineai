@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import {
 	type CapabilityTree,
 	type ExecutionPlan,
@@ -9,6 +10,7 @@ import {
 import { createNodeUserPatternLearningAdapters } from "@porcupineai/agent-core/node";
 import { createAutonomousCapabilityLearner } from "./capability-learning.ts";
 import { extractUserPatternsHeuristic } from "./memory-store.ts";
+import { createUserWriteGuard } from "./memory-write-guard.ts";
 import { createHeuristicRuntimeAdapters } from "./session-adapters.ts";
 
 export type TaskGraphStepStatus = "pending" | "active" | "done" | "failed" | "skipped";
@@ -177,14 +179,19 @@ export class PorcupineSessionOrchestrator {
 		let userPatternLearner: UserPatternLearningLoop | undefined;
 		if (this.enableUserPatterns && this.configDir) {
 			const rootDir = this.configDir;
-			userPatternLearner = new UserPatternLearningLoop(
-				createNodeUserPatternLearningAdapters({
-					rootDir,
-					async extract(message: string) {
-						return extractUserPatternsHeuristic(message);
-					},
-				}),
-			);
+			const adapters = createNodeUserPatternLearningAdapters({
+				rootDir,
+				async extract(message: string) {
+					return extractUserPatternsHeuristic(message);
+				},
+			});
+			// Snapshot + content-hash guard USER.md before autonomous user-pattern writes
+			// so a rollback refuses to clobber a later independent edit.
+			const writeGuard = createUserWriteGuard(rootDir, (relative) => join(rootDir, relative));
+			userPatternLearner = new UserPatternLearningLoop({
+				...adapters,
+				writeUserFile: writeGuard.wrapUserWrite(adapters.writeUserFile.bind(adapters)),
+			});
 		}
 
 		const capabilityLearner =
