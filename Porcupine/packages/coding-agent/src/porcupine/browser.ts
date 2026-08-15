@@ -25,6 +25,7 @@
 
 import { isAbsolute, resolve, sep } from "node:path";
 import type { Browser, BrowserContext, Page } from "playwright";
+import { resolveBrowserVisionConfig, visionRead } from "./browser-vision.ts";
 
 /** Launch options for opening a Chromium instance. */
 export interface BrowserLaunchOptions {
@@ -215,6 +216,22 @@ export class BrowserSession {
 		}
 	}
 
+	/**
+	 * OCR the rendered page through the configured vision model (Florence-2 by
+	 * default) and return a bounded text layer for text-only models. Returns ""
+	 * when OCR is disabled or no page is open; never throws (fail-closed).
+	 */
+	async visualText(): Promise<string> {
+		if (!this.page) {
+			return "";
+		}
+		try {
+			const bytes = await this.page.screenshot({ fullPage: true });
+			return await visionRead(bytes, resolveBrowserVisionConfig());
+		} catch {
+			return "";
+		}
+	}
 	/** Capture a compact ARIA snapshot optimized for AI inspection and stable refs. */
 	async snapshot(options: BrowserSnapshotOptions = {}): Promise<string> {
 		if (!this.page) {

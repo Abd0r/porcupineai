@@ -46,6 +46,43 @@ Agent-controlled browsing is scoped to be conservative by default:
 - **Timeouts.** Every navigation and network-touching call gets a timeout
   (15 seconds by default), so a hung page can never stall the agent forever.
 
+## Vision layer for text-only models
+
+Text-only models (DeepSeek V4 Flash and similar) cannot see screenshots, so
+browser work for them stops at the ARIA tree. To close that gap,
+`browser_snapshot` appends a **VISUAL LAYER** when the active model cannot see
+images: a screenshot of the page is sent to a small OpenAI-compatible
+vision-language model, which returns a bounded text read of the rendered page
+(visible text, approximate element positions, layout, and visual state like
+errors, toasts, disabled elements, and dialogs).
+
+**Recommended model:** [LiquidAI/LFM2.5-VL-3B](https://huggingface.co/LiquidAI/LFM2.5-VL-3B)
+(~3B general VLM, reads text AND describes state; verify its license before
+depending on it). Alternatives that speak the same wire format: Florence-2
+(`<OCR_WITH_REGION>` text + regions), DeepSeek-OCR-2 (heavy, accurate). Serve
+any of them with vLLM/SGLang, or a small wrapper, and point Porcupine at it:
+
+```bash
+# serve LFM2.5-VL-3B with vLLM (OpenAI-compatible)
+vllm serve LiquidAI/LFM2.5-VL-3B --port 8011
+
+# enable the layer in Porcupine
+PORCUPINE_BROWSER_VISION=1
+PORCUPINE_BROWSER_VISION_BASE_URL=http://127.0.0.1:8011/v1
+# optional: PORCUPINE_BROWSER_VISION_MODEL, _PROMPT, _API_KEY
+```
+
+Design notes:
+
+- **Fail-closed.** Any vision failure returns a short `VISUAL LAYER: unavailable`
+  note; it never throws and never breaks the browser session.
+- **Cached.** Screenshots are cached by content hash, so repeated snapshots of
+  the same page do not re-run the model.
+- **Bounded.** Output is capped (12k chars default) to keep the model's window
+  clean.
+- The layer only runs for models without image input; vision-capable models
+  keep native screenshots.
+
 ## Tool reference
 
 All tools operate on a single shared browser session. Call `browser_navigate`
