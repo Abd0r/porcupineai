@@ -603,8 +603,14 @@ export class AgentHarness<
 			return;
 		}
 		if (event.type === "agent_end") {
+			// NOTE: do NOT reset `this.phase` here. This handler runs inside
+			// runAgentLoop, which has not yet returned; executeTurn's `finally`
+			// (final session flush) and prompt()/skill()'s `finally`
+			// (operation.finish()) still run afterwards. Clearing phase here would let
+			// a concurrent prompt()/skill()/promptFromTemplate() pass its idle guard
+			// and interleave before that tail work settles. Phase is reset to "idle"
+			// in those methods' settling `finally` instead.
 			await this.flushPendingSessionWrites();
-			this.phase = "idle";
 			await this.emitAny(event, signal);
 			await this.emitOwn({ type: "settled", nextTurnCount: this.nextTurnQueue.length }, signal);
 			return;
@@ -708,6 +714,7 @@ export class AgentHarness<
 			throw normalizeHarnessError(error, "unknown");
 		} finally {
 			operation.finish();
+			this.phase = "idle";
 		}
 	}
 
@@ -730,6 +737,7 @@ export class AgentHarness<
 			throw normalizeHarnessError(error, "unknown");
 		} finally {
 			operation.finish();
+			this.phase = "idle";
 		}
 	}
 
@@ -748,6 +756,7 @@ export class AgentHarness<
 			throw normalizeHarnessError(error, "unknown");
 		} finally {
 			operation.finish();
+			this.phase = "idle";
 		}
 	}
 
@@ -1110,12 +1119,25 @@ export class AgentHarness<
 	requestShutdown(): void {
 		if (this.isShutdown) return;
 		this.isShutdown = true;
-		this.pendingSessionWrites = [];
 		this.steerQueue = [];
 		this.followUpQueue = [];
 		this.nextTurnQueue = [];
 		this.activeAbortController?.abort();
-		this.shutdownPromise = this.waitForTasks();
+		// Flush any queued session writes (messages, model/thinking/tool changes)
+		// rather than silently dropping them, so the durable session does not lose
+		// the tail of the transcript that the run already computed. flushThenWait
+		// drains pendingSessionWrites before (and concurrently-safe with) waiting
+		// for in-flight operations to settle.
+		this.shutdownPromise = this.flushThenWaitForShutdown();
+	}
+
+	private async flushThenWaitForShutdown(): Promise<void> {
+		await this.flushPendingSessionWrites();
+		await this.waitForTasks();
+		// A final flush catches writes enqueued while the aborted operation wound
+		// down (e.g. its agent_end/turn_end handler flushed, or a mutation landed
+		// mid-abort); then end the shutdown.
+		await this.flushPendingSessionWrites();
 	}
 
 	/** Waits for work active when shutdown was requested to settle. */

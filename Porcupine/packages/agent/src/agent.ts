@@ -402,7 +402,11 @@ export class Agent {
 		images?: ImageContent[],
 	): AgentMessage[] {
 		if (Array.isArray(input)) {
-			return input;
+			// Defensive copy: callers may mutate their array after prompt() returns, and
+			// the resolved messages later flow into internal loop state (runPromptMessages
+			// → runAgentLoop). Returning a copy prevents caller mutations from aliasing
+			// into that internal state.
+			return [...input];
 		}
 
 		if (typeof input !== "string") {

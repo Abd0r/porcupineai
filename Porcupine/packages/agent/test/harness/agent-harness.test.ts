@@ -433,6 +433,80 @@ describe("AgentHarness", () => {
 		await expect(harness.compact()).rejects.toMatchObject({ code: "invalid_state" });
 	});
 
+	it("does not reset phase on agent_end until the turn settles (no concurrent-interleave race)", async () => {
+		const registration = newFaux();
+		registration.setResponses([() => fauxAssistantMessage("done")]);
+		const harness = new AgentHarness({
+			models,
+			session: await createInMemorySession(),
+			model: registration.getModel(),
+		});
+
+		let secondPromptError: unknown = "not-attempted";
+		const subscriberRan = deferred();
+		harness.subscribe(async (event) => {
+			if (event.type === "agent_end") {
+				// This handler runs while the turn is still settling (run-loop has not
+				// returned; final session flush and operation.finish are still pending).
+				// The phase must still be non-idle so a concurrent prompt() is rejected
+				// as busy instead of interleaving with the tail work.
+				try {
+					await harness.prompt("interleaved");
+				} catch (error) {
+					secondPromptError = error;
+				}
+				subscriberRan.resolve();
+			}
+		});
+
+		const first = harness.prompt("first");
+		await subscriberRan.promise;
+		await first;
+		expect(secondPromptError).toMatchObject({ code: "busy" });
+	});
+
+	it("flushes queued session writes during shutdown instead of dropping them", async () => {
+		const registration = newFaux();
+		const entered = deferred();
+		let release: () => void = () => {};
+		const releasePromise = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		registration.setResponses([
+			async () => {
+				entered.resolve();
+				await releasePromise;
+				return fauxAssistantMessage("done");
+			},
+		]);
+		const session = await createInMemorySession();
+		const harness = new AgentHarness({
+			models,
+			session,
+			model: registration.getModel(),
+		});
+
+		const prompt = harness.prompt("blocked");
+		await entered.promise; // turn is live -> phase !== "idle"
+
+		// A mutation queued mid-turn lands in pendingSessionWrites, not the session
+		// (phase is not idle). It must survive shutdown and be flushed, not dropped.
+		await harness.appendMessage(createUserMessage("pending-followup"));
+
+		harness.requestShutdown();
+		release();
+		await expect(prompt).resolves.toMatchObject({ role: "assistant" });
+		await harness.waitForShutdown();
+
+		const texts = (await session.getEntries()).flatMap((entry) => {
+			if (entry.type !== "message" || entry.message.role !== "user") return [];
+			const content = entry.message.content;
+			if (typeof content === "string") return [content];
+			return content.flatMap((part) => (part.type === "text" ? [part.text] : []));
+		});
+		expect(texts).toContain("pending-followup");
+	});
+
 	it("drains one queued steering message at a time and emits queue updates", async () => {
 		const registration = newFaux();
 		const userCounts: number[] = [];

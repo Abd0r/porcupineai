@@ -9,6 +9,7 @@ import {
 	type StreamFn,
 	setDefaultStreamFn,
 } from "../src/index.ts";
+import type { AgentMessage } from "../src/types.ts";
 
 // Mock stream that mimics AssistantMessageEventStream
 class MockAssistantStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
@@ -730,5 +731,39 @@ describe("Agent", () => {
 
 		await agent.prompt("hello again");
 		expect(receivedSessionId).toBe("session-def");
+	});
+
+	it("prompt(array) does not let later caller mutations alias into internal state", async () => {
+		const receivedBatches: AgentMessage[][] = [];
+		const agent = new Agent({
+			streamFn: (_model, context) => {
+				receivedBatches.push(context.messages);
+				const stream = new MockAssistantStream();
+				queueMicrotask(() => {
+					stream.push({ type: "done", reason: "stop", message: createAssistantMessage("ok") });
+				});
+				return stream;
+			},
+		});
+
+		const batch: AgentMessage[] = [
+			{ role: "user", content: [{ type: "text", text: "first" }], timestamp: Date.now() },
+		];
+		await agent.prompt(batch);
+
+		// The caller keeps its own array (normalizePromptInput must return a copy).
+		batch.push({ role: "user", content: [{ type: "text", text: "injected-after-prompt" }], timestamp: Date.now() });
+
+		// The injected element must not appear in what the loop sent to the model or
+		// in the agent's persisted transcript.
+		const injectedInRun = receivedBatches.some((msgs) =>
+			msgs.some((m) => {
+				if (m.role !== "user" || typeof m.content === "string") return false;
+				return m.content.some((part) => part.type === "text" && part.text === "injected-after-prompt");
+			}),
+		);
+		expect(injectedInRun).toBe(false);
+		expect(agent.state.messages).toHaveLength(2); // the user batch + the assistant reply
+		expect(agent.state.messages[0]).toMatchObject({ role: "user" });
 	});
 });

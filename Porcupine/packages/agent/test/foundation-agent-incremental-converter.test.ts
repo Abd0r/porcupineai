@@ -223,6 +223,38 @@ describe("incremental cache across the built-in converter", () => {
 		expect(again).toHaveLength(3);
 		expect(key(again)).toBe(key(convertToLlm(history)));
 	});
+
+	it("FILTERED LAST MESSAGE: the final message converting to zero outputs never injects undefined", async () => {
+		const conv = createIncrementalConverter(builtInCfg());
+
+		// Two real outputs up front.
+		const history: AgentMessage[] = [user("u0"), assistant("a0")];
+		const before = await conv.convert(history);
+		expect(before).toHaveLength(2);
+
+		// Same length (only the last element changed), but the replacement converts
+		// to ZERO outputs (a filtered bashExecution). The old code wrote `last[0]!`
+		// which is `undefined` here; the fix must drop it and stay byte-identical to
+		// a one-shot conversion of the same (shorter, filtered) input.
+		history[history.length - 1] = {
+			role: "bashExecution",
+			command: "echo hi",
+			output: "filtered output",
+			exitCode: 0,
+			cancelled: false,
+			truncated: false,
+			excludeFromContext: true,
+			timestamp: Date.now(),
+		} as unknown as AgentMessage;
+		const after = await conv.convert(history);
+		const expected = convertToLlm(history);
+		expect(after).toHaveLength(expected.length);
+		expect(expected).toHaveLength(1); // only the user message survives
+		for (const msg of after) {
+			expect(msg).not.toBeUndefined();
+		}
+		expect(key(after)).toBe(key(expected));
+	});
 });
 
 describe("rejection: custom converters fall back to full conversion", () => {
