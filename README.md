@@ -241,5 +241,5 @@ Built on top of [Pi](https://github.com/earendil-works/pi) (MIT).
 </p>
 
 <p align="center">
-  Follow development on X: <a href="https://x.com/SyedAbdurR2hman">@SyedAbdurR2hman</a>
+  <a href="https://x.com/SyedAbdurR2hman"><img src="https://img.shields.io/badge/X-%40SyedAbdurR2hman-000000?style=flat-square&logo=X&logoColor=white" alt="Follow on X"></a>
 </p>
