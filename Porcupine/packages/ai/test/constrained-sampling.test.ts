@@ -183,6 +183,23 @@ describe("constrained tool sampling", () => {
 		);
 	});
 
+	it("escapes each delta cleanly without re-encoding prior content (BUG-8)", () => {
+		// Feed a single value through several deltas containing control chars and
+		// quotes. Each delta must escape only its own appended chunk, so the streamed
+		// JSON stays valid and the correct value round-trips (no duplicate/escaped
+		// text from re-encoding previously emitted buckets).
+		const value = 'line1\n"quoted"\t\u0001!🙂漢字';
+		const buffer = { input: "", started: false, closed: false };
+		let emitted = "";
+		for (let i = 0; i < value.length; i++) {
+			const next = value.slice(0, i + 1);
+			const close = i === value.length - 1;
+			const delta = appendGrammarToolInputJsonDelta(buffer, "payload", next, close);
+			if (delta) emitted += delta;
+		}
+		expect(JSON.parse(emitted)).toEqual({ payload: value });
+	});
+
 	it("streams custom Responses tool calls as string arguments", async () => {
 		const output = makeOutput();
 		const stream = new AssistantMessageEventStream();
