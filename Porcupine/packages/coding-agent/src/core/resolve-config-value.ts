@@ -6,8 +6,12 @@
 import { execSync, spawnSync } from "child_process";
 import { getShellConfig } from "../utils/shell.ts";
 
-// Cache for shell command results (persists for process lifetime)
-const commandResultCache = new Map<string, string | undefined>();
+// Cache for shell command results (persists for process lifetime). Successful
+// results are cached until clearConfigValueCache(); failed results are cached
+// only briefly so a transient failure (10s timeout, network hiccup) retries
+// instead of silently poisoning credential resolution for the whole session.
+const commandResultCache = new Map<string, { value: string | undefined; at: number }>();
+const FAILURE_CACHE_TTL_MS = 30_000;
 const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const ENV_VAR_NAME_PREFIX_RE = /^[A-Za-z_][A-Za-z0-9_]*/;
 
@@ -206,12 +210,21 @@ function executeCommandUncached(commandConfig: string): string | undefined {
 }
 
 function executeCommand(commandConfig: string): string | undefined {
-	if (commandResultCache.has(commandConfig)) {
-		return commandResultCache.get(commandConfig);
+	// Explicit opt-out: with PORCUPINE_DISABLE_CONFIG_COMMANDS=1, `!`-prefixed
+	// values never execute anything; they resolve to undefined (the same
+	// failure shape callers already handle). The feature stays on by default.
+	if (process.env.PORCUPINE_DISABLE_CONFIG_COMMANDS === "1") {
+		return undefined;
+	}
+
+	const cached = commandResultCache.get(commandConfig);
+	if (cached !== undefined) {
+		const fresh = cached.value !== undefined || Date.now() - cached.at < FAILURE_CACHE_TTL_MS;
+		if (fresh) return cached.value;
 	}
 
 	const result = executeCommandUncached(commandConfig);
-	commandResultCache.set(commandConfig, result);
+	commandResultCache.set(commandConfig, { value: result, at: Date.now() });
 	return result;
 }
 

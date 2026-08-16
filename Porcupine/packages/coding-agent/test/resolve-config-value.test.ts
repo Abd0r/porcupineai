@@ -118,4 +118,36 @@ describe("resolveConfigValue", () => {
 			if (platformDescriptor) Object.defineProperty(process, "platform", platformDescriptor);
 		}
 	});
+
+	test("retries a failed command after the failure TTL instead of caching undefined forever", async () => {
+		vi.useFakeTimers();
+		try {
+			const counterFile = join(tempDir, "ttl-counter");
+			writeFileSync(counterFile, "0");
+			const escapedPath = counterFile.replace(/\\/g, "/").replace(/"/g, '\\"');
+			const failure = `!sh -c 'count=$(cat "${escapedPath}"); echo $((count + 1)) > "${escapedPath}"; exit 1'`;
+			expect(resolveConfigValue(failure)).toBeUndefined();
+			expect(resolveConfigValue(failure)).toBeUndefined();
+			expect(readFileSync(counterFile, "utf-8").trim()).toBe("1"); // cached failure, no re-execution
+			vi.advanceTimersByTime(31_000); // past the failure TTL
+			expect(resolveConfigValue(failure)).toBeUndefined();
+			expect(readFileSync(counterFile, "utf-8").trim()).toBe("2"); // re-executed after TTL
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	test("PORCUPINE_DISABLE_CONFIG_COMMANDS=1 blocks command execution without running the command", () => {
+		const counterFile = join(tempDir, "blocked-counter");
+		writeFileSync(counterFile, "0");
+		const escapedPath = counterFile.replace(/\\/g, "/").replace(/"/g, '\\"');
+		const command = `!sh -c 'count=$(cat "${escapedPath}"); echo $((count + 1)) > "${escapedPath}"; echo ran'`;
+		process.env.PORCUPINE_DISABLE_CONFIG_COMMANDS = "1";
+		try {
+			expect(resolveConfigValue(command)).toBeUndefined();
+			expect(readFileSync(counterFile, "utf-8").trim()).toBe("0"); // never executed
+		} finally {
+			delete process.env.PORCUPINE_DISABLE_CONFIG_COMMANDS;
+		}
+	});
 });
