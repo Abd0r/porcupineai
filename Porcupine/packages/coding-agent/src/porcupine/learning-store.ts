@@ -510,10 +510,20 @@ function extractExplicitTechnicalMemoryFact(userText: string): string | undefine
 	return fact;
 }
 
+export interface PostTurnLearningOptions {
+	/** Enable autonomous USER.md user-pattern writes. Defaults to false (memory is agent-decided only). */
+	enableUserPatterns?: boolean;
+	/** Enable autonomous capability learning (durable MEMORY.md technical facts + recovery skills). Defaults to false. */
+	enableCapabilityLearning?: boolean;
+}
+
 export async function processPostTurnLearning(
 	agentDir: string,
 	observation: PostTurnLearningObservation,
+	options: PostTurnLearningOptions = {},
 ): Promise<LearningOutcome> {
+	const enableUserPatterns = options.enableUserPatterns ?? false;
+	const enableCapabilityLearning = options.enableCapabilityLearning ?? false;
 	const output: LearningOutcome = { records: [], activated: [] };
 	const activate = (record: LearningProposal) => {
 		try {
@@ -541,7 +551,7 @@ export async function processPostTurnLearning(
 		}
 	};
 	const userText = observation.userText.trim();
-	if (userText) {
+	if (userText && enableUserPatterns) {
 		const userAdapters = createNodeUserPatternLearningAdapters({
 			rootDir: agentDir,
 			async extract(message) {
@@ -567,7 +577,9 @@ export async function processPostTurnLearning(
 				accepted: result.accepted,
 			});
 		}
+	}
 
+	if (userText && enableCapabilityLearning) {
 		const memoryFact = extractExplicitTechnicalMemoryFact(userText);
 		if (memoryFact) {
 			const id = `memory-${slugify(memoryFact)}`;
@@ -601,7 +613,7 @@ export async function processPostTurnLearning(
 		}
 	}
 
-	for (const tool of observation.tools) {
+	for (const tool of enableCapabilityLearning ? observation.tools : []) {
 		// Wire tool outcomes into the evidence counter BEFORE failure handling so
 		// the counter is populated even for the create path. The key is the same
 		// learned-skill id used by the proposal/skill folder (and thus by the

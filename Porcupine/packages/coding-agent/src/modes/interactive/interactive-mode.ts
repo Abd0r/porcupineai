@@ -6153,11 +6153,20 @@ export class InteractiveMode {
 		this.learningUserText = undefined;
 		if (!userText && this.learningToolEvidence.length === 0) return;
 		try {
-			const outcome = await processPostTurnLearning(getAgentDir(), {
-				userText: userText ?? "",
-				tools: this.learningToolEvidence,
-				sessionId: this.session.sessionManager.getSessionId(),
-			});
+			const outcome = await processPostTurnLearning(
+				getAgentDir(),
+				{
+					userText: userText ?? "",
+					tools: this.learningToolEvidence,
+					sessionId: this.session.sessionManager.getSessionId(),
+				},
+				{
+					// Memory is agent-decided only: autonomous learning is
+					// deliberately off unless an operator explicitly enables it.
+					enableUserPatterns: false,
+					enableCapabilityLearning: false,
+				},
+			);
 			if (outcome.userPatternChange) {
 				this.chatContainer.addChild(new ArtifactChangeComponent(outcome.userPatternChange));
 			}

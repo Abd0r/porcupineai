@@ -96,6 +96,10 @@ export class BrowserSession {
 		}
 		const headless = options?.headless ?? process.env.PORCUPINE_BROWSER_VISIBLE !== "1";
 		const timeoutMs = options?.timeoutMs ?? this.timeoutMs;
+		// Set the session timeout BEFORE creating the page so every subsequent
+		// navigation/network call (and the page's own default timeouts) uses the
+		// configured value.
+		this.timeoutMs = timeoutMs;
 		try {
 			if (options?.userDataDir) {
 				const { chromium } = await import("playwright");
@@ -109,7 +113,6 @@ export class BrowserSession {
 			this.page.setDefaultTimeout(timeoutMs);
 			this.page.setDefaultNavigationTimeout(timeoutMs);
 			this.attachDiagnostics(this.page);
-			this.timeoutMs = timeoutMs;
 			return `Browser launched (${headless ? "headless" : "headed"}). ${this.status()}`;
 		} catch (err) {
 			// On partial-launch failure, close any browser/context created so far so
@@ -378,7 +381,12 @@ export function getBrowserSession(): BrowserSession {
 }
 
 /** Replace the shared session (e.g. install a fresh instance for a reload). */
-export function setBrowserSession(session: BrowserSession): void {
+export async function setBrowserSession(session: BrowserSession): Promise<void> {
+	// Close the previously-open session (when it is not the noop placeholder) so
+	// a swapped-in fresh instance does not leak the prior Chromium process/page.
+	if (sharedSession && sharedSession !== noopSession && sharedSession !== session) {
+		await sharedSession.close();
+	}
 	sharedSession = session;
 }
 
@@ -411,11 +419,118 @@ function errorMessage(err: unknown): string {
 }
 
 /**
+ * Parse a legacy IPv4 literal written in any accepted notation — dotted
+ * decimal/hex/octal, short forms (127.1), a single 32-bit integer
+ * (2130706433), or an IPv4-mapped IPv6 tail (::ffff:127.0.0.1 / ::ffff:7f00:1).
+ * Returns [a,b,c,d] octets or null when the host is not an IPv4 address.
+ */
+function parseIpv4Literal(host: string): number[] | null {
+	const value = host;
+	// IPv4-mapped IPv6: `::ffff:127.0.0.1` or the URL-normalized `::ffff:7f00:1`,
+	// plus the full 8-group `0:0:0:0:0:ffff:…` expansion. The trailing bits hold
+	// the embedded IPv4. `URL` normalizes dotted tails to colon-hex, so we accept
+	// both. Parse the tail 32 bits into IPv4 octets.
+	const mapped = /^(?:::)?(?:0:0:0:0:0:)?ffff:(.+)$/i.exec(host);
+	if (mapped) {
+		const tail = mapped[1]!;
+		if (tail.includes(".")) {
+			// Dotted IPv4 tail (`127.0.0.1`) — parse directly.
+			return parseDottedIpv4(tail);
+		}
+		// Colon-hex tail: `7f00:1` => last 32 bits `0x7f000001` => 127.0.0.1.
+		const groups = tail.split(":").filter(Boolean);
+		if (groups.length > 2) return null;
+		let n = 0;
+		for (const g of groups) {
+			if (!/^[0-9a-f]{1,4}$/i.test(g)) return null;
+			n = (n << 16) | Number.parseInt(g, 16);
+		}
+		return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+	}
+	return parseDottedIpv4(value);
+}
+
+/** Parse a legacy dotted IPv4 literal incl. short / integer / hex / octal forms. */
+function parseDottedIpv4(value: string): number[] | null {
+	const parts = value.split(".");
+	if (parts.length > 4) return null;
+	const octets: number[] = [];
+	for (const part of parts) {
+		if (!/^[0-9a-f]+$/i.test(part)) return null;
+		const n = parseRadixInt(part);
+		if (n === null) return null;
+		// A single-part “integer” form (`2130706433`) is the whole 32-bit address.
+		if (parts.length === 1) {
+			if (n < 0 || n > 0xffffffff) return null;
+			return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+		}
+		octets.push(n);
+	}
+	// Legacy in-addr short forms: fewer than 4 parts pads zeros left-to-right so
+	// the last part is the low (fourth) octet. `127.1` => 127.0.0.1;
+	// `127.0.1` => 127.0.0.1.
+	const [a, b, c, d] = octets;
+	if (parts.length === 2) {
+		if (d === undefined || a > 255 || d > 255) return null;
+		return [a, 0, 0, d];
+	}
+	if (parts.length === 3) {
+		if (c === undefined || a > 255 || b > 255 || c > 255) return null;
+		return [a, b, 0, c];
+	}
+	if (parts.length === 4) {
+		if (octets.some((o) => o > 255)) return null;
+		return octets;
+	}
+	return null;
+}
+
+/** Parse a numeric string as decimal, hex (0x), or octal (leading 0). */
+function parseRadixInt(part: string): number | null {
+	let p = part.toLowerCase();
+	if (p.startsWith("0x")) {
+		p = p.slice(2);
+		if (p.length === 0) return null;
+		const v = Number.parseInt(p, 16);
+		return Number.isNaN(v) ? null : v;
+	}
+	if (/^0[0-9]+$/.test(p)) {
+		// Leading-zero octal.
+		const v = Number.parseInt(p, 8);
+		return Number.isNaN(v) ? null : v;
+	}
+	if (!/^\d+$/.test(p)) return null;
+	const v = Number.parseInt(p, 10);
+	return Number.isNaN(v) ? null : v;
+}
+
+/** True when the 4 octets are a reserved/loopback/private (or unspecified) address. */
+function isReservedIpv4(octets: number[]): boolean {
+	const [a, b] = octets;
+	return (
+		a === 0 ||
+		a === 10 ||
+		a === 127 ||
+		(a === 169 && b === 254) ||
+		(a === 172 && b >= 16 && b <= 31) ||
+		(a === 192 && b === 168) ||
+		(a === 100 && b >= 64 && b <= 127)
+	);
+}
+
+/** Normalize common IPv6 loopback/unspecified expansions to their canonical `::…` form. */
+function normalizeIpv6Loopback(host: string): string | undefined {
+	if (host === "::" || host === "0:0:0:0:0:0:0:0") return "::";
+	if (host === "::1" || host === "0:0:0:0:0:0:0:1") return "::1";
+	return undefined;
+}
+
+/**
  * Detect private/reserved/loopback hosts a browser should not be pointed at
  * (SSRF guard). Returns an error string when blocked, or null when allowed.
  * Set PORCUPINE_BROWSER_ALLOW_INTERNAL=1 to opt out.
  */
-function internalHostError(target: string): string | null {
+export function internalHostError(target: string): string | null {
 	if (process.env.PORCUPINE_BROWSER_ALLOW_INTERNAL === "1") return null;
 	let u: URL;
 	try {
@@ -423,29 +538,21 @@ function internalHostError(target: string): string | null {
 	} catch {
 		return `could not parse url "${target}"`;
 	}
-	const host = u.hostname.toLowerCase().replace(/\.$/, "");
+	const rawHost = u.hostname.toLowerCase().replace(/\.$/, "");
+	const host = rawHost.replace(/^\[|\]$/g, "");
 	// Hostnames that resolve to the machine or a LAN.
 	if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) {
 		return `refusing internal host "${host}"`;
 	}
-	// IPv4 literal.
-	const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-	if (ipv4) {
-		const [a, b, c, d] = ipv4.slice(1).map(Number);
-		if ([a, b, c, d].some((n) => n < 0 || n > 255)) return `refusing invalid host "${host}"`;
-		const reserved =
-			a === 0 ||
-			a === 10 ||
-			a === 127 ||
-			(a === 169 && b === 254) ||
-			(a === 172 && b >= 16 && b <= 31) ||
-			(a === 192 && b === 168) ||
-			(a === 100 && b >= 64 && b <= 127);
-		if (reserved) return `refusing internal host "${host}"`;
-	}
-	// IPv6 loopback / unspecified.
-	if (host === "::1" || host === "0:0:0:0:0:0:0:1" || host === "::" || host === "0:0:0:0:0:0:0:0") {
+	// IPv4 literal (all notations, incl. short / integer / hex / octal forms).
+	const ipv4 = parseIpv4Literal(host);
+	if (ipv4 && isReservedIpv4(ipv4)) {
 		return `refusing internal host "${host}"`;
+	}
+	// IPv6 loopback / unspecified (canonical + full 8-group expansions).
+	if (host.includes(":")) {
+		const canonical = normalizeIpv6Loopback(host);
+		if (canonical) return `refusing internal host "${host}"`;
 	}
 	return null;
 }

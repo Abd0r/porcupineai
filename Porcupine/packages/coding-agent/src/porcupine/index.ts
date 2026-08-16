@@ -74,6 +74,7 @@ export {
 	type LearningToolEvidence,
 	listLearningProposals,
 	type PostTurnLearningObservation,
+	type PostTurnLearningOptions,
 	processPostTurnLearning,
 	rejectLearningProposal,
 } from "./learning-store.ts";

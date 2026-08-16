@@ -38,11 +38,15 @@ describe("/memory command", () => {
 
 	it("renders recent learning evidence with status when records exist", async () => {
 		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-memory-evidence-"));
-		await processPostTurnLearning(agentDir, {
-			userText: "Fix the build.",
-			tools: [{ name: "bash", isError: true }],
-			sessionId: "s-mem",
-		});
+		await processPostTurnLearning(
+			agentDir,
+			{
+				userText: "Fix the build.",
+				tools: [{ name: "bash", isError: true }],
+				sessionId: "s-mem",
+			},
+			{ enableCapabilityLearning: true },
+		);
 
 		const report = formatMemoryReport(agentDir);
 		expect(report).toContain("Learning evidence");

@@ -92,6 +92,26 @@ describe("tool-policy validation (Phase F)", () => {
 		expect(validateToolPolicy({ ...base, name: "bad-C", command: ["git", "-C", "/tmp", "status"] })).not.toEqual([]);
 	});
 
+	it("rejects destructive/invoking find primitives (-delete/-exec/-ok...)", () => {
+		const base = { kind: "composed" as const, description: "x" };
+		// read-only find is accepted.
+		expect(validateToolPolicy({ ...base, name: "ok-find", command: ["find", "src", "-name", "*.ts", "-print"] })).toEqual(
+			[],
+		);
+		// destructive / invoking primitives are denied.
+		expect(validateToolPolicy({ ...base, name: "bad-del", command: ["find", "src", "-delete"] })).not.toEqual([]);
+		expect(
+			validateToolPolicy({ ...base, name: "bad-exec", command: ["find", "src", "-exec", "rm", "{}", ";"] }),
+		).not.toEqual([]);
+		expect(
+			validateToolPolicy({ ...base, name: "bad-execdir", command: ["find", ".", "-execdir", "rm", "{}", ";"] }),
+		).not.toEqual([]);
+		expect(validateToolPolicy({ ...base, name: "bad-ok", command: ["find", ".", "-ok", "cp", "{}", "out"] })).not.toEqual([]);
+		expect(validateToolPolicy({ ...base, name: "bad-okdir", command: ["find", ".", "-okdir", "rm", "{}", ";"] })).not.toEqual(
+			[],
+		);
+	});
+
 	it("returns truncated stdout as a SUCCESS with a truncation marker", async () => {
 		const dir = tempDir("porcupine-policy-trunc-");
 		const payload = "A".repeat(10_000); // well past the 4,000 soft cap

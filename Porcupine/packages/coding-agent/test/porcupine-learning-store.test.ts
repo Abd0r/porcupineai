@@ -19,22 +19,42 @@ import {
 describe("autonomous post-turn learning", () => {
 	it("adds an explicit durable preference after the turn settles", async () => {
 		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-post-turn-"));
-		const result = await processPostTurnLearning(agentDir, {
-			userText: "Please remember that I prefer pnpm over npm.",
-			tools: [],
-			sessionId: "s1",
-		});
+		const result = await processPostTurnLearning(
+			agentDir,
+			{
+				userText: "Please remember that I prefer pnpm over npm.",
+				tools: [],
+				sessionId: "s1",
+			},
+			{ enableUserPatterns: true },
+		);
 		expect(result.userPatternChange?.path).toBe("USER.md");
 		expect(readFileSync(join(agentDir, "USER.md"), "utf8")).toContain("prefer pnpm over npm");
 	});
 
+	it("does NOT write USER.md when enableUserPatterns is off (agent-decided memory only)", async () => {
+		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-no-user-flag-"));
+		const result = await processPostTurnLearning(agentDir, {
+			userText: "Please remember that I prefer pnpm over npm.",
+			tools: [],
+			sessionId: "s-off",
+		});
+		// Default (and interactive-mode's hardcoded) flag is off: no USER.md write.
+		expect(result.userPatternChange).toBeUndefined();
+		expect(existsSync(join(agentDir, "USER.md"))).toBe(false);
+	});
+
 	it("autonomously activates technical memory after an explicit request", async () => {
 		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-learning-memory-"));
-		const result = await processPostTurnLearning(agentDir, {
-			userText: "Please remember that this repository uses pnpm workspace commands.",
-			tools: [],
-			sessionId: "s2",
-		});
+		const result = await processPostTurnLearning(
+			agentDir,
+			{
+				userText: "Please remember that this repository uses pnpm workspace commands.",
+				tools: [],
+				sessionId: "s2",
+			},
+			{ enableCapabilityLearning: true },
+		);
 		expect(result.records).toHaveLength(1);
 		expect(result.records[0]?.status).toBe("activated");
 		expect(readFileSync(join(agentDir, "MEMORY.md"), "utf8")).toContain("repository uses pnpm workspace commands");
@@ -42,11 +62,15 @@ describe("autonomous post-turn learning", () => {
 
 	it("autonomously activates a non-overwriting recovery skill after a tool failure", async () => {
 		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-learning-skill-"));
-		const result = await processPostTurnLearning(agentDir, {
-			userText: "Fix the build.",
-			tools: [{ name: "bash", isError: true }],
-			sessionId: "s3",
-		});
+		const result = await processPostTurnLearning(
+			agentDir,
+			{
+				userText: "Fix the build.",
+				tools: [{ name: "bash", isError: true }],
+				sessionId: "s3",
+			},
+			{ enableCapabilityLearning: true },
+		);
 		const record = result.records[0]!;
 		expect(record.status).toBe("activated");
 		expect(existsSync(join(agentDir, "skills", record.stack!, record.id, "SKILL.md"))).toBe(true);
@@ -67,22 +91,26 @@ describe("autonomous post-turn learning", () => {
 			userText: "Fix the build.",
 			tools: [{ name: "bash", isError: true }],
 		};
-		await processPostTurnLearning(agentDir, observation);
-		const repeated = await processPostTurnLearning(agentDir, observation);
+		await processPostTurnLearning(agentDir, observation, { enableCapabilityLearning: true });
+		const repeated = await processPostTurnLearning(agentDir, observation, { enableCapabilityLearning: true });
 		expect(repeated.records).toHaveLength(0);
 		expect(buildLearningGraph(agentDir).totalRecords).toBe(1);
 	});
 
 	it("wires tool outcomes into the evidence counter (recordSkillUse in production)", async () => {
 		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-record-use-"));
-		await processPostTurnLearning(agentDir, {
-			userText: "Fix the build.",
-			tools: [
-				{ name: "bash", isError: true },
-				{ name: "grep", isError: false },
-			],
-			sessionId: "s-record",
-		});
+		await processPostTurnLearning(
+			agentDir,
+			{
+				userText: "Fix the build.",
+				tools: [
+					{ name: "bash", isError: true },
+					{ name: "grep", isError: false },
+				],
+				sessionId: "s-record",
+			},
+			{ enableCapabilityLearning: true },
+		);
 		// learned-${slugify("recover-bash")} = learned-recover-bash
 		const failed = getSkillStats(agentDir, "learned-recover-bash");
 		expect(failed).toBeDefined();
@@ -108,10 +136,14 @@ describe("autonomous post-turn learning", () => {
 		const id = `memory-${slug}`;
 		// Seed MEMORY.md so the fact is already present, then create a PROPOSED
 		// memory proposal whose draft content duplicates it.
-		const seed = await processPostTurnLearning(agentDir, {
-			userText: `Please remember that ${fact}.`,
-			tools: [],
-		});
+		const seed = await processPostTurnLearning(
+			agentDir,
+			{
+				userText: `Please remember that ${fact}.`,
+				tools: [],
+			},
+			{ enableCapabilityLearning: true },
+		);
 		expect(seed.records[0]?.status).toBe("activated");
 
 		// Reset the first proposal to "proposed" so applyLearningProposal re-runs it.
@@ -165,11 +197,15 @@ describe("/learning", () => {
 
 	it("lists the append-only learning events newest-first", async () => {
 		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-learning-events-"));
-		await processPostTurnLearning(agentDir, {
-			userText: "Please remember that this repository uses pnpm workspace commands.",
-			tools: [{ name: "bash", isError: true }],
-			sessionId: "s-events",
-		});
+		await processPostTurnLearning(
+			agentDir,
+			{
+				userText: "Please remember that this repository uses pnpm workspace commands.",
+				tools: [{ name: "bash", isError: true }],
+				sessionId: "s-events",
+			},
+			{ enableCapabilityLearning: true },
+		);
 		const events = listLearningEvents(agentDir);
 		expect(events.length).toBeGreaterThanOrEqual(2);
 		expect(events[0]).toMatchObject({ type: "learning-activated" });

@@ -52,11 +52,15 @@ describe("evidence counter (Phase B)", () => {
 describe("learning store Phase B (autonomous + transparent)", () => {
 	it("tags new proposals with origin/grade/risk and emits feed entries on activation", async () => {
 		const dir = tempDir("porcupine-phase2-");
-		const result = await processPostTurnLearning(dir, {
-			userText: "Please remember that this repository uses pnpm workspaces.",
-			tools: [{ name: "bash", isError: true }],
-			sessionId: "s1",
-		});
+		const result = await processPostTurnLearning(
+			dir,
+			{
+				userText: "Please remember that this repository uses pnpm workspaces.",
+				tools: [{ name: "bash", isError: true }],
+				sessionId: "s1",
+			},
+			{ enableCapabilityLearning: true },
+		);
 
 		const memory = result.records.find((r) => r.kind === "memory");
 		expect(memory?.origin).toBe("porcupine-crafted");
@@ -91,11 +95,15 @@ describe("learning store Phase B (autonomous + transparent)", () => {
 
 	it("auto-rolls back a regressed activated skill", async () => {
 		const dir = tempDir("porcupine-auto-rollback-");
-		const result = await processPostTurnLearning(dir, {
-			userText: "Fix the build.",
-			tools: [{ name: "bash", isError: true }],
-			sessionId: "s2",
-		});
+		const result = await processPostTurnLearning(
+			dir,
+			{
+				userText: "Fix the build.",
+				tools: [{ name: "bash", isError: true }],
+				sessionId: "s2",
+			},
+			{ enableCapabilityLearning: true },
+		);
 		const skill = result.records.find((r) => r.kind === "skill");
 		expect(skill?.status).toBe("activated");
 		const skillFile = join(dir, "skills", skill!.stack!, skill!.id, "SKILL.md");

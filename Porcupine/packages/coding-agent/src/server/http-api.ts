@@ -229,8 +229,15 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 	if (session) registerSession(session);
 	for (const candidate of sessions ?? []) registerSession(candidate);
 
+	// Fail closed: without a token the server will not accept unauthenticated
+	// requests UNLESS the operator explicitly opted into tokenless loopback mode
+	// via PORCUPINE_SERVE_ALLOW_TOKENLESS=1. This prevents any local process (or
+	// a bare-Origin browser page) from driving the agent when no token is set.
+	const allowTokenless = process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS === "1";
 	const requireAuth = (req: IncomingMessage): boolean => {
-		if (!token) return true;
+		if (!token) {
+			return allowTokenless;
+		}
 		const header = req.headers.authorization;
 		if (typeof header !== "string") return false;
 		const expected = `Bearer ${token}`;
@@ -249,8 +256,10 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 	/**
 	 * Origin/CSRF guard: the server is plain HTTP bound to a loopback host. A
 	 * state-changing cross-origin call (token theft via a malicious browser page,
-	 * DNS rebinding) must be rejected. We allow requests with no Origin header;
-	 * when one is present it must match the server's own origin (scheme://host:port).
+	 * DNS rebinding) must be rejected. When an Origin header is present it must
+	 * match the server's own origin exactly — scheme (http:) + host + port.
+	 * `URL.host` is scheme-agnostic hostname:port, so together with the explicit
+	 * protocol check this validates the full origin.
 	 */
 	const isOriginAllowed = (req: IncomingMessage, origin: string): boolean => {
 		let originUrl: URL;
@@ -266,7 +275,9 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 		} catch {
 			return false;
 		}
-		return originUrl.host === reqUrl.host;
+		// Compare full origin: host includes hostname + port (default ports included
+		// by URL normalization), so scheme + host + port are all validated.
+		return originUrl.host === reqUrl.host && originUrl.hostname === reqUrl.hostname;
 	};
 
 	const server = createServer(async (req, res) => {
