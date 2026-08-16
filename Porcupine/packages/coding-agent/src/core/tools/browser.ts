@@ -13,6 +13,7 @@ import { Text } from "@porcupineai/tui";
 import { type Static, Type } from "typebox";
 import { theme } from "../../modes/interactive/theme/theme.ts";
 import { getBrowserSession } from "../../porcupine/browser.ts";
+import { composeVisualLayer } from "../../porcupine/browser-vision.ts";
 import type { ToolDefinition, ToolRenderContext, ToolRenderResultOptions } from "../extensions/types.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
@@ -253,22 +254,34 @@ export function createBrowserEvaluateToolDefinition(): ToolDefinition<
 	};
 }
 
-export function createBrowserSnapshotToolDefinition(): ToolDefinition<
-	typeof browserSnapshotSchema,
-	BrowserToolDetails | undefined
-> {
+export interface BrowserSnapshotToolOptions {
+	/** True when the active model cannot see images; adds an OCR visual layer. */
+	isTextOnlyModel?: () => boolean;
+}
+
+export function createBrowserSnapshotToolDefinition(
+	options: BrowserSnapshotToolOptions = {},
+): ToolDefinition<typeof browserSnapshotSchema, BrowserToolDetails | undefined> {
 	return {
 		name: "browser_snapshot",
 		label: "browser_snapshot",
 		description:
-			"Capture an AI-oriented ARIA snapshot of the current page. Returns semantic roles, accessible names, and stable refs such as aria-ref=e2 for resilient browser inspection and interaction.",
+			"Capture an AI-oriented ARIA snapshot of the current page. Returns semantic roles, accessible names, and stable refs such as aria-ref=e2 for resilient browser inspection and interaction. When the active model cannot see images, a VISUAL LAYER (OCR of the rendered page) is appended so canvas, image, and rendered text is readable.",
 		promptSnippet: "Inspect the page's semantic accessibility tree",
 		promptGuidelines: [
 			"Prefer browser_snapshot before browser_click/browser_type. Use returned refs with selectors such as aria-ref=e2 instead of brittle CSS when possible.",
 		],
 		parameters: browserSnapshotSchema,
 		async execute(_toolCallId, { depth, boxes }) {
-			return ackResult("browser_snapshot", await getBrowserSession().snapshot({ depth, boxes }));
+			const session = getBrowserSession();
+			const snapshotText = await session.snapshot({ depth, boxes });
+			if (options.isTextOnlyModel?.()) {
+				const visual = await session.visualText();
+				if (visual) {
+					return ackResult("browser_snapshot", composeVisualLayer(snapshotText, visual));
+				}
+			}
+			return ackResult("browser_snapshot", snapshotText);
 		},
 		renderCall(args) {
 			return renderCall("browser_snapshot", `depth=${String(args?.depth ?? "all")}`);

@@ -3435,6 +3435,11 @@ export class AgentSession {
 						list: (serverKey) => this._ensureMcpManager().listResources(serverKey),
 						read: (serverKey, uri) => this._ensureMcpManager().readResource(serverKey, uri),
 					},
+					// Text-only models get an OCR visual layer on browser snapshots so
+					// canvas/image/rendered text is readable (Florence-2 by default).
+					browser: {
+						isTextOnlyModel: () => !this.model?.input?.includes("image"),
+					},
 				});
 
 		this._baseToolDefinitions = new Map(

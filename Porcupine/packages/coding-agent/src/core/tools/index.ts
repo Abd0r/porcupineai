@@ -448,6 +448,13 @@ export interface ToolsOptions {
 	x?: XToolsOptions;
 	email?: EmailToolOptions;
 	inspectRuntime?: InspectRuntimeToolOptions;
+	browser?: BrowserToolOptions;
+}
+
+/** Options for the browser tool family (visual layer for text-only models). */
+export interface BrowserToolOptions {
+	/** True when the active model cannot see images; browser_snapshot adds an OCR layer. */
+	isTextOnlyModel?: () => boolean;
 }
 
 export function createToolDefinition(toolName: ToolName, cwd: string, options?: ToolsOptions): ToolDef {
@@ -579,7 +586,7 @@ export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): R
 		browser_extract: createBrowserExtractToolDefinition(),
 		browser_screenshot: createBrowserScreenshotToolDefinition(),
 		browser_evaluate: createBrowserEvaluateToolDefinition(),
-		browser_snapshot: createBrowserSnapshotToolDefinition(),
+		browser_snapshot: createBrowserSnapshotToolDefinition({ isTextOnlyModel: options?.browser?.isTextOnlyModel }),
 		browser_resize: createBrowserResizeToolDefinition(),
 		browser_wait: createBrowserWaitToolDefinition(),
 		browser_diagnostics: createBrowserDiagnosticsToolDefinition(),
