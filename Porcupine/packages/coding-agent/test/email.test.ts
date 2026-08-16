@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createRequire } from "node:module";
 import {
+	createEmailClient,
 	type EmailClient,
 	type EmailDraftResult,
 	type EmailFolderCounts,
@@ -162,6 +164,54 @@ describe("buildEmailCommandOutput", () => {
 		expect(out).toContain("Could not read message 1");
 		expect(out).toContain("connection refused");
 		expect(out).not.toContain("at ");
+	});
+});
+
+describe("createEmailClient IMAP timeout aborts the underlying op", () => {
+	const cacheKey = createRequire(import.meta.url).resolve("imapflow");
+	// Force-load the real module into the CommonJS require cache (keyed by the
+	// same resolved path email.ts will hit), so we can safely override it and
+	// restore it afterwards.
+	const original = require(cacheKey);
+
+	afterEach(() => {
+		// Restore the real imapflow module for any later tests in the run.
+		require.cache[cacheKey]!.exports = original;
+		vi.restoreAllMocks();
+	});
+
+	it("tears down the socket (close) instead of hanging logout when connect stalls", async () => {
+		const closes = vi.fn();
+		const fakeImapFlow = {
+			ImapFlow: class {
+				connect(): Promise<void> {
+					// Never resolves — simulates a network stall.
+					return new Promise(() => {});
+				}
+				logout(): Promise<void> {
+					return new Promise(() => {}); // would hang forever if awaited
+				}
+				close(): void {
+					closes();
+				}
+			},
+		};
+		require.cache[cacheKey]!.exports = fakeImapFlow;
+
+		const client = createEmailClient({
+			host: "imap.example.com",
+			port: 993,
+			secure: true,
+			user: "me@example.com",
+			draftsFolder: "Drafts",
+			sentFolder: "Sent",
+			timeoutMs: 50,
+		});
+
+		// The connect must settle (reject with a timeout) rather than hang, and the
+		// hung socket is torn down via close() — not left leaking.
+		await expect(client.connect()).rejects.toThrow(/timed out/);
+		expect(closes).toHaveBeenCalled();
 	});
 });
 

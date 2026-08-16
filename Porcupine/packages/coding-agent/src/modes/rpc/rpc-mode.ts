@@ -401,32 +401,45 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			case "prompt": {
 				// Start prompt handling immediately, but emit the authoritative response only after
 				// prompt preflight succeeds. Queued and immediately handled prompts also count as success.
-				let preflightSucceeded = false;
+				// Track a single `settled` latch so every path emits exactly one response, and a
+				// `preflightExplicitlyFailed` flag so a preflight that reports failure without a
+				// rejection (the failure is only surfaced through the callback) never falls through
+				// to the false-success fallback.
+				let settled = false;
+				let preflightExplicitlyFailed = false;
 				void session
 					.prompt(command.message, {
 						images: command.images,
 						streamingBehavior: command.streamingBehavior,
 						source: "rpc",
 						preflightResult: (didSucceed) => {
+							if (settled) return;
 							if (didSucceed) {
-								preflightSucceeded = true;
+								settled = true;
 								output(success(id, "prompt"));
+							} else {
+								preflightExplicitlyFailed = true;
 							}
 						},
 					})
 					.catch((e) => {
-						if (!preflightSucceeded) {
-							preflightSucceeded = true; // mark settled so we never double-emit
+						if (!settled) {
+							settled = true; // mark settled so we never double-emit
 							output(error(id, "prompt", e.message));
 						}
 					})
 					.finally(() => {
-						// If prompt() resolved normally but the preflight callback never fired,
+						// If prompt() resolved normally but the preflight never emitted a success,
 						// we would otherwise emit nothing and the client hangs forever. Emit a
-						// fallback success so every prompt path yields exactly one response.
-						if (!preflightSucceeded) {
-							preflightSucceeded = true;
-							output(success(id, "prompt"));
+						// fallback so every prompt path yields exactly one response. If the preflight
+						// explicitly reported failure, surface an error — never a false SUCCESS.
+						if (!settled) {
+							settled = true;
+							if (preflightExplicitlyFailed) {
+								output(error(id, "prompt", "Prompt preflight failed."));
+							} else {
+								output(success(id, "prompt"));
+							}
 						}
 					});
 				return undefined;

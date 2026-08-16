@@ -398,6 +398,16 @@ function expandHome(token: string): string {
 	return token;
 }
 
+/** True when the command changes the working directory (`cd`/`pushd`/`popd`).
+ * A directory change before the `rm` makes the effective cwd differ from the
+ * session cwd, so targets cannot be safely resolved for workspace-scope.
+ */
+function containsDirectoryChange(command: string): boolean {
+	// Word-boundary match at a command/segment/space boundary so we catch
+	// `cd .. && rm -rf x` without matching `cd` inside a quoted arg/path token.
+	return /(^|[;&|]|\s)(?:cd|pushd|popd)\b/.test(command);
+}
+
 /**
  * Infer the scope of a recursive delete: protected paths (hardline), inside the
  * workspace (agent's own domain), or outside (flagged). Returns null when the
@@ -410,6 +420,11 @@ export function analyzeRmScope(
 ): { protected?: string; insideWorkspace: boolean } | null {
 	const targets = extractRmTargets(command);
 	if (targets.length === 0) return null;
+	// Fail closed on directory changes: `cd / && rm -rf x` (or any `cd`/`pushd`/
+	// `popd`) resolves the targets against the wrong directory once the shell
+	// changes cwd. We do not track the shell's effective cwd, so a cd-containing
+	// rm is conservatively never "inside the workspace" - it cannot auto-approve.
+	if (containsDirectoryChange(command)) return { insideWorkspace: false };
 	const resolved = targets.map((target) => {
 		const expanded = expandHome(target);
 		return { path: resolve(cwd, expanded), unresolved: expanded.includes("$") };

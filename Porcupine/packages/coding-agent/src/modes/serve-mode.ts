@@ -93,7 +93,16 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 
 	process.stderr.write(`Porcupine serve listening on http://${options.host ?? "127.0.0.1"}:${handle.port()}\n`);
 	if (!options.token) {
-		process.stderr.write("No token set; only loopback connections can reach this server.\n");
+		if (process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS !== "1") {
+			// Fail closed: no token and no explicit opt-in means every request is
+			// rejected (401) by the server. Prompt the operator to set a token.
+			process.stderr.write(
+				"Error: no serve token set. Requests will be rejected (401). Pass --token, set PORCUPINE_SERVER_TOKEN,\n" +
+					"or opt into tokenless loopback mode with PORCUPINE_SERVE_ALLOW_TOKENLESS=1.\n",
+			);
+		} else {
+			process.stderr.write("Tokenless loopback mode is enabled (PORCUPINE_SERVE_ALLOW_TOKENLESS=1).\n");
+		}
 	}
 
 	await new Promise<void>((resolve) => {

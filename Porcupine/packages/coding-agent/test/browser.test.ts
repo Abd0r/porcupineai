@@ -61,7 +61,7 @@ import {
 	createBrowserTypeToolDefinition,
 	createBrowserWaitToolDefinition,
 } from "../src/core/tools/browser.ts";
-import { BrowserSession, getBrowserSession, resetBrowserSession } from "../src/porcupine/browser.ts";
+import { BrowserSession, getBrowserSession, internalHostError, resetBrowserSession, setBrowserSession } from "../src/porcupine/browser.ts";
 
 const chromiumMock = playwright.chromium as unknown as {
 	launch: ReturnType<typeof vi.fn>;
@@ -281,8 +281,7 @@ describe("tool execution through shared session", () => {
 		const session = new BrowserSession(500);
 		await session.launch({ headless: true, timeoutMs: 500 });
 		// replace shared singleton with our opened session
-		const mod = await import("../src/porcupine/browser.ts");
-		(mod as { setBrowserSession: (s: BrowserSession) => void }).setBrowserSession(session);
+		await setBrowserSession(session);
 		const res = await createBrowserClickToolDefinition().execute(
 			"id",
 			{ selector: "#btn" },
@@ -306,10 +305,52 @@ describe("shared session singleton", () => {
 		const first = getBrowserSession();
 		expect(first.isOpen()).toBe(false);
 		const replacement = new BrowserSession();
-		const mod = await import("../src/porcupine/browser.ts");
-		(mod as { setBrowserSession: (s: BrowserSession) => void }).setBrowserSession(replacement);
+		await setBrowserSession(replacement);
 		expect(getBrowserSession()).toBe(replacement);
 		await resetBrowserSession();
 		expect(getBrowserSession()).not.toBe(replacement);
+	});
+});
+
+describe("SSRF guard (internalHostError)", () => {
+	const original = process.env.PORCUPINE_BROWSER_ALLOW_INTERNAL;
+	afterEach(() => {
+		if (original === undefined) delete process.env.PORCUPINE_BROWSER_ALLOW_INTERNAL;
+		else process.env.PORCUPINE_BROWSER_ALLOW_INTERNAL = original;
+	});
+
+	it.each([
+		"http://127.0.0.1/secret",
+		"http://127.0.0.1:8080/x",
+		"http://localhost/secret",
+		"http://10.0.0.5/x",
+		"http://192.168.1.1/x",
+		"http://[::1]/x",
+	])("blocks %s", (url) => {
+		expect(internalHostError(url)).not.toBeNull();
+	});
+
+	it.each([
+		"http://127.1/x", // short 2-part loopback
+		"http://127.0.1/x", // short 3-part loopback
+		"http://2130706433/x", // single 32-bit loopback
+		"http://0x7f000001/x", // hex loopback
+		"http://0177.0.0.1/x", // octal-prefixed loopback
+		"http://0x7f.1/x", // hex-prefixed dotted loopback
+		"http://[::ffff:127.0.0.1]/x", // IPv4-mapped loopback
+		"http://[::ffff:7f00:1]/x", // IPv4-mapped loopback (hex tail)
+	])("blocks non-dotted/alt-notation loopback %s", (url) => {
+		expect(internalHostError(url)).not.toBeNull();
+	});
+
+	it("allows public hosts", () => {
+		expect(internalHostError("https://example.com/")).toBeNull();
+		expect(internalHostError("https://93.184.216.34/")).toBeNull();
+	});
+
+	it("honors PORCUPINE_BROWSER_ALLOW_INTERNAL=1 opt-out", () => {
+		process.env.PORCUPINE_BROWSER_ALLOW_INTERNAL = "1";
+		expect(internalHostError("http://127.0.0.1/secret")).toBeNull();
+		expect(internalHostError("http://localhost/secret")).toBeNull();
 	});
 });
