@@ -220,8 +220,15 @@ export function convertResponsesMessages<TApi extends Api>(
 			for (const block of msg.content) {
 				if (block.type === "thinking") {
 					if (block.thinkingSignature) {
-						const reasoningItem = JSON.parse(block.thinkingSignature) as ResponseReasoningItem;
-						output.push(reasoningItem);
+						// Completions-style runtimes may store a plain signature string
+						// (e.g. "reasoning_content") rather than a JSON ResponseReasoningItem.
+						// Degrade gracefully (skip the reasoning item) instead of throwing.
+						try {
+							const reasoningItem = JSON.parse(block.thinkingSignature) as ResponseReasoningItem;
+							output.push(reasoningItem);
+						} catch {
+							// Non-JSON signature: leave it out of the replayed response.
+						}
 					}
 				} else if (block.type === "text") {
 					const textBlock = block as TextContent;

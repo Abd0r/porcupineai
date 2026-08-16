@@ -585,12 +585,20 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 					output.responseId = event.message.id;
 					// Capture initial token usage from message_start event
 					// This ensures we have input token counts even if the stream is aborted early
-					output.usage.input = event.message.usage.input_tokens || 0;
 					output.usage.output = event.message.usage.output_tokens || 0;
 					output.usage.cacheRead = event.message.usage.cache_read_input_tokens || 0;
 					output.usage.cacheWrite = event.message.usage.cache_creation_input_tokens || 0;
 					output.usage.cacheWrite1h = event.message.usage.cache_creation?.ephemeral_1h_input_tokens || 0;
-					// Anthropic doesn't provide total_tokens, compute from components
+					// Anthropic's input_tokens already includes cache_read and cache_creation,
+					// so subtract them to keep input disjoint from the cache buckets (matches the
+					// OpenAI Responses path) and avoid double-charging cache in cost.
+					output.usage.input = Math.max(
+						0,
+						(event.message.usage.input_tokens || 0) - output.usage.cacheRead - output.usage.cacheWrite,
+					);
+					// Anthropic doesn't provide total_tokens, compute from components.
+					// totalTokens = fresh(uncached) input + output + cache equals exactly what
+					// the provider reported (input_tokens + output_tokens) — no double-count.
 					output.usage.totalTokens =
 						output.usage.input + output.usage.output + output.usage.cacheRead + output.usage.cacheWrite;
 					calculateCost(model, output.usage);
@@ -726,9 +734,6 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 					// Only update usage fields if present (not null).
 					// Preserves input_tokens from message_start when proxies omit it in message_delta.
 					if (event.usage) {
-						if (event.usage.input_tokens != null) {
-							output.usage.input = event.usage.input_tokens;
-						}
 						if (event.usage.output_tokens != null) {
 							output.usage.output = event.usage.output_tokens;
 						}
@@ -741,13 +746,24 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 						// Anthropic reports reasoning tokens in `output_tokens_details.thinking_tokens` on the
 						// final message_delta usage (a subset of output_tokens). SDK 0.91.1 omits the field from
 						// its Usage type, so read it through a narrow cast. Verified against the live API.
-						const thinkingTokens = (event.usage as { output_tokens_details?: { thinking_tokens?: number } })
-							.output_tokens_details?.thinking_tokens;
+						const thinkingTokens =
+							(event.usage as { output_tokens_details?: { thinking_tokens?: number } })
+								.output_tokens_details?.thinking_tokens;
 						if (thinkingTokens != null) {
 							output.usage.reasoning = thinkingTokens;
 						}
+						if (event.usage.input_tokens != null) {
+							// input_tokens already includes cache_read + cache_creation, so recompute
+							// the uncached portion against the current cache buckets to avoid
+							// double-counting (mirrors the OpenAI Responses usage subtraction).
+							output.usage.input = Math.max(
+								0,
+								event.usage.input_tokens - output.usage.cacheRead - output.usage.cacheWrite,
+							);
+						}
 					}
-					// Anthropic doesn't provide total_tokens, compute from components
+					// Anthropic doesn't provide total_tokens, compute from components.
+					// totalTokens = fresh(uncached) input + output + cache — no double-count of cache.
 					output.usage.totalTokens =
 						output.usage.input + output.usage.output + output.usage.cacheRead + output.usage.cacheWrite;
 					calculateCost(model, output.usage);
