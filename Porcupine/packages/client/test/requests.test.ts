@@ -1,5 +1,4 @@
 import { describe, expect, test, vi } from "vitest";
-import { PorcupineClient } from "../src/index.ts";
 import { PorcupineRequestTimeoutError } from "../src/errors.ts";
 import type { ConnectionStateChange } from "../src/types.ts";
 import { collectRequests, connectClient, MemoryByteServer, sessionSnapshot } from "./support.ts";
