@@ -237,7 +237,8 @@ export class McpManager {
 			}
 
 			this.running.set(resolved.serverKey, entry);
-			entry.health = resolved.type === "http" && resolved.oauth ? "connected" : "connected";
+			entry.health = "connected";
+			entry.restartAttempts = 0; // Healthy again: reset the reconnect backoff.
 			entry.oauthState = resolved.type === "http" ? this.oauthStateFor(resolved) : undefined;
 			this.options.registrar.setServerTools(resolved.serverKey, defs);
 		} catch (error) {
@@ -328,9 +329,14 @@ export class McpManager {
 		entry.restartAttempts += 1;
 		entry.restartTimer = setTimeout(() => {
 			if (this.shuttingDown) return;
-			void this.reload().then(() => {
-				// reload() handles reconnection.
-			});
+			void this.reload()
+				.then(() => {
+					// reload() handles reconnection.
+				})
+				.catch(() => {
+					// A reload failure (e.g. malformed config) must not become an
+					// unhandled promise rejection; the backoff timer retries later.
+				});
 		}, delay);
 	}
 
