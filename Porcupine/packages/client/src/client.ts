@@ -55,6 +55,7 @@ export class PorcupineClient {
 	readonly #connection: Connection;
 	readonly #state: ClientState;
 	readonly #pendingRequests = new Map<string, PendingRequest>();
+	readonly #timedOutRequestIds = new Set<string>();
 	readonly #sessionLeaseCounts = new Map<string, number>();
 	readonly #exclusiveSessionLeases = new Map<string, SessionLeaseToken>();
 	readonly #sessionLeaseGenerations = new Map<string, number>();
@@ -203,9 +204,9 @@ export class PorcupineClient {
 		const id = `request-${++this.#requestSequence}`;
 		const { promise, resolve, reject } = createPromiseResolvers<CommandResult>();
 		const timeoutId = setTimeout(() => {
-			this.#takePendingRequest(id)?.reject(
-				new PorcupineRequestTimeoutError(command.command, this.#requestTimeoutMs()),
-			);
+			const timedOut = this.#takePendingRequest(id);
+			timedOut?.reject(new PorcupineRequestTimeoutError(command.command, this.#requestTimeoutMs()));
+			if (timedOut) this.#timedOutRequestIds.add(id);
 		}, this.#requestTimeoutMs());
 		// Never pin the event loop: the harness shares this process with the TUI,
 		// and an unref'd timer is cleared on response/disconnect anyway.
@@ -324,6 +325,10 @@ export class PorcupineClient {
 		}
 		const pending = this.#takePendingRequest(message.id);
 		if (!pending) {
+			// A response for a request that already timed out is a stale/duplicate from a
+			// busy server, not a protocol violation. Drop it instead of tearing down the
+			// whole connection (which would reject every other in-flight request).
+			if (this.#timedOutRequestIds.delete(message.id)) return;
 			this.#connection.fail(new ProtocolValidationError("Response has no matching request"));
 			return;
 		}
@@ -347,6 +352,9 @@ export class PorcupineClient {
 		if (change.state === "disconnected") {
 			this.#state.clearAttachments();
 			this.#invalidateAllSessionLeases();
+			// Timed-out request ids no longer need stale-response tracking once the
+			// connection is gone.
+			this.#timedOutRequestIds.clear();
 			this.#rejectPendingRequests(change.error ?? new PorcupineDisconnectedError());
 		}
 		this.#notifyConnectionStateListeners(change);
