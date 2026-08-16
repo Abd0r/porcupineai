@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type ServeApiSession, startServeApi } from "../src/server/http-api.ts";
 
-
 /**
  * Multi-session serve API surface (Feature A). The server can run several
  * independent sessions: create/list/select by id, per-session prompts, scoped

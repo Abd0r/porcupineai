@@ -4,8 +4,8 @@
  * compacted sub-agent context cannot land above the compaction headroom.
  */
 import { describe, expect, it } from "vitest";
-import { keepRecentTail } from "../src/porcupine/subagent.ts";
 import { estimateTokens } from "../src/harness/compaction/compaction.ts";
+import { keepRecentTail } from "../src/porcupine/subagent.ts";
 import type { AgentMessage } from "../src/types.ts";
 
 function title() {

@@ -231,17 +231,17 @@ describe("bounded session branch queries", () => {
 				(await session.findEntriesOnBranch({ start: tail, stopAtId: "does-not-exist" })).map((e) => e.id),
 			).toEqual([]);
 			expect(
-				(
-					await session.findEntriesOnBranch({ start: tail, stopAtId: "does-not-exist", order: "oldestFirst" })
-				).map((e) => e.id),
+				(await session.findEntriesOnBranch({ start: tail, stopAtId: "does-not-exist", order: "oldestFirst" })).map(
+					(e) => e.id,
+				),
 			).toEqual([]);
 			expect(
 				(await session.findEntriesOnBranch({ start: tail, stopAtType: "compaction" })).map((e) => e.id),
 			).toEqual([]);
 			expect(
-				(
-					await session.findEntriesOnBranch({ start: tail, stopAtType: "compaction", order: "oldestFirst" })
-				).map((e) => e.id),
+				(await session.findEntriesOnBranch({ start: tail, stopAtType: "compaction", order: "oldestFirst" })).map(
+					(e) => e.id,
+				),
 			).toEqual([]);
 			void root;
 			void child;

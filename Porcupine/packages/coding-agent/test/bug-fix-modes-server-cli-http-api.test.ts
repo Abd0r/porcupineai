@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type ServeApiSession, startServeApi } from "../src/server/http-api.ts";
 
-
 /**
  * Regression tests for BUG-01 (permission double-response race after the 60s
  * timeout) and BUG-02 (constant-time bearer-token comparison).

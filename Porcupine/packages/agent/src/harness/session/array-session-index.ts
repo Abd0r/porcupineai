@@ -146,9 +146,7 @@ export class ArraySessionIndex {
 		// no rows); mirror that here instead of silently returning the whole branch.
 		if (
 			stopRequested &&
-			!pathFromStart.some(
-				(entry) => entry.id === query.stopAtId || entry.type === query.stopAtType,
-			)
+			!pathFromStart.some((entry) => entry.id === query.stopAtId || entry.type === query.stopAtType)
 		) {
 			return [];
 		}

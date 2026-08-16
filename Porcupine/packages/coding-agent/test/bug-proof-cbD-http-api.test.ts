@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type ServeApiSession, startServeApi } from "../src/server/http-api.ts";
 
-
 /**
  * Part-D deep review repro: server/http-api.ts body/status-code correctness.
  * A request body over MAX_BODY_BYTES (1 MiB) is rejected in readBody() with
