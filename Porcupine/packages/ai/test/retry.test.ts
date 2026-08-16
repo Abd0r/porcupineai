@@ -209,4 +209,30 @@ describe("retryAssistantCall", () => {
 		expect(produce).toHaveBeenCalledTimes(1);
 		expect(onRetryFinished).toHaveBeenCalledWith(false, 1, "terminated");
 	});
+
+	it("removes the backoff abort listener after a successful retry sleep (BUG-9)", async () => {
+		vi.useFakeTimers();
+		const removeSpy = vi.spyOn(AbortSignal.prototype, "removeEventListener");
+		try {
+			const controller = new AbortController();
+			let n = 0;
+			const produce = vi.fn(async () => {
+				n++;
+				return n === 1
+					? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
+					: fauxAssistantMessage("recovered");
+			});
+			const policy: RetryPolicy = { enabled: true, maxRetries: 3, baseDelayMs: 10 };
+			const p = retryAssistantCall(produce, policy, controller.signal);
+			await vi.advanceTimersByTimeAsync(10); // backoff sleep completes, then retried call succeeds
+
+			const result = await p;
+			expect(result.content).toEqual([{ type: "text", text: "recovered" }]);
+			// The happy path must detach the abort listener so it does not leak across retries.
+			expect(removeSpy).toHaveBeenCalled();
+		} finally {
+			removeSpy.mockRestore();
+			vi.useRealTimers();
+		}
+	});
 });

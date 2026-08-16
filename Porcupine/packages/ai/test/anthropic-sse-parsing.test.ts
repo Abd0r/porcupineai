@@ -3,7 +3,7 @@ import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import { getModel } from "../src/compat.ts";
-import type { Context, ToolCall } from "../src/types.ts";
+import type { Context, Model, ToolCall } from "../src/types.ts";
 
 function createSseResponse(events: Array<{ event: string; data: string }>): Response {
 	const body = events.map(({ event, data }) => `event: ${event}\ndata: ${data}\n`).join("\n");
@@ -420,5 +420,94 @@ describe("Anthropic raw SSE parsing", () => {
 		expect(result.stopReason).toBe("stop");
 		expect(result.errorMessage).toBeUndefined();
 		expect(result.content).toEqual([{ type: "text", text: "Hello" }]);
+	});
+
+	it("does not double-count cache tokens in input or totalTokens (BUG-1)", async () => {
+		const model = {
+			id: "claude-custom",
+			name: "Claude Custom",
+			api: "anthropic-messages",
+			provider: "anthropic",
+			baseUrl: "https://api.anthropic.com/v1",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 2, output: 10, cacheRead: 0.5, cacheWrite: 1 },
+			contextWindow: 200000,
+			maxTokens: 8192,
+		} as unknown as Model<"anthropic-messages">;
+		const context: Context = {
+			messages: [{ role: "user", content: "hi", timestamp: Date.now() }],
+		};
+		const response = createSseResponse([
+			{
+				event: "message_start",
+				data: JSON.stringify({
+					type: "message_start",
+					message: {
+						id: "msg_cache",
+						usage: {
+							input_tokens: 100,
+							output_tokens: 0,
+							cache_read_input_tokens: 40,
+							cache_creation_input_tokens: 10,
+						},
+					},
+				}),
+			},
+			{
+				event: "content_block_start",
+				data: JSON.stringify({
+					type: "content_block_start",
+					index: 0,
+					content_block: { type: "text", text: "" },
+				}),
+			},
+			{
+				event: "content_block_delta",
+				data: JSON.stringify({
+					type: "content_block_delta",
+					index: 0,
+					delta: { type: "text_delta", text: "Hello" },
+				}),
+			},
+			{
+				event: "content_block_stop",
+				data: JSON.stringify({ type: "content_block_stop", index: 0 }),
+			},
+			{
+				event: "message_delta",
+				data: JSON.stringify({
+					type: "message_delta",
+					delta: { stop_reason: "end_turn" },
+					usage: {
+						input_tokens: 100,
+						output_tokens: 5,
+						cache_read_input_tokens: 40,
+						cache_creation_input_tokens: 10,
+					},
+				}),
+			},
+			{ event: "message_stop", data: JSON.stringify({ type: "message_stop" }) },
+		]);
+
+		const streaming = streamAnthropic(model, context, {
+			client: createFakeAnthropicClient(response),
+		});
+		const result = await streaming.result();
+
+		// Anthropic's input_tokens already includes cache_read + cache_creation.
+		// input must hold only the uncached tokens so cost is not double-charged.
+		expect(result.usage.input).toBe(50); // 100 - 40 - 10
+		expect(result.usage.cacheRead).toBe(40);
+		expect(result.usage.cacheWrite).toBe(10);
+		expect(result.usage.output).toBe(5);
+		// totalTokens = uncached input + output + cache (no double-count).
+		expect(result.usage.totalTokens).toBe(105);
+
+		// The input rate must be applied to the 50 uncached tokens, not the
+		// provider-reported 100 that already includes cache.
+		expect(result.usage.cost.input).toBeCloseTo((2 / 1_000_000) * 50, 10);
+		expect(result.usage.cost.cacheRead).toBeCloseTo((0.5 / 1_000_000) * 40, 10);
+		expect(result.usage.cost.cacheWrite).toBeCloseTo((1 / 1_000_000) * 10, 10);
 	});
 });
