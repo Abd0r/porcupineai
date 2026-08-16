@@ -239,3 +239,7 @@ Built on top of [Pi](https://github.com/earendil-works/pi) (MIT).
   <a href="https://github.com/Abd0r/porcupineai/releases">Releases</a> ·
   <a href="LICENSE">MIT License</a>
 </p>
+
+<p align="center">
+  <a href="https://x.com/SyedAbdurR2hman"><img src="https://img.shields.io/badge/X-%40SyedAbdurR2hman-000000?style=flat-square&logo=X&logoColor=white" alt="Follow on X"></a>
+</p>
