@@ -61,7 +61,13 @@ import {
 	createBrowserTypeToolDefinition,
 	createBrowserWaitToolDefinition,
 } from "../src/core/tools/browser.ts";
-import { BrowserSession, getBrowserSession, internalHostError, resetBrowserSession, setBrowserSession } from "../src/porcupine/browser.ts";
+import {
+	BrowserSession,
+	getBrowserSession,
+	internalHostError,
+	resetBrowserSession,
+	setBrowserSession,
+} from "../src/porcupine/browser.ts";
 
 const chromiumMock = playwright.chromium as unknown as {
 	launch: ReturnType<typeof vi.fn>;

@@ -155,8 +155,7 @@ describe("SAFETY PROOF (FIXED): serve API authentication model", () => {
 			expect((await http("GET", port, "/health")).status).toBe(401);
 			expect((await http("POST", port, "/session")).status).toBe(401);
 			expect(
-				(await http("POST", port, "/session/sess-fixed/message", { body: JSON.stringify({ text: "x" }) }))
-					.status,
+				(await http("POST", port, "/session/sess-fixed/message", { body: JSON.stringify({ text: "x" }) })).status,
 			).toBe(401);
 		} finally {
 			if (prev === undefined) delete process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;
@@ -195,17 +194,21 @@ describe("SAFETY PROOF (FIXED): serve API authentication model", () => {
 			const matchingOrigin = `http://127.0.0.1:${port}`;
 			// Mismatched host is rejected even when tokenless.
 			expect(
-				(await http("POST", port, "/session", {
-					origin: "http://127.0.0.2:9999",
-					body: "{}",
-				})).status,
+				(
+					await http("POST", port, "/session", {
+						origin: "http://127.0.0.2:9999",
+						body: "{}",
+					})
+				).status,
 			).toBe(403);
 			// Matching full origin (scheme + host + port) is allowed.
 			expect(
-				(await http("POST", port, "/session", {
-					origin: matchingOrigin,
-					body: "{}",
-				})).status,
+				(
+					await http("POST", port, "/session", {
+						origin: matchingOrigin,
+						body: "{}",
+					})
+				).status,
 			).toBe(201);
 		} finally {
 			if (prev === undefined) delete process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;

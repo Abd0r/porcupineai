@@ -442,9 +442,7 @@ async function consumeChatStream(
 			// Boolean() wrapper, so pluck the real id into a `string | undefined` and
 			// branch on that so both `callId` and `key` stay typed as `string`.
 			const realId = toolCall.id && toolCall.id !== "null" ? toolCall.id : undefined;
-			const callId = realId
-				? realId
-				: deriveMistralToolCallId(`toolcall:${toolCallSequence++}`, 0);
+			const callId = realId ? realId : deriveMistralToolCallId(`toolcall:${toolCallSequence++}`, 0);
 			const key = realId ? `${callId}:${toolCall.index || 0}` : callId;
 			const existingIndex = toolBlocksByKey.get(key);
 			let block: (ToolCall & { partialArgs?: string }) | undefined;

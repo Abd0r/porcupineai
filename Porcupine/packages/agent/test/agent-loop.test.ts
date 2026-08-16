@@ -1387,7 +1387,11 @@ describe("agentLoop with AgentMessage", () => {
 		const end = events.find((event) => event.type === "agent_end");
 		if (!end || end.type !== "agent_end") throw new Error("missing agent_end");
 		expect(end.messages).toHaveLength(1);
-		expect(end.messages[0]).toMatchObject({ role: "assistant", stopReason: "error", errorMessage: "provider exploded" });
+		expect(end.messages[0]).toMatchObject({
+			role: "assistant",
+			stopReason: "error",
+			errorMessage: "provider exploded",
+		});
 		expect(await stream.result()).toEqual(end.messages);
 	});
 

@@ -26,7 +26,7 @@ type AuthFileReadState = {
 	reload?: Promise<AuthStorageData>;
 };
 
-let sharedAuthFileReadStates = new Map<string, AuthFileReadState>();
+const sharedAuthFileReadStates = new Map<string, AuthFileReadState>();
 
 function getFileRevision(path: string): string | undefined {
 	try {

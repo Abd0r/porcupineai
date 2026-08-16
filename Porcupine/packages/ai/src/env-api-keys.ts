@@ -58,9 +58,7 @@ function hasVertexAdcCredentials(env?: ProviderEnv): boolean {
 			found = _existsSync(gacPath);
 		} else {
 			// Fall back to default ADC path (lazy evaluation)
-			found = _existsSync(
-				_join(_homedir(), ".config", "gcloud", "application_default_credentials.json"),
-			);
+			found = _existsSync(_join(_homedir(), ".config", "gcloud", "application_default_credentials.json"));
 		}
 		// Only cache a positive result. In Node a user may run
 		// `gcloud auth application-default login` mid-process, so a not-yet-existing

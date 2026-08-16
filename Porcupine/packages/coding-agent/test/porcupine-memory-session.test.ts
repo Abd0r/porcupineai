@@ -76,7 +76,9 @@ describe("persistent memory", () => {
 	it("remaining count is computed by entry boundary, not substring overlap (regression)", () => {
 		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-mem-count-"));
 		// entry 1 (included, short) contains the phrase "concise replies" inline.
-		mutateMemory(agentDir, "add", "user", { content: "Working style: keep it terse and use concise replies in every message." });
+		mutateMemory(agentDir, "add", "user", {
+			content: "Working style: keep it terse and use concise replies in every message.",
+		});
 		// entry 2 (huge filler) forces trunk to cut before the short entry 3.
 		mutateMemory(agentDir, "add", "user", { content: `Filler ${`z`.repeat(USER_PROMPT_CHAR_LIMIT)}` });
 		// entry 3 (cut off) is exactly the substring "concise replies" that also

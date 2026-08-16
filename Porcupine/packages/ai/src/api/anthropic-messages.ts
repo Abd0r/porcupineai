@@ -746,9 +746,8 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 						// Anthropic reports reasoning tokens in `output_tokens_details.thinking_tokens` on the
 						// final message_delta usage (a subset of output_tokens). SDK 0.91.1 omits the field from
 						// its Usage type, so read it through a narrow cast. Verified against the live API.
-						const thinkingTokens =
-							(event.usage as { output_tokens_details?: { thinking_tokens?: number } })
-								.output_tokens_details?.thinking_tokens;
+						const thinkingTokens = (event.usage as { output_tokens_details?: { thinking_tokens?: number } })
+							.output_tokens_details?.thinking_tokens;
 						if (thinkingTokens != null) {
 							output.usage.reasoning = thinkingTokens;
 						}

@@ -3,7 +3,6 @@ import { adaptSessionToServeApi } from "../src/modes/serve-mode.ts";
 import { type ServeApiSession, startServeApi } from "../src/server/http-api.ts";
 import { createHarness } from "./test-harness.ts";
 
-
 function fakeSession(overrides: Partial<ServeApiSession> = {}): ServeApiSession {
 	const listeners = new Set<(event: unknown) => void>();
 	const confirmHandlers = new Set<

@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	createEmailClient,
 	type EmailClient,
