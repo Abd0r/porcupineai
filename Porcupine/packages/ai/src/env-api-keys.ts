@@ -53,14 +53,20 @@ function hasVertexAdcCredentials(env?: ProviderEnv): boolean {
 
 		// Check GOOGLE_APPLICATION_CREDENTIALS env var first (standard way)
 		const gacPath = getProviderEnvValue("GOOGLE_APPLICATION_CREDENTIALS", env);
+		let found: boolean;
 		if (gacPath) {
-			cachedVertexAdcCredentialsExists = _existsSync(gacPath);
+			found = _existsSync(gacPath);
 		} else {
 			// Fall back to default ADC path (lazy evaluation)
-			cachedVertexAdcCredentialsExists = _existsSync(
+			found = _existsSync(
 				_join(_homedir(), ".config", "gcloud", "application_default_credentials.json"),
 			);
 		}
+		// Only cache a positive result. In Node a user may run
+		// `gcloud auth application-default login` mid-process, so a not-yet-existing
+		// file must be re-checked next call rather than cached as permanently absent.
+		if (found) cachedVertexAdcCredentialsExists = true;
+		return found;
 	}
 	return cachedVertexAdcCredentialsExists;
 }

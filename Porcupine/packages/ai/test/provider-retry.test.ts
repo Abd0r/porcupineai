@@ -97,4 +97,22 @@ describe("provider request retries", () => {
 		expect(request).toHaveBeenCalledTimes(1);
 		expect(vi.getTimerCount()).toBe(0);
 	});
+
+	it("honors an abort issued synchronously before the caller timer is armed (BUG-8 race)", async () => {
+		vi.useFakeTimers();
+		const controller = new AbortController();
+		const request = vi.fn<() => Promise<string>>().mockRejectedValue(providerError(429, { "retry-after": "277403" }));
+
+		const result = retryProviderRequest(request, { maxRetries: 2, maxRetryDelayMs: 0, signal: controller.signal });
+		await vi.advanceTimersByTimeAsync(0); // request rejects, retry sleep scheduled
+		expect(vi.getTimerCount()).toBe(1);
+
+		// Abort in the same synchronous turn the sleep starts (before its timer fires):
+		// the listener must already be attached so the sleep rejects immediately.
+		controller.abort();
+
+		await expect(result).rejects.toMatchObject({ name: "AbortError" });
+		expect(request).toHaveBeenCalledTimes(1);
+		expect(vi.getTimerCount()).toBe(0);
+	});
 });

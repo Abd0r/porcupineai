@@ -30,6 +30,10 @@ export class InMemoryCredentialStore implements CredentialStore {
 	}
 
 	async list(): Promise<readonly CredentialInfo[]> {
+		// Wait for any in-flight per-provider writes to settle so list() never
+		// snapshots a stale/partial credential while a concurrent modify(refresh)
+		// is in flight (mirrors the read() serialization guarantee).
+		await Promise.all([...this.chains.values()]);
 		return [...this.credentials].map(([providerId, credential]) => ({ providerId, type: credential.type }));
 	}
 

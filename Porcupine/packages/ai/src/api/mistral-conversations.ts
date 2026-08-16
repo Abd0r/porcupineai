@@ -307,6 +307,9 @@ async function consumeChatStream(
 	const blocks = output.content;
 	const blockIndex = () => blocks.length - 1;
 	const toolBlocksByKey = new Map<string, number>();
+	// Monotonic counter disambiguating no-id tool calls (see the tool-case loop
+	// below) so distinct calls sharing an index never collapse into one block.
+	let toolCallSequence = 0;
 
 	const finishCurrentBlock = (block?: typeof currentBlock) => {
 		if (!block) return;
@@ -431,11 +434,18 @@ async function consumeChatStream(
 				finishCurrentBlock(currentBlock);
 				currentBlock = null;
 			}
-			const callId =
-				toolCall.id && toolCall.id !== "null"
-					? toolCall.id
-					: deriveMistralToolCallId(`toolcall:${toolCall.index ?? 0}`, 0);
-			const key = `${callId}:${toolCall.index || 0}`;
+			// A tool call with a real id is stable across deltas. A missing/"null" id
+			// cannot be matched across chunks, so give every such call a monotonic
+			// synthetic id — otherwise two distinct no-id calls in one chunk collapse
+			// onto the same `index ?? 0` key and merge their arguments into one block.
+			// Narrow to a definitely-string id: TS cannot narrow `toolCall.id` from the
+			// Boolean() wrapper, so pluck the real id into a `string | undefined` and
+			// branch on that so both `callId` and `key` stay typed as `string`.
+			const realId = toolCall.id && toolCall.id !== "null" ? toolCall.id : undefined;
+			const callId = realId
+				? realId
+				: deriveMistralToolCallId(`toolcall:${toolCallSequence++}`, 0);
+			const key = realId ? `${callId}:${toolCall.index || 0}` : callId;
 			const existingIndex = toolBlocksByKey.get(key);
 			let block: (ToolCall & { partialArgs?: string }) | undefined;
 
