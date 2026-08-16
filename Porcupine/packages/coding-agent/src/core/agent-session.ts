@@ -556,7 +556,9 @@ export class AgentSession {
 	private async _injectSubagentReport(id: string, result: SubagentResult): Promise<void> {
 		// Persist the sub-agent run as a recallable sub-agent session file
 		// (best-effort; it never throws). Runs with no transcript are skipped.
-		void this._persistSubagentRun(id, result);
+		// Await so a run is durable before the report fold-in returns (the exit
+		// flush covers only the synchronous session buffer, not this path).
+		await this._persistSubagentRun(id, result);
 		try {
 			const status = result.ok
 				? "✓ done"
