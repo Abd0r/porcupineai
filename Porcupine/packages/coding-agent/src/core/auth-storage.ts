@@ -26,7 +26,7 @@ type AuthFileReadState = {
 	reload?: Promise<AuthStorageData>;
 };
 
-let sharedAuthFileReadState: { authPath: string; readState: AuthFileReadState } | undefined;
+let sharedAuthFileReadStates = new Map<string, AuthFileReadState>();
 
 function getFileRevision(path: string): string | undefined {
 	try {
@@ -193,10 +193,12 @@ export class AuthStorage implements CredentialStore {
 	private constructor(storage: AuthStorageBackend, authPath?: string) {
 		this.storage = storage;
 		this.authPath = authPath;
-		this.readState =
-			authPath && sharedAuthFileReadState?.authPath === authPath ? sharedAuthFileReadState.readState : { data: {} };
+		// Shared read-state per auth path, so instances for different paths do
+		// not evict each other's cache (previously a single module-level pair).
+		const shared = authPath ? sharedAuthFileReadStates.get(authPath) : undefined;
+		this.readState = shared ?? { data: {} };
 		if (authPath) {
-			sharedAuthFileReadState = { authPath, readState: this.readState };
+			sharedAuthFileReadStates.set(authPath, this.readState);
 			const revision = getFileRevision(authPath);
 			if (revision !== undefined && revision === this.readState.revision) return;
 		}
@@ -304,13 +306,15 @@ export class AuthStorage implements CredentialStore {
 
 	async delete(provider: string): Promise<void> {
 		let latestData = this.readState.data;
+		let revision: string | undefined;
 		await this.storage.withLockAsync(async (content) => {
 			const currentData = this.parseStorageData(content);
 			delete currentData[provider];
 			latestData = currentData;
+			revision = this.authPath ? getFileRevision(this.authPath) : undefined;
 			return { result: undefined, next: JSON.stringify(currentData, null, 2) };
 		});
-		this.updateReadState(latestData);
+		this.updateReadState(latestData, revision);
 	}
 
 	/** List credential metadata without resolving configured key values. */
