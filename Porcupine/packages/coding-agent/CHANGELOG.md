@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.1.72] - 2026-08-16
+
+### Fixed (codebase-wide bug-fix batch, 32 verified fixes)
+
+- **Security** (browser SSRF guard now blocks non-dotted loopback forms like `127.1` and integer literals; composed `find` tools reject `-delete`/`-exec`; `!`-prefixed config commands get a `PORCUPINE_DISABLE_CONFIG_COMMANDS` opt-out; serve API requires a token unless `PORCUPINE_SERVE_ALLOW_TOKENLESS=1`; workspace-scope `rm` refinement tokenizes compound commands).
+- **Memory** (USER.md no longer auto-updates via the settled-turn learning pipeline; user/capability learning is opt-in only; `remaining` budget counter counts entries once).
+- **Cost/usage** (Anthropic cache tokens no longer double-counted in totals and cost; failed `!`-command results cached 30s instead of forever).
+- **Stability** (unguarded `JSON.parse` on thinking signatures degrades gracefully; client late responses no longer tear down the whole connection; retry abort-listener leak fixed; MCP restart failures cannot become unhandled rejections and backoff resets on reconnect; sub-agent runs persist before report fold-in; harness teardown flushes session writes; branch index/sqlite stop semantics aligned; sub-agent tail truncates oversized messages; agent_end surfaces failures).
+- **Misc** (auth-storage delete records revision; per-path auth read-state cache; email timeout aborts IMAP; rpc preflight surfaces failures; setBrowserSession closes the old session; browser timeout set before page creation; prompt returns a defensive copy; incremental converter no longer injects undefined).
+
 ## [0.1.71] - 2026-08-16
 
 ### Added
