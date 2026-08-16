@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/evals",
-	"version": "0.1.70",
+	"version": "0.1.71",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -9,8 +9,8 @@
 		"test": "vitest run --config vitest.test.config.ts"
 	},
 	"devDependencies": {
-		"@porcupineai/ai": "^0.1.70",
-		"@porcupineai/coding-agent": "^0.1.70",
+		"@porcupineai/ai": "^0.1.71",
+		"@porcupineai/coding-agent": "^0.1.71",
 		"@types/node": "24.12.4",
 		"shx": "0.4.0",
 		"typescript": "5.9.3",

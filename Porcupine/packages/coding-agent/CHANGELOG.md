@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.1.71] - 2026-08-16
+
+### Added
+
+- **Browser vision layer for text-only models**: `browser_snapshot` appends a VISUAL LAYER when the active model cannot see images. A screenshot is sent to an OpenAI-compatible image-to-text model (default LiquidAI/LFM2.5-VL-3B; Florence-2 and DeepSeek-OCR-2 work via the same wire format) and returned as a bounded text read of the rendered page: visible text, approximate viewport positions, layout, and visual state (errors, toasts, disabled elements, dialogs). Fail-closed, cached by screenshot content hash, output bounded. Configure via `PORCUPINE_BROWSER_VISION` / `_BASE_URL` / `_MODEL` / `_PROMPT` / `_API_KEY`. Documented in `docs/browser.md`.
+- **anti-slop skill** (`skills/coding/anti-slop/`): agent-facing guidance adapted from the MIT-licensed dmmulroy/anti-slop Oxlint rules. Rejects low-evidence/low-signal TypeScript patterns (chained type assertions, unknown/object widening, Reflect, runtime typeof, module mocking, unsafe dictionary types) in favor of typed boundaries.
+
 ## [0.1.70] - 2026-08-15
 
 ### Added
