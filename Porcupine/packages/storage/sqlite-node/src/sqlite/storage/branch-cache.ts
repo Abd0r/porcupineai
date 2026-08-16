@@ -147,8 +147,8 @@ export async function queryCachedBranchRows(
 		)`
 		: "";
 	const range = stopPredicates.length
-		? `AND b.entry_seq ${oldestFirst ? "<=" : ">="} COALESCE(
-			(SELECT entry_seq FROM boundary), ${oldestFirst ? branch.leafSeq : 0}
+		? `AND b.entry_seq ${oldestFirst ? "<=" : ">="} (
+			SELECT entry_seq FROM boundary
 		)`
 		: "";
 	const sql = `${boundary}
