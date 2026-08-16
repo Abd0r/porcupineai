@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { adaptSessionToServeApi } from "../src/modes/serve-mode.ts";
 import { type ServeApiSession, startServeApi } from "../src/server/http-api.ts";
 import { createHarness } from "./test-harness.ts";
