@@ -3,6 +3,7 @@ import { adaptSessionToServeApi } from "../src/modes/serve-mode.ts";
 import { type ServeApiSession, startServeApi } from "../src/server/http-api.ts";
 import { createHarness } from "./test-harness.ts";
 
+
 function fakeSession(overrides: Partial<ServeApiSession> = {}): ServeApiSession {
 	const listeners = new Set<(event: unknown) => void>();
 	const confirmHandlers = new Set<
@@ -53,7 +54,12 @@ async function start(overrides: Partial<ServeApiSession> = {}, token?: string) {
 
 const cleanups: Array<() => Promise<void> | void> = [];
 
+beforeEach(() => {
+	process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS = "1";
+});
+
 afterEach(async () => {
+	delete process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;
 	while (cleanups.length > 0) await cleanups.pop()?.();
 });
 

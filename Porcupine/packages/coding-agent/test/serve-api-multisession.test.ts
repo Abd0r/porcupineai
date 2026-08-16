@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { type ServeApiSession, startServeApi } from "../src/server/http-api.ts";
 
+
 /**
  * Multi-session serve API surface (Feature A). The server can run several
  * independent sessions: create/list/select by id, per-session prompts, scoped
@@ -74,7 +75,12 @@ function collectSse(
 }
 
 const cleanups: Array<() => Promise<void> | void> = [];
+beforeEach(() => {
+	process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS = "1";
+});
+
 afterEach(async () => {
+	delete process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;
 	while (cleanups.length > 0) await cleanups.pop()?.();
 });
 
