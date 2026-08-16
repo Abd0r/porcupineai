@@ -73,6 +73,23 @@ describe("persistent memory", () => {
 		expect(block).toContain("more entries in USER.md");
 	});
 
+	it("remaining count is computed by entry boundary, not substring overlap (regression)", () => {
+		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-mem-count-"));
+		// entry 1 (included, short) contains the phrase "concise replies" inline.
+		mutateMemory(agentDir, "add", "user", { content: "Working style: keep it terse and use concise replies in every message." });
+		// entry 2 (huge filler) forces trunk to cut before the short entry 3.
+		mutateMemory(agentDir, "add", "user", { content: `Filler ${`z`.repeat(USER_PROMPT_CHAR_LIMIT)}` });
+		// entry 3 (cut off) is exactly the substring "concise replies" that also
+		// appears inside the included entry 1. Substring counting would falsely
+		// mark it as shown and under-report the remaining count.
+		mutateMemory(agentDir, "add", "user", { content: "concise replies" });
+		const block = formatMemoryForPrompt(agentDir);
+		expect(block).toContain("more entries");
+		// Two entries (filler + concise replies) are NOT shown; boundary-based
+		// counting must report 2, never 1 (substring overlap bug).
+		expect(block).toMatch(/\(2 more entries in USER\.md/);
+	});
+
 	it("memory tool executes", async () => {
 		const agentDir = mkdtempSync(join(tmpdir(), "porcupine-mem-tool-"));
 		const tool = createMemoryToolDefinition({ agentDir });

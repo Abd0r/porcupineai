@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type ServeApiSession, startServeApi } from "../src/server/http-api.ts";
+
 
 /**
  * Regression tests for BUG-01 (permission double-response race after the 60s
@@ -18,7 +19,12 @@ function fakeSession(): ServeApiSession {
 }
 
 const cleanups: Array<() => Promise<void> | void> = [];
+beforeEach(() => {
+	process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS = "1";
+});
+
 afterEach(async () => {
+	delete process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;
 	while (cleanups.length > 0) await cleanups.pop()?.();
 });
 

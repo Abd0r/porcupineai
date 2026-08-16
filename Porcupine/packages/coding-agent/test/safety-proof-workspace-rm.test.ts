@@ -41,6 +41,22 @@ describe("analyzeRmScope — intent inferred from scope", () => {
 	it("user-configured protected paths are honored", () => {
 		expect(analyzeRmScope("rm -rf vendor/secret", CWD, ["/Users/tester/project/vendor"]))?.toBeDefined();
 	});
+
+	it("directory changes (cd/pushd/popd) never auto-approve as inside the workspace (regression: cd && rm)", () => {
+		// A `cd`/`pushd`/`popd` changes the shell's cwd before `rm`, so the targets
+		// resolve against the wrong directory. The guard must fail closed and never
+		// classify a cd-containing recursive delete as the agent's own domain.
+		for (const cmd of [
+			"cd /tmp && rm -rf node_modules",
+			"cd / && rm -rf node_modules",
+			"cd .. && rm -rf .",
+			"pushd /tmp && rm -rf build",
+			"cd /etc && rm -rf x",
+		]) {
+			const scope = analyzeRmScope(cmd, CWD, PROTECTED);
+			expect(scope).not.toEqual({ insideWorkspace: true });
+		}
+	});
 });
 
 describe("guardBashCommand — workspace-scoped rm -rf", () => {
@@ -105,5 +121,23 @@ describe("guardBashCommand — workspace-scoped rm -rf", () => {
 		expect(decision.approved).toBe(true);
 		expect(decision.via).toBe("safe");
 		expect(confirm).not.toHaveBeenCalled();
+	});
+
+	it("Normal: cd && rm -rf is not auto-approved as safe workspace scope (regression)", async () => {
+		confirm.mockClear();
+		const decision = await guardBashCommand({
+			command: "cd /tmp && rm -rf node_modules",
+			mode: "normal",
+			cwd: CWD,
+			protectedPaths: PROTECTED,
+			modelRuntime: undefined as never,
+			model: undefined,
+			confirm,
+		});
+		// A directory change invalidates workspace-scope; it must require real
+		// confirmation rather than the "safe" auto-approval shortcut.
+		expect(decision.via).not.toBe("safe");
+		expect(decision.via).toBe("manual");
+		expect(confirm).toHaveBeenCalled();
 	});
 });

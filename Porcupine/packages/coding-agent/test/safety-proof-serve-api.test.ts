@@ -143,31 +143,73 @@ describe("SAFETY PROOF (FIXED): serve API authentication model", () => {
 		expect(decided).toBe(true);
 	});
 
-	it("(D) BY DESIGN: loopback runs with no token; health and session are reachable", async () => {
-		server = await (async () => {
-			const s = createServeApi({ session: makeSession(), port: 0 });
-			await s.listen();
-			return s;
-		})();
-		const port = server.port();
-		expect(port).toBeGreaterThan(0);
-		expect((await http("GET", port, "/health")).status).toBe(200);
-		expect((await http("POST", port, "/session")).status).toBe(201);
+	it("(D) FIXED/secured: tokenless requests are rejected (fail closed) unless explicitly allowed", async () => {
+		const prev = process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;
+		delete process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;
+		try {
+			server = createServeApi({ session: makeSession(), port: 0 });
+			await server.listen();
+			const port = server.port();
+			expect(port).toBeGreaterThan(0);
+			// No token and no allow-env: every request is unauthorized (401).
+			expect((await http("GET", port, "/health")).status).toBe(401);
+			expect((await http("POST", port, "/session")).status).toBe(401);
+			expect(
+				(await http("POST", port, "/session/sess-fixed/message", { body: JSON.stringify({ text: "x" }) }))
+					.status,
+			).toBe(401);
+		} finally {
+			if (prev === undefined) delete process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;
+			else process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS = prev;
+		}
 	});
 
-	it("(D2) BY DESIGN: the token-optional loopback surface can be injected into", async () => {
-		server = await (async () => {
-			const s = createServeApi({ session: makeSession(), port: 0 });
-			await s.listen();
-			return s;
-		})();
-		const port = server.port();
-		expect(
-			(
-				await http("POST", port, "/session/sess-fixed/message", {
-					body: JSON.stringify({ text: "drop the db" }),
-				})
-			).status,
-		).toBe(202);
+	it("(D2) tokenless loopback is reachable ONLY behind the explicit PORCUPINE_SERVE_ALLOW_TOKENLESS=1 opt-in", async () => {
+		const prev = process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;
+		process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS = "1";
+		try {
+			server = createServeApi({ session: makeSession(), port: 0 });
+			await server.listen();
+			const port = server.port();
+			expect(
+				(
+					await http("POST", port, "/session/sess-fixed/message", {
+						body: JSON.stringify({ text: "drop the db" }),
+					})
+				).status,
+			).toBe(202);
+			expect((await http("GET", port, "/health")).status).toBe(200);
+		} finally {
+			if (prev === undefined) delete process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;
+			else process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS = prev;
+		}
+	});
+
+	it("rejects a state-changing request whose Origin does not match the full server origin", async () => {
+		const prev = process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;
+		process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS = "1";
+		try {
+			server = createServeApi({ session: makeSession(), port: 0 });
+			await server.listen();
+			const port = server.port();
+			const matchingOrigin = `http://127.0.0.1:${port}`;
+			// Mismatched host is rejected even when tokenless.
+			expect(
+				(await http("POST", port, "/session", {
+					origin: "http://127.0.0.2:9999",
+					body: "{}",
+				})).status,
+			).toBe(403);
+			// Matching full origin (scheme + host + port) is allowed.
+			expect(
+				(await http("POST", port, "/session", {
+					origin: matchingOrigin,
+					body: "{}",
+				})).status,
+			).toBe(201);
+		} finally {
+			if (prev === undefined) delete process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS;
+			else process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS = prev;
+		}
 	});
 });

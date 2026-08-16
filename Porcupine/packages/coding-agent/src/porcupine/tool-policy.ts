@@ -139,6 +139,17 @@ export function validateToolPolicy(entry: Partial<ToolPolicyEntry>): string[] {
 				errors.push(`denied arg pattern: ${arg}`);
 			}
 		}
+		// find: refuse destructive/invoking actions that would break the read-only
+		// contract (`-delete` deletes files; `-exec`/`-execdir`/`-ok`/`-okdir` run
+		// arbitrary commands — an injection surface for a composed "inspection" tool).
+		if (binary === "find") {
+			const findArgs = entry.command.slice(1);
+			for (const arg of findArgs) {
+				if (arg === "-delete" || arg === "-exec" || arg === "-execdir" || arg === "-ok" || arg === "-okdir") {
+					errors.push(`denied: find primitive ${arg}`);
+				}
+			}
+		}
 		// git: allow only read-only subcommands and refuse redirect/force variants.
 		if (binary === "git") {
 			const gitArgs = entry.command.slice(1);

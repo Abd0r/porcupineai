@@ -124,9 +124,16 @@ const LIST_FETCH_LIMIT = 50;
 export const EMAIL_KEYRING_SERVICE = "email";
 
 /** Wrap a promise in a timeout; resolves the wrapped value or rejects cleanly. */
-function withTimeout<T>(timeoutMs: number, label: string, promise: Promise<T>): Promise<T> {
+function withTimeout<T>(timeoutMs: number, label: string, promise: Promise<T>, onTimeout?: () => void): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
-		const timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs} ms`)), timeoutMs);
+		const timer = setTimeout(() => {
+			try {
+				onTimeout?.();
+			} catch {
+				// The abort/takedown hook must never mask the timeout error.
+			}
+			reject(new Error(`${label} timed out after ${timeoutMs} ms`));
+		}, timeoutMs);
 		promise.then(
 			(value) => {
 				clearTimeout(timer);
@@ -268,14 +275,33 @@ export function createEmailClient(config: EmailConfig): EmailClient {
 			auth: imapAuth(),
 			logger: false as const,
 		});
+		// `close()` tears the TCP connection down (non-blocking) without waiting for
+		// the server — the escape hatch that keeps a hung socket from hanging the
+		// caller's logout forever. Guarded so it only runs once.
+		let closed = false;
+		const teardown = () => {
+			if (closed) return;
+			closed = true;
+			try {
+				client.close();
+			} catch {
+				// best-effort teardown
+			}
+		};
 		try {
-			await withTimeout(timeoutMs, "IMAP connect", client.connect());
+			// If connect stalls, tear the socket down so the pending op rejects too.
+			await withTimeout(timeoutMs, "IMAP connect", client.connect(), teardown);
 			return await op(client);
 		} finally {
-			try {
-				await client.logout();
-			} catch {
-				// best-effort disconnect
+			if (!closed) {
+				// Graceful logout, but bound it: a dead/stalled socket must not hang the
+				// caller forever. On logout timeout we tear the socket down instead.
+				// (If the op already failed/timeed out and teardown() ran, we skip.)
+				try {
+					await withTimeout(timeoutMs, "IMAP logout", client.logout(), teardown);
+				} catch {
+					teardown();
+				}
 			}
 		}
 	}

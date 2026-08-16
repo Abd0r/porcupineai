@@ -328,14 +328,21 @@ export function formatMemoryForPrompt(agentDir: string): string {
 			// Truncate on an entry boundary so the injected block never ends with
 			// a dangling half-bullet, and tell the model more exists.
 			let cut = 0;
+			let includedCount = 0;
 			for (const entry of entries) {
 				const lineEnd = full.indexOf(`- ${entry.text}`, cut) + entry.text.length + 2;
 				if (lineEnd > budget) break;
 				cut = lineEnd;
+				// The entry fully fits within the truncated block only when its own
+				// line boundary was reached (lineEnd <= budget). Counting by boundary
+				// avoids a substring-overlap false positive: an entry whose text
+				// happens to be a substring of an included entry is still counted as
+				// remaining if it was cut off.
+				includedCount++;
 			}
 			if (cut === 0) cut = Math.min(budget, full.length);
 			content = full.slice(0, cut).trimEnd();
-			const remaining = entries.length - entries.filter((e) => content.includes(e.text)).length;
+			const remaining = entries.length - includedCount;
 			marker = `\n… (${remaining} more entries in ${file} — read via the memory tool)`;
 		}
 		const tag = target === "user" ? "user_profile" : "agent_memory";
