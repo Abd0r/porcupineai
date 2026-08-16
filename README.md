@@ -239,3 +239,7 @@ Built on top of [Pi](https://github.com/earendil-works/pi) (MIT).
   <a href="https://github.com/Abd0r/porcupineai/releases">Releases</a> ·
   <a href="LICENSE">MIT License</a>
 </p>
+
+<p align="center">
+  Follow development on X: <a href="https://x.com/SyedAbdurR2hman">@SyedAbdurR2hman</a>
+</p>
