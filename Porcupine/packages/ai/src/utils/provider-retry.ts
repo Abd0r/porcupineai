@@ -80,13 +80,18 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
 		}
 
 		let settled = false;
+		let timeout: ReturnType<typeof setTimeout> | undefined;
 		const onAbort = () => {
 			if (settled) return;
 			settled = true;
-			clearTimeout(timeout);
+			if (timeout) clearTimeout(timeout);
 			reject(createAbortError());
 		};
-		const timeout = setTimeout(
+		// Register the abort listener synchronously *before* arming the timer so an
+		// abort landing in the microtask window between the two is observed and the
+		// sleep still rejects instead of running to full duration.
+		signal?.addEventListener("abort", onAbort, { once: true });
+		timeout = setTimeout(
 			() => {
 				if (settled) return;
 				settled = true;
@@ -95,10 +100,6 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
 			},
 			Math.max(0, ms),
 		);
-		// { once: true } auto-detaches on the abort path; the timeout path detaches
-		// explicitly above, so the listener is removed on every settle path and a
-		// long-lived caller signal never accumulates listeners across retries.
-		signal?.addEventListener("abort", onAbort, { once: true });
 	});
 }
 

@@ -129,15 +129,18 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 			reject(new RetrySleepAbortError());
 			return;
 		}
-		const timeout = setTimeout(resolve, ms);
-		signal?.addEventListener(
-			"abort",
-			() => {
-				clearTimeout(timeout);
-				reject(new RetrySleepAbortError());
-			},
-			{ once: true },
-		);
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+		const onAbort = () => {
+			if (timeout) clearTimeout(timeout);
+			reject(new RetrySleepAbortError());
+		};
+		timeout = setTimeout(() => {
+			// Remove the abort listener on the happy path so a long-lived signal
+			// reused across many backoffs does not accumulate listeners.
+			signal?.removeEventListener("abort", onAbort);
+			resolve();
+		}, ms);
+		signal?.addEventListener("abort", onAbort, { once: true });
 	});
 }
 

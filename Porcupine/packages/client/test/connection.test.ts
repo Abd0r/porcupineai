@@ -188,7 +188,7 @@ describe("PorcupineClient", () => {
 				error: { code: "auth", message: "Invalid token" },
 			});
 		});
-		const client = createClient(server, "wrong");
+		const client = createClient(server, { token: "wrong" });
 
 		await expect(client.connect()).rejects.toMatchObject({
 			name: "PorcupineServerError",

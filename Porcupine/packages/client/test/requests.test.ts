@@ -1,4 +1,6 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { PorcupineRequestTimeoutError } from "../src/errors.ts";
+import type { ConnectionStateChange } from "../src/types.ts";
 import { collectRequests, connectClient, MemoryByteServer, sessionSnapshot } from "./support.ts";
 
 describe("PorcupineClient", () => {
@@ -64,5 +66,36 @@ describe("PorcupineClient", () => {
 			error: { code: "session_locked", message: "Already attached" },
 		});
 		await expect(attaching).rejects.toMatchObject({ name: "PorcupineServerError", code: "session_locked" });
+	});
+
+	test("drops a late response after timeout instead of failing the connection (BUG-C3)", async () => {
+		vi.useFakeTimers();
+		try {
+			const server = new MemoryByteServer();
+			const client = await connectClient(server, { requestTimeoutMs: 100 });
+			const requests = collectRequests(server);
+			const changes: ConnectionStateChange[] = [];
+			client.onConnectionStateChange((change) => changes.push(change));
+
+			const slow = client.listSessions();
+			const slowGuard = slow.catch(() => {}); // avoid unhandled rejection while timers advance
+			await vi.advanceTimersByTimeAsync(100); // timeout fires
+			await expect(slow).rejects.toBeInstanceOf(PorcupineRequestTimeoutError);
+			await slowGuard;
+			expect(client.connectionState).toBe("connected");
+
+			// A busy server delivers the response late. It must be dropped, not fatal.
+			server.send({
+				type: "response",
+				id: requests[0]!.id,
+				ok: true,
+				result: { command: "list", sessions: [] },
+			});
+			expect(client.connectionState).toBe("connected");
+			expect(changes.map((c) => c.state)).not.toContain("disconnected");
+			await client.dispose();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

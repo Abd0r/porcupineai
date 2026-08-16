@@ -10,6 +10,7 @@ import {
 } from "@porcupineai/protocol";
 import type { ByteTransport, ByteTransportHandlers, PorcupineSessionHandle } from "../src/index.ts";
 import { PorcupineClient } from "../src/index.ts";
+import type { PorcupineClientOptions } from "../src/types.ts";
 
 export class MemoryByteServer {
 	private handlers: ByteTransportHandlers | undefined;
@@ -104,15 +105,19 @@ export function sessionSnapshot(id: string, overrides: Partial<SessionSnapshot> 
 	};
 }
 
-export function createClient(server: MemoryByteServer, token = "bearer-secret"): PorcupineClient {
+export function createClient(server: MemoryByteServer, options: Partial<PorcupineClientOptions> = {}): PorcupineClient {
 	return new PorcupineClient({
-		token,
+		token: "bearer-secret",
 		transportFactory: (handlers) => server.connect(handlers),
+		...options,
 	});
 }
 
-export async function connectClient(server: MemoryByteServer, token = "bearer-secret"): Promise<PorcupineClient> {
-	const client = createClient(server, token);
+export async function connectClient(
+	server: MemoryByteServer,
+	options: Partial<PorcupineClientOptions> = {},
+): Promise<PorcupineClient> {
+	const client = createClient(server, options);
 	server.onMessage((message) => {
 		if (message.type === "hello") {
 			server.send({
