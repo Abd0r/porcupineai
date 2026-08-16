@@ -1382,7 +1382,13 @@ describe("agentLoop with AgentMessage", () => {
 			events.push(event);
 		}
 		expect(events.some((event) => event.type === "agent_end")).toBe(true);
-		expect(await stream.result()).toEqual([]);
+		// BUG-7: the terminal agent_end must surface the failure (an error-carrying
+		// assistant message), not silently end with an empty transcript.
+		const end = events.find((event) => event.type === "agent_end");
+		if (!end || end.type !== "agent_end") throw new Error("missing agent_end");
+		expect(end.messages).toHaveLength(1);
+		expect(end.messages[0]).toMatchObject({ role: "assistant", stopReason: "error", errorMessage: "provider exploded" });
+		expect(await stream.result()).toEqual(end.messages);
 	});
 
 	it("BUG-8: incremental converter tolerates fresh (copied) arrays with unchanged prefix", async () => {

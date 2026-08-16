@@ -407,8 +407,13 @@ async function summarizeSubagentConversation(
 	return text;
 }
 
-/** Retain the recent tail of a conversation within the keep-recent token budget. */
-function keepRecentTail(messages: AgentMessage[], maxContextTokens: number): AgentMessage[] {
+/**
+ * Retain the recent tail of a conversation within the keep-recent token budget.
+ * A single message that alone exceeds the budget is truncated (capped) to the
+ * remaining budget rather than injected whole past the compacted-context
+ * budget, which could otherwise immediately re-trigger compaction.
+ */
+export function keepRecentTail(messages: AgentMessage[], maxContextTokens: number): AgentMessage[] {
 	// The tail must fit inside the headroom below the compaction threshold, so
 	// a compacted context can never re-trigger compaction immediately.
 	const headroom = Math.floor(maxContextTokens * (1 - SUBAGENT_COMPACT_RATIO));
@@ -421,9 +426,61 @@ function keepRecentTail(messages: AgentMessage[], maxContextTokens: number): Age
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const message = messages[i]!;
 		const tokens = estimateTokens(message);
-		if (used + tokens > budget && tail.length > 0) break;
+		if (used + tokens > budget) {
+			if (tail.length === 0) {
+				// The newest (or a leading oversized) message alone exceeds the budget.
+				// Truncate it to the remaining budget instead of injecting it whole, so
+				// the compacted context stays within the keep-recent headroom.
+				const remaining = budget - used;
+				if (remaining <= 0) break;
+				const truncated = truncateMessageToBudget(message, remaining);
+				if (truncated) {
+					tail.unshift(truncated);
+					used += estimateTokens(truncated);
+				}
+			}
+			break;
+		}
 		tail.unshift(message);
 		used += tokens;
 	}
 	return tail;
+}
+
+/**
+ * Copy `message` with its text-bearing content truncated so the estimate fits
+ * within `tokenBudget`. Content is estimated at ~1 token per 4 chars, so it
+ * keeps up to `tokenBudget * 4` chars of text and drops the rest. Returns
+ * `undefined` when the message shape has no truncatable text content (the
+ * overflow is then left to the compaction summary to carry).
+ */
+function truncateMessageToBudget(message: AgentMessage, tokenBudget: number): AgentMessage | undefined {
+	const maxChars = Math.max(0, tokenBudget * 4);
+	const hasContent = "content" in message;
+	if (!hasContent) return undefined;
+	const content = (message as { content: unknown }).content;
+	if (typeof content === "string") {
+		if (content.length <= maxChars) return undefined;
+		return { ...message, content: content.slice(0, maxChars) } as AgentMessage;
+	}
+	if (Array.isArray(content)) {
+		let chars = 0;
+		for (const part of content) {
+			if (part && typeof part === "object" && "text" in part && typeof part.text === "string") {
+				chars += part.text.length;
+			}
+		}
+		if (chars <= maxChars) return undefined;
+		let remaining = maxChars;
+		const kept = content.map((part) => {
+			if (part && typeof part === "object" && "text" in part && typeof part.text === "string") {
+				const text = part.text.slice(0, remaining);
+				remaining -= text.length;
+				return { ...part, text };
+			}
+			return part;
+		});
+		return { ...message, content: kept } as AgentMessage;
+	}
+	return undefined;
 }

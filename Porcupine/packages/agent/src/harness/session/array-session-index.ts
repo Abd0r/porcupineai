@@ -139,6 +139,19 @@ export class ArraySessionIndex {
 			current = parent;
 		}
 		const traversal = query.order === "oldestFirst" ? pathFromStart.reverse() : pathFromStart;
+		const stopRequested = query.stopAtId !== undefined || query.stopAtType !== undefined;
+		// Match the SQLite backend: when a stop bound is requested but NO entry on
+		// the branch satisfies it, the query has nothing "up to the boundary" to
+		// return. The SQLite path returns [] for this case (a NULL boundary yields
+		// no rows); mirror that here instead of silently returning the whole branch.
+		if (
+			stopRequested &&
+			!pathFromStart.some(
+				(entry) => entry.id === query.stopAtId || entry.type === query.stopAtType,
+			)
+		) {
+			return [];
+		}
 		const stopIndex =
 			query.order === "oldestFirst"
 				? traversal.findIndex((entry) => entry.id === query.stopAtId || entry.type === query.stopAtType)
