@@ -425,7 +425,7 @@ function errorMessage(err: unknown): string {
  * Returns [a,b,c,d] octets or null when the host is not an IPv4 address.
  */
 function parseIpv4Literal(host: string): number[] | null {
-	let value = host;
+	const value = host;
 	// IPv4-mapped IPv6: `::ffff:127.0.0.1` or the URL-normalized `::ffff:7f00:1`,
 	// plus the full 8-group `0:0:0:0:0:ffff:…` expansion. The trailing bits hold
 	// the embedded IPv4. `URL` normalizes dotted tails to colon-hex, so we accept
@@ -462,12 +462,7 @@ function parseDottedIpv4(value: string): number[] | null {
 		// A single-part “integer” form (`2130706433`) is the whole 32-bit address.
 		if (parts.length === 1) {
 			if (n < 0 || n > 0xffffffff) return null;
-			return [
-				(n >>> 24) & 0xff,
-				(n >>> 16) & 0xff,
-				(n >>> 8) & 0xff,
-				n & 0xff,
-			];
+			return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
 		}
 		octets.push(n);
 	}
@@ -511,7 +506,7 @@ function parseRadixInt(part: string): number | null {
 
 /** True when the 4 octets are a reserved/loopback/private (or unspecified) address. */
 function isReservedIpv4(octets: number[]): boolean {
-	const [a, b, c, d] = octets;
+	const [a, b] = octets;
 	return (
 		a === 0 ||
 		a === 10 ||
