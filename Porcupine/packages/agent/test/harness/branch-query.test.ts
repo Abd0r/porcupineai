@@ -218,6 +218,49 @@ describe("bounded session branch queries", () => {
 		});
 	});
 
+	it("returns [] for a requested stop bound absent from the branch (backend-consistent)", async () => {
+		async function assertAbsentStop(session: Session): Promise<void> {
+			const root = await session.appendMessage(createUserMessage("root"));
+			const child = await session.appendMessage(createAssistantMessage("child"));
+			const tail = await session.appendMessage(createUserMessage("tail"));
+
+			// A stop predicate that does not lie on `tail`'s branch has no boundary to
+			// stop at; both array- and SQLite-backed readers must return [] (not the
+			// whole branch) so a wrong stop cannot leak foreign-branch content.
+			expect(
+				(await session.findEntriesOnBranch({ start: tail, stopAtId: "does-not-exist" })).map((e) => e.id),
+			).toEqual([]);
+			expect(
+				(
+					await session.findEntriesOnBranch({ start: tail, stopAtId: "does-not-exist", order: "oldestFirst" })
+				).map((e) => e.id),
+			).toEqual([]);
+			expect(
+				(await session.findEntriesOnBranch({ start: tail, stopAtType: "compaction" })).map((e) => e.id),
+			).toEqual([]);
+			expect(
+				(
+					await session.findEntriesOnBranch({ start: tail, stopAtType: "compaction", order: "oldestFirst" })
+				).map((e) => e.id),
+			).toEqual([]);
+			void root;
+			void child;
+		}
+
+		const memoryRepo = new InMemorySessionRepository();
+		ownedRepositories.push(memoryRepo);
+		await assertAbsentStop(await memoryRepo.create({ id: "memory-absent" }));
+
+		const root = createTempDir();
+		const sqliteRepo = new SqliteSessionRepository({
+			env: new NodeExecutionEnv({ cwd: root }),
+			sqlite: createNodeSqliteFactory(),
+			databasePath: join(root, "sessions.sqlite"),
+		});
+		ownedRepositories.push(sqliteRepo);
+		await assertAbsentStop(await sqliteRepo.create({ id: "sqlite-absent", cwd: root }));
+	});
+
 	it("validates SQLite entries before filtering and limiting branch results", async () => {
 		const root = createTempDir();
 		const databasePath = join(root, "sessions.sqlite");

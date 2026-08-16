@@ -93,7 +93,18 @@ export function createIncrementalConverter(config: AgentLoopConfig): Incremental
 				// Only the last message changed (streaming deltas): re-convert it.
 				if (converted.length > 0 && messages.length > 0) {
 					const last = await config.convertToLlm([messages[messages.length - 1]!]);
-					converted[converted.length - 1] = last[0]!;
+					if (last.length > 0) {
+						converted[converted.length - 1] = last[0]!;
+					} else {
+						// The final message converted to ZERO outputs (e.g. a filtered
+						// bashExecution/unknown role). Positional caching keyed on
+						// message count can no longer stay aligned with the filtered
+						// converted array, so re-convert the whole history once rather
+						// than leave a stale element (or `undefined`) at the tail.
+						converted = await config.convertToLlm(messages);
+						cachedArray = messages;
+						convertedCount = messages.length;
+					}
 				}
 				return converted;
 			}
@@ -144,13 +155,10 @@ export function agentLoop(
 			// The stream function (or the loop) rejected instead of emitting a
 			// non-error stop. Without this handler the rejection would be an
 			// unhandled promise rejection and `stream` would never end, leaking its
-			// event buffer and subscribers. Push a synthetic terminal so consumers
-			// see agent_end and the stream resolves, then end it.
-			console.error("[agent-loop] agentLoop failed", err);
-			try {
-				stream.push({ type: "agent_end", messages: [] });
-			} catch {}
-			stream.end([]);
+			// event buffer and subscribers. Push a synthetic terminal that carries
+			// the failure (an assistant message with stopReason "error") so
+			// consumers observe a failure instead of a silent empty `agent_end`.
+			emitLoopFailure(stream, config, err);
 		},
 	);
 
@@ -196,11 +204,7 @@ export function agentLoopContinue(
 		(err) => {
 			// See agentLoop: a rejected loop must still terminal the stream so
 			// subscribers are not left hanging and the rejection is not unhandled.
-			console.error("[agent-loop] agentLoopContinue failed", err);
-			try {
-				stream.push({ type: "agent_end", messages: [] });
-			} catch {}
-			stream.end([]);
+			emitLoopFailure(stream, config, err);
 		},
 	);
 
@@ -262,6 +266,44 @@ function createAgentStream(): EventStream<AgentEvent, AgentMessage[]> {
 		(event: AgentEvent) => event.type === "agent_end",
 		(event: AgentEvent) => (event.type === "agent_end" ? event.messages : []),
 	);
+}
+
+/**
+ * Terminal a rejected agent stream with a visible failure instead of a silent
+ * empty `agent_end`. Rejections reach this path when `streamFunction` (or the
+ * loop) throws rather than encoding the failure as a non-error stop, so this
+ * synthesizes an assistant "error" message that carries the underlying error
+ * and ends the stream with it. Consistent with `Agent.handleRunFailure`.
+ */
+function emitLoopFailure(
+	stream: EventStream<AgentEvent, AgentMessage[]>,
+	config: AgentLoopConfig,
+	error: unknown,
+): void {
+	console.error("[agent-loop] agent loop failed", error);
+	const message = String(error instanceof Error ? error.message : error);
+	const failureMessage = {
+		role: "assistant",
+		content: [{ type: "text", text: message }],
+		api: config.model.api,
+		provider: config.model.provider,
+		model: config.model.id,
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "error",
+		errorMessage: message,
+		timestamp: Date.now(),
+	} satisfies AgentMessage;
+	try {
+		stream.push({ type: "agent_end", messages: [failureMessage] });
+	} catch {}
+	stream.end([failureMessage]);
 }
 
 /**
