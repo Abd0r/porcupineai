@@ -99,6 +99,8 @@ These variables are read by Porcupine itself:
 
 Provider credentials such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and cloud-provider configuration are listed in [Providers](providers.md#environment-variables-or-auth-file).
 
+Local servers: `LLAMA_BASE_URL` / `LLAMA_API_KEY`, `OLLAMA_BASE_URL` / `OLLAMA_API_KEY`, `MLX_BASE_URL` / `MLX_API_KEY`. See [Local models](local-models.md).
+
 ## Agent-home `.env`
 
 At CLI startup Porcupine loads `<agent home>/.env` (usually

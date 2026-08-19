@@ -43,6 +43,7 @@ For the full first-run flow, see [Quickstart](quickstart.md).
 - [MCP](mcp.md) - Model Context Protocol client: connect MCP servers, tools/resources/prompts, OAuth, security.
 - [Providers](providers.md) - subscription and API-key setup for built-in providers.
 - [llama.cpp](llama-cpp.md) - run a local router and manage models with `/llama`.
+- [Local models](local-models.md) - Ollama, MLX, and llama.cpp on Apple Silicon.
 - [Security](security.md) - project trust, sandbox boundaries, and vulnerability reporting.
 - [Containerization](containerization.md) - sandbox porcupine with Gondolin, Docker, or OpenShell.
 - [Server](server.md) - headless HTTP API: `porcupine serve`, sessions, async prompts, SSE events, programmatic approval.
