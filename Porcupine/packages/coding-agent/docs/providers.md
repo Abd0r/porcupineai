@@ -2,6 +2,8 @@
 
 Porcupine supports subscription-based providers via OAuth and API key providers via environment variables or auth file. Built-in catalogs ship with porcupine; configured providers may refresh newer catalogs and cache them in `~/.porcupine/agent/models-store.json` for offline use.
 
+OpenCode Go also refreshes from the live list at `https://opencode.ai/zen/go/v1/models` (same source as the Go page). Pinned metadata is kept for known ids; new ids such as Muse Spark 1.2 Contributor appear in `/model` after a refresh without waiting for a catalog regen.
+
 ## Table of Contents
 
 - [Subscriptions](#subscriptions)
@@ -9,6 +11,8 @@ Porcupine supports subscription-based providers via OAuth and API key providers 
 - [Auth File](#auth-file)
 - [Cloud Providers](#cloud-providers)
 - [llama.cpp](#llamacpp)
+- [Ollama](#ollama)
+- [MLX](#mlx)
 - [Custom Providers](#custom-providers)
 - [Resolution Order](#resolution-order)
 
@@ -294,9 +298,25 @@ Porcupine supports the llama.cpp router server. Configure it with `/login llama.
 
 See [llama.cpp](llama-cpp.md) for server setup, model directory layout, environment variables, and command usage.
 
+## Ollama
+
+Native provider. Configure with `/login ollama`, list pulled models with `/ollama`, then `/model`.
+
+Default URL is `http://127.0.0.1:11434`. Set `OLLAMA_BASE_URL` to skip the prompt. The API key is optional.
+
+See [Local models](local-models.md).
+
+## MLX
+
+Native provider for `mlx_lm.server` on Apple Silicon. Configure with `/login mlx`, list models with `/mlx`, then `/model`.
+
+Default URL is `http://127.0.0.1:8080`. That port is also llama.cpp's default — run only one of them there. Set `MLX_BASE_URL` to skip the prompt.
+
+See [Local models](local-models.md).
+
 ## Custom Providers
 
-**Via models.json:** Add Ollama, LM Studio, vLLM, or any provider that speaks a supported API (OpenAI Completions, OpenAI Responses, Anthropic Messages, Google Generative AI). See [models.md](models.md).
+**Via models.json:** Add LM Studio, vLLM, or any provider that speaks a supported API (OpenAI Completions, OpenAI Responses, Anthropic Messages, Google Generative AI). Ollama and MLX have native `/login` providers; `models.json` is still valid if you want a static list. See [models.md](models.md).
 
 **Via extensions:** For providers that need custom API implementations or OAuth flows, create an extension. See [custom-provider.md](custom-provider.md) and [examples/extensions/custom-provider-gitlab-duo](../examples/extensions/custom-provider-gitlab-duo/).
 

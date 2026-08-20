@@ -46,6 +46,10 @@
         {
           "title": "llama.cpp",
           "path": "llama-cpp.md"
+        },
+        {
+          "title": "Local models",
+          "path": "local-models.md"
         }
       ]
     },

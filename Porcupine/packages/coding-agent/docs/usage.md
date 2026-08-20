@@ -38,6 +38,8 @@ Type `/` in the editor to open command completion. Extensions can register custo
 | ---------------------------- | -------------------------------------------------------------------------- |
 | `/login`, `/logout`          | Manage OAuth or API-key credentials                                        |
 | [`/llama`](llama-cpp.md)     | Download, load, and unload llama.cpp router models                         |
+| [`/ollama`](local-models.md) | List models on the local Ollama server                                     |
+| [`/mlx`](local-models.md)    | List models on the local MLX (`mlx_lm.server`) endpoint                    |
 | `/model`                     | Switch models                                                              |
 | `/scoped-models`             | Enable/disable models for Ctrl+P cycling                                   |
 | `/settings`                  | Thinking level, theme, message delivery, transport                         |

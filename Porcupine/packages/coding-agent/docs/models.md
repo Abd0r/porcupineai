@@ -1,6 +1,8 @@
 # Custom Models
 
-Add custom providers and models (Ollama, vLLM, LM Studio, proxies) via `~/.porcupine/agent/models.json`.
+Add custom providers and models (vLLM, LM Studio, proxies) via `~/.porcupine/agent/models.json`.
+
+Ollama and MLX are native providers now (`/login ollama`, `/login mlx`). See [Local models](local-models.md). The JSON examples below still work if you want a fixed list instead of auto-discovery.
 
 ## Table of Contents
 
