@@ -2,6 +2,8 @@
 
 Porcupine supports subscription-based providers via OAuth and API key providers via environment variables or auth file. Built-in catalogs ship with porcupine; configured providers may refresh newer catalogs and cache them in `~/.porcupine/agent/models-store.json` for offline use.
 
+OpenCode Go also refreshes from the live list at `https://opencode.ai/zen/go/v1/models` (same source as the Go page). Pinned metadata is kept for known ids; new ids such as Muse Spark 1.2 Contributor appear in `/model` after a refresh without waiting for a catalog regen.
+
 ## Table of Contents
 
 - [Subscriptions](#subscriptions)

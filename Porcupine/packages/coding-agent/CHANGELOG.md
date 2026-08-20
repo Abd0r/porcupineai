@@ -4,6 +4,7 @@
 
 ### Added
 
+- **OpenCode Go live catalog:** `/model` overlays the public list at `https://opencode.ai/zen/go/v1/models` on the pinned Go metadata, so new Go models (e.g. Muse Spark 1.2 Contributor) appear without a generate-models regen.
 - **Native Ollama and MLX providers** for local / Apple Silicon models. `/login ollama` discovers pulled models from `http://127.0.0.1:11434` (`/api/tags`, then `/v1/models`). `/login mlx` discovers `mlx_lm.server` models from `http://127.0.0.1:8080/v1/models`. `/ollama` and `/mlx` refresh the live catalog. llama.cpp `/login llama.cpp` + `/llama` is unchanged. Docs: `docs/local-models.md`.
 
 ## [0.1.72] - 2026-08-16
