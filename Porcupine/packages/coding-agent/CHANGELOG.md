@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.73] - 2026-08-20
+
 ### Added
 
 - **OpenCode Go live catalog:** `/model` overlays the public list at `https://opencode.ai/zen/go/v1/models` on the pinned Go metadata, so new Go models (e.g. Muse Spark 1.2 Contributor) appear without a generate-models regen.
