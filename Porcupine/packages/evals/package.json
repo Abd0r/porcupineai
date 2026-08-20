@@ -13,7 +13,7 @@
 		"@porcupineai/coding-agent": "^0.1.73",
 		"@types/node": "24.12.4",
 		"shx": "0.4.0",
-		"typescript": "5.9.3",
+		"typescript": "7.0.2",
 		"vitest-evals": "0.15.0",
 		"vitest": "4.1.9"
 	}
