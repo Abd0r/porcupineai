@@ -2253,6 +2253,28 @@ async function generateModels() {
 		}
 	}
 
+	// Fire Pass routers are a documented compatibility path. Preserve Kimi K2.6
+	// Turbo when the upstream catalog temporarily omits router entries.
+	const fireworksCompatModels: Model<"anthropic-messages">[] = [
+		{
+			id: "accounts/fireworks/routers/kimi-k2p6-turbo",
+			name: "Kimi K2.6 Turbo",
+			api: "anthropic-messages",
+			provider: "fireworks",
+			baseUrl: "https://api.fireworks.ai/inference",
+			reasoning: false,
+			input: ["text", "image"],
+			cost: { input: 0.95, output: 4, cacheRead: 0.16, cacheWrite: 0 },
+			contextWindow: 262000,
+			maxTokens: 256000,
+		},
+	];
+	for (const model of fireworksCompatModels) {
+		if (!allModels.some((candidate) => candidate.provider === model.provider && candidate.id === model.id)) {
+			allModels.push(model);
+		}
+	}
+
 	// Keep this documented Workers AI compatibility route available when the
 	// upstream discovery feed temporarily omits it. It exercises the gateway's
 	// OpenAI-completions transport and is distinct from the direct Workers AI API.

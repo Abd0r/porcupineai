@@ -152,37 +152,29 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
 		}
 	});
 
-	it("tracks split Kitty confirmation", () => {
-		mock.timers.enable({ apis: ["setTimeout"] });
+	it("tracks a Kitty confirmation split across input chunks before the timeout", () => {
 		const harness = setupNegotiation();
 		try {
 			harness.send("\x1b[?7");
-			mock.timers.tick(10);
-
-			assert.equal(harness.getInput(), undefined);
-
 			harness.send("u");
 
 			assert.equal(harness.terminal.kittyProtocolActive, true);
 			assert.equal(harness.writes.includes("\x1b[>4;2m"), false);
 		} finally {
 			harness.cleanup();
-			mock.timers.reset();
 		}
 	});
 
-	it("replays buffered CSI-prefix input when it is not a Kitty response", () => {
+	it("emits an expired CSI prefix as literal input", () => {
 		mock.timers.enable({ apis: ["setTimeout"] });
 		const harness = setupNegotiation();
 		try {
 			harness.send("\x1b[");
 			mock.timers.tick(10);
 
-			assert.equal(harness.getInput(), undefined);
-
-			mock.timers.tick(150);
-
-			assert.equal(harness.getInput(), "\x1b[");
+			// Expired prefixes are emitted character-by-character so later printable
+			// input cannot complete them into a ghost shortcut.
+			assert.equal(harness.getInput(), "[");
 		} finally {
 			harness.cleanup();
 			mock.timers.reset();

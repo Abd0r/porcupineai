@@ -4,9 +4,9 @@ import { StdinBuffer } from "../src/stdin-buffer.ts";
 
 // ---------------------------------------------------------------------------
 // ui-proof-cbA — stdin chunk-split parsing edge cases (FIXED behavior).
-// flush() now re-splits with extractCompleteSequences and keeps an incomplete
-// escape tail buffered so a slow escape split across a flush boundary is
-// reassembled instead of leaking as a broken partial + garbage tail.
+// flush() re-splits complete input, then emits an expired incomplete prefix as
+// literal characters. This prevents later input from completing a stale escape
+// prefix into a ghost shortcut.
 // ---------------------------------------------------------------------------
 
 function _collect(processChunks: string[]): string[] {
@@ -34,33 +34,27 @@ describe("ui-proof-cbA stdin chunk splitting (fixed)", () => {
 		assert.deepEqual(emitted, ["\x1b[<0;10;11M", "\x1b[<1;12;13m"]);
 	});
 
-	it("an incomplete escape tail is kept buffered, not flushed raw", () => {
+	it("emits an expired incomplete escape tail literally", () => {
 		const buffer = new StdinBuffer({ timeout: 5 });
-		const emitted: string[] = [];
-		buffer.on("data", (seq) => emitted.push(seq));
-
 		buffer.process("\x1b[27;5;");
-		const flushed = buffer.flush();
-		assert.equal(flushed.length, 0, "incomplete tail must not be emitted");
-		assert.equal(buffer.getBuffer(), "\x1b[27;5;", "tail stays buffered for reassembly");
+
+		assert.deepEqual(buffer.flush(), ["\x1b", "[", "2", "7", ";", "5", ";"]);
+		assert.equal(buffer.getBuffer(), "");
 	});
 
-	it("a slow escape split across a flush() boundary is reassembled", () => {
+	it("does not let a slow tail complete an expired escape prefix", () => {
 		const buffer = new StdinBuffer({ timeout: 0 });
 		const emitted: string[] = [];
 		buffer.on("data", (seq) => emitted.push(seq));
 
-		// Fragment 1: start of an SGR mouse sequence, still incomplete.
 		buffer.process("\x1b[<0;10;11");
 		for (const seq of buffer.flush()) emitted.push(seq);
-		assert.equal(emitted.length, 0, "nothing complete yet");
-		assert.equal(buffer.getBuffer(), "\x1b[<0;10;11");
+		assert.deepEqual(emitted, ["\x1b", "[", "<", "0", ";", "1", "0", ";", "1", "1"]);
+		assert.equal(buffer.getBuffer(), "");
 
-		// Fragment 2 arrives after the flush: the buffered prefix + tail now form
-		// one complete sequence — emitted as a single reassembled event.
 		buffer.process("M");
 		for (const seq of buffer.flush()) emitted.push(seq);
-		assert.deepEqual(emitted, ["\x1b[<0;10;11M"], "reassembled, no bare tail leak");
+		assert.deepEqual(emitted, ["\x1b", "[", "<", "0", ";", "1", "0", ";", "1", "1", "M"]);
 	});
 
 	it("multi-byte codepoints survive buffer.process() calls", () => {
