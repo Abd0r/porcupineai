@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.1.74] - 2026-09-01
+
+### Added
+
+- **Compact + Safe Autonomy:** compaction checkpoints retain safety and permission context; Auto Mode caches equivalent verdicts briefly, uses a fail-closed circuit breaker, and broadens write-to-execute scanning across common script runtimes.
+
+### Fixed
+
+- Sub-agent retry state, live provider-catalog resilience, and expired terminal escape-prefix handling.
+
 ## [0.1.73] - 2026-08-20
 
 ### Added
