@@ -131,6 +131,15 @@ describe("StdinBuffer", () => {
 			await wait(15);
 
 			assert.deepStrictEqual(emittedSequences, ["\x1b", "[", "<", "3", "5"]);
+			assert.strictEqual(buffer.getBuffer(), "");
+		});
+
+		it("does not turn a key arriving after timeout into a ghost CSI sequence", async () => {
+			processInput("\x1b[");
+			await wait(15);
+			processInput("a");
+
+			assert.deepStrictEqual(emittedSequences, ["\x1b", "[", "a"]);
 		});
 	});
 
@@ -334,7 +343,7 @@ describe("StdinBuffer", () => {
 	});
 
 	describe("Flush", () => {
-		it("flushes incomplete CSI prefixes literally", () => {
+		it("flushes incomplete CSI prefixes as literal input", () => {
 			processInput("\x1b[<35");
 			const flushed = buffer.flush();
 			assert.deepStrictEqual(flushed, ["\x1b", "[", "<", "3", "5"]);
@@ -353,15 +362,11 @@ describe("StdinBuffer", () => {
 			assert.deepStrictEqual(flushed, []);
 		});
 
-		it("does not reassemble a sequence split across the timeout boundary", async () => {
+		it("treats a late sequence tail as literal input", async () => {
 			processInput("\x1b[<35");
-			assert.deepStrictEqual(emittedSequences, []);
-
 			await wait(15);
-			assert.deepStrictEqual(emittedSequences, ["\x1b", "[", "<", "3", "5"]);
-
-			// The tail remains literal input and cannot become a ghost shortcut.
 			processInput(";20;5m");
+
 			assert.deepStrictEqual(emittedSequences, ["\x1b", "[", "<", "3", "5", ";", "2", "0", ";", "5", "m"]);
 		});
 	});
