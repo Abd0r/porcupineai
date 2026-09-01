@@ -95,6 +95,25 @@ describe("runSubagent", () => {
 		expect(result.error).toContain("budget");
 	});
 
+	it("retries a transient assistant error and returns the subsequent result", async () => {
+		const faux = createFauxRegistration();
+		faux.setResponses([
+			fauxAssistantMessage("", { stopReason: "error", errorMessage: "upstream server error" }),
+			fauxAssistantMessage("Recovered after retry."),
+		]);
+
+		const result = await runSubagent({
+			task: "Retry if the provider is temporarily unavailable.",
+			model: faux.getModel(),
+			streamFn: streamSimple,
+			tools: [],
+			systemPrompt: "You are a sub-agent.",
+		});
+
+		expect(result.ok).toBe(true);
+		expect(result.summary).toContain("Recovered after retry.");
+	});
+
 	it("emits start / step / turn / done progress events", async () => {
 		const faux = createFauxRegistration();
 		faux.setResponses([

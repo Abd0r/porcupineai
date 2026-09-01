@@ -1,4 +1,4 @@
-import type { Model } from "@porcupineai/ai";
+import { isRetryableAssistantError, type Model } from "@porcupineai/ai";
 import { Agent } from "../agent.ts";
 import { estimateTokens } from "../harness/compaction/compaction.ts";
 import { convertToLlm } from "../harness/messages.ts";
@@ -270,15 +270,83 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 	}
 
 	let promptError: unknown;
+	// Transient LLM failures (mid-stream truncation without finish_reason, upstream
+	// 5xx/overload) surface either as thrown errors or as assistant messages with
+	// stopReason "error". Retry the same prompt a bounded number of times instead of
+	// failing the whole sub-agent run - mirrors the main agent's turn-level retry.
+	const MAX_LLM_RETRIES = 3;
+	let llmRetries = 0;
+	const isTransientLlmError = (errorMessage: string): boolean =>
+		isRetryableAssistantError({
+			role: "assistant",
+			content: [],
+			api: options.model.api,
+			provider: options.model.provider,
+			model: options.model.id,
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "error",
+			errorMessage,
+			timestamp: Date.now(),
+		});
+	const retrySleep = async (ms: number): Promise<void> => {
+		for (let waited = 0; waited < ms && !aborted; waited += 200) {
+			await new Promise((resolve) => setTimeout(resolve, 200));
+		}
+	};
+	const resetAfterRetry = (): void => {
+		// reset() clears these queues, so capture parent steering before resetting.
+		const queuedSteering = agent.drainSteeringMessages();
+		const queuedFollowUps = agent.drainFollowUpMessages();
+		agent.reset();
+		lastEstimatedMessages = 0;
+		runningContextTokens = Math.ceil(systemPrompt.length / 4);
+		for (const message of queuedSteering) agent.steer(message);
+		for (const message of queuedFollowUps) agent.followUp(message);
+	};
 	try {
 		while (!aborted) {
 			compactionRequested = false;
-			if (fullMessages.length === 0) {
-				await agent.prompt(options.notes ? `${options.notes}\n\n${options.task}` : options.task);
-			} else {
-				await agent.prompt(compactedContext);
+			try {
+				if (fullMessages.length === 0) {
+					await agent.prompt(options.notes ? `${options.notes}\n\n${options.task}` : options.task);
+				} else {
+					await agent.prompt(compactedContext);
+				}
+				llmRetries = 0;
+			} catch (error) {
+				const text = error instanceof Error ? error.message : String(error);
+				if (!aborted && !budgetHit && isTransientLlmError(text) && llmRetries < MAX_LLM_RETRIES) {
+					llmRetries += 1;
+					resetAfterRetry();
+					await retrySleep(1500 * llmRetries);
+					continue;
+				}
+				promptError = error;
+				break;
 			}
-			if (!compactionRequested) break;
+			if (!compactionRequested) {
+				// LLM/API failures arrive as an assistant message with stopReason "error"
+				// rather than a throw: retry transient ones before giving up.
+				const lastAssistant = [...agent.state.messages].reverse().find((m) => m.role === "assistant");
+				const retryable =
+					lastAssistant !== undefined &&
+					lastAssistant.stopReason === "error" &&
+					isRetryableAssistantError(lastAssistant);
+				if (retryable && llmRetries < MAX_LLM_RETRIES && !aborted && !budgetHit) {
+					llmRetries += 1;
+					resetAfterRetry();
+					await retrySleep(1500 * llmRetries);
+					continue;
+				}
+				break;
+			}
 			// This segment ended because the context threshold was crossed:
 			// summarize it, retain the recent tail, and resume the same task.
 			const segment = agent.state.messages;

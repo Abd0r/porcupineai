@@ -124,14 +124,22 @@ describe("StdinBuffer", () => {
 			assert.deepStrictEqual(emittedSequences, ["\x1b[<35;20;5m"]);
 		});
 
-		it("keeps an incomplete sequence buffered after timeout (reassembly)", async () => {
+		it("emits an incomplete sequence literally after timeout", async () => {
 			processInput("\x1b[<35");
 			assert.deepStrictEqual(emittedSequences, []);
 
-			// Wait for timeout — nothing is emitted for an incomplete prefix.
 			await wait(15);
 
-			assert.deepStrictEqual(emittedSequences, []);
+			assert.deepStrictEqual(emittedSequences, ["\x1b", "[", "<", "3", "5"]);
+			assert.strictEqual(buffer.getBuffer(), "");
+		});
+
+		it("does not turn a key arriving after timeout into a ghost CSI sequence", async () => {
+			processInput("\x1b[");
+			await wait(15);
+			processInput("a");
+
+			assert.deepStrictEqual(emittedSequences, ["\x1b", "[", "a"]);
 		});
 	});
 
@@ -335,11 +343,11 @@ describe("StdinBuffer", () => {
 	});
 
 	describe("Flush", () => {
-		it("keeps incomplete CSI prefixes buffered for reassembly", () => {
+		it("flushes incomplete CSI prefixes as literal input", () => {
 			processInput("\x1b[<35");
 			const flushed = buffer.flush();
-			assert.deepStrictEqual(flushed, []);
-			assert.strictEqual(buffer.getBuffer(), "\x1b[<35");
+			assert.deepStrictEqual(flushed, ["\x1b", "[", "<", "3", "5"]);
+			assert.strictEqual(buffer.getBuffer(), "");
 		});
 
 		it("flushes a lone ESC (real Esc keypress)", () => {
@@ -354,17 +362,12 @@ describe("StdinBuffer", () => {
 			assert.deepStrictEqual(flushed, []);
 		});
 
-		it("reassembles a sequence split across the timeout boundary", async () => {
+		it("treats a late sequence tail as literal input", async () => {
 			processInput("\x1b[<35");
-			assert.deepStrictEqual(emittedSequences, []);
-
-			// Wait for timeout to flush — the incomplete prefix is NOT emitted.
 			await wait(15);
-			assert.deepStrictEqual(emittedSequences, []);
-
-			// The tail completes it into one clean event.
 			processInput(";20;5m");
-			assert.deepStrictEqual(emittedSequences, ["\x1b[<35;20;5m"]);
+
+			assert.deepStrictEqual(emittedSequences, ["\x1b", "[", "<", "3", "5", ";", "2", "0", ";", "5", "m"]);
 		});
 	});
 
