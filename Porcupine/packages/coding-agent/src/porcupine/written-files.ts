@@ -12,7 +12,7 @@
  * long session.
  */
 
-import { basename, resolve } from "node:path";
+import { relative, resolve } from "node:path";
 
 const MAX_ENTRIES = 4096;
 const STALE_MS = 5 * 60 * 1000; // forget very old writes; stale scripts are not fresh agent-authored weapons
@@ -66,16 +66,16 @@ function escapeRegex(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-const EVALUATOR = "\\b(?:ba|z|k|da)?sh\\b|\\bsource\\b|\\.(?:\\s|\\/[^\\s]|$)";
+const EVALUATOR =
+	"\\b(?:ba|z|k|da)?sh\\b|\\bsource\\b|\\b(?:python(?:[23])?|node|bun|deno|perl|ruby|php)\\b|\\.(?:\\s|\\/[^\\s]|$)";
 
 /**
  * Given a bash command run from `cwd`, return the tracked written-file path the
  * command appears to execute — or null when it does not.
  *
  * Recognized invocation shapes:
- *   - `bash|sh|zsh|source <path>` with `path` being `./base`, `base`, or absolute
- *   - `./base` used as a standalone command
- *   - `<base>` used alone as a command
+ *   - shell and common language evaluators (`bash`, `python`, `node`, `bun`, etc.) with a tracked path
+ *   - `./path` or `path` used as a standalone executable command
  */
 export function findExecutedWrittenScript(command: string, cwd: string): string | null {
 	prune();
@@ -86,22 +86,14 @@ export function findExecutedWrittenScript(command: string, cwd: string): string 
 	candidates.sort((a, b) => (writtenPaths.get(b) ?? 0) - (writtenPaths.get(a) ?? 0));
 	for (const abs of candidates) {
 		const absResolved = resolve(cwd, abs);
-		const base = basename(absResolved);
-		const baseEsc = escapeRegex(base);
-		const absEsc = escapeRegex(absResolved);
-		// Evaluator+path: `bash payload.sh`, `sh payload.sh`, `source ./payload.sh`, etc.
-		if (new RegExp(`(${EVALUATOR})\\s+(?:\\./)?(${baseEsc})(?:\\s|$|;|&|\\|)`).test(normalized)) {
+		const relativePath = relative(cwd, absResolved);
+		const pathVariants = [absResolved, relativePath, `./${relativePath}`].filter(Boolean).map(escapeRegex).join("|");
+		// Evaluator+path: `bash payload.sh`, `python scripts/payload.py`, `source /abs/payload.sh`, etc.
+		if (new RegExp(`(${EVALUATOR})\\s+(?:${pathVariants})(?:\\s|$|;|&|\\|)`).test(normalized)) {
 			return absResolved;
 		}
-		if (new RegExp(`(${EVALUATOR})\\s+(${absEsc})(?:\\s|$|;|&|\\|)`).test(normalized)) {
-			return absResolved;
-		}
-		// `./base` used as a standalone command word.
-		if (new RegExp(`(?:^|[;&|])\\s*\\./(${baseEsc})(?:\\s|$|[;&|])`).test(normalized)) {
-			return absResolved;
-		}
-		// Bare `base` alone as the command (executable).
-		if (new RegExp(`(?:^|[;&|])\\s*(${baseEsc})\\s*(?:$|[;&|])`).test(normalized)) {
+		// A tracked path used as a standalone executable command.
+		if (new RegExp(`(?:^|[;&|])\\s*(?:${pathVariants})\\s*(?:$|[;&|])`).test(normalized)) {
 			return absResolved;
 		}
 	}

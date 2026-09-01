@@ -92,10 +92,13 @@ const TOOL_RESULT_MAX_CHARS = 2000;
  * Truncate text to a maximum character length for summarization.
  * Keeps the beginning and appends a truncation marker.
  */
-function truncateForSummary(text: string, maxChars: number): string {
+function truncateForSummary(text: string, maxChars: number, preserveTail = false): string {
 	if (text.length <= maxChars) return text;
 	const truncatedChars = text.length - maxChars;
-	return `${text.slice(0, maxChars)}\n\n[... ${truncatedChars} more characters truncated]`;
+	if (!preserveTail) return `${text.slice(0, maxChars)}\n\n[... ${truncatedChars} more characters truncated]`;
+	const tailChars = Math.min(800, Math.floor(maxChars / 2));
+	const headChars = maxChars - tailChars;
+	return `${text.slice(0, headChars)}\n\n[... ${truncatedChars} more characters truncated; error tail preserved]\n\n${text.slice(-tailChars)}`;
 }
 
 /**
@@ -141,7 +144,7 @@ export function serializeConversation(messages: Message[]): string {
 		} else if (msg.role === "toolResult") {
 			const content = contentText(msg.content, "");
 			if (content) {
-				parts.push(`[Tool result]: ${truncateForSummary(content, TOOL_RESULT_MAX_CHARS)}`);
+				parts.push(`[Tool result]: ${truncateForSummary(content, TOOL_RESULT_MAX_CHARS, msg.isError === true)}`);
 			}
 		}
 	}

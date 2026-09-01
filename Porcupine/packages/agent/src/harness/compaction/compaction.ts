@@ -498,7 +498,11 @@ Use this EXACT format:
 - [Any data, examples, or references needed to continue]
 - [Or "(none)" if not applicable]
 
-Keep each section concise. Preserve exact file paths, function names, and error messages.`;
+## Safety & Permissions
+- [Exact user constraints, denied actions, blocked tool calls, or failed commands that must not be retried]
+- [Or "(none)" if none were shown]
+
+Keep each section concise. Preserve exact file paths, function names, and error messages. Do not invent constraints, permissions, decisions, file paths, or failures not present in the conversation.`;
 
 const UPDATE_SUMMARIZATION_PROMPT = `The messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.
 
@@ -537,7 +541,11 @@ Use this EXACT format:
 ## Critical Context
 - [Preserve important context, add new if needed]
 
-Keep each section concise. Preserve exact file paths, function names, and error messages.`;
+## Safety & Permissions
+- [Preserve exact user constraints, denied actions, blocked tool calls, and failed commands that must not be retried]
+- [Or "(none)" if none were shown]
+
+Keep each section concise. Preserve exact file paths, function names, and error messages. Do not invent constraints, permissions, decisions, file paths, or failures not present in the conversation.`;
 
 /** Generate or update a conversation summary for compaction. */
 export async function generateSummary(

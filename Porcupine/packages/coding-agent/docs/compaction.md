@@ -246,6 +246,10 @@ Both compaction and branch summarization use the same structured format:
 ## Critical Context
 - [Data needed to continue]
 
+## Safety & Permissions
+- [Exact user constraints, denied actions, blocked calls, or failed commands that must not be retried]
+- [(none) when no such evidence exists]
+
 <read-files>
 path/to/file1.ts
 path/to/file2.ts
@@ -270,7 +274,7 @@ Before summarization, messages are serialized to text via [`serializeConversatio
 
 This prevents the model from treating it as a conversation to continue.
 
-Tool results are truncated to 2000 characters during serialization. Content beyond that limit is replaced with a marker indicating how many characters were truncated. This keeps summarization requests within reasonable token budgets, since tool results (especially from `read` and `bash`) are typically the largest contributors to context size.
+Tool results are truncated to 2000 characters during serialization. Ordinary results retain their head plus a truncation marker. Error results retain a bounded head **and tail**, preserving final diagnostics such as an exit error while keeping the same token budget. This keeps summarization requests within reasonable token budgets, since tool results (especially from `read` and `bash`) are typically the largest contributors to context size.
 
 ## Custom Summarization via Extensions
 
