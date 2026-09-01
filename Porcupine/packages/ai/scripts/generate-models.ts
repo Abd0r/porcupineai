@@ -2253,6 +2253,38 @@ async function generateModels() {
 		}
 	}
 
+	// Keep this documented Workers AI compatibility route available when the
+	// upstream discovery feed temporarily omits it. It exercises the gateway's
+	// OpenAI-completions transport and is distinct from the direct Workers AI API.
+	const cloudflareAiGatewayCompatModels: Model<"openai-completions">[] = [
+		{
+			id: "workers-ai/@cf/moonshotai/kimi-k2.6",
+			name: "Kimi K2.6",
+			api: "openai-completions",
+			provider: "cloudflare-ai-gateway",
+			baseUrl: CLOUDFLARE_AI_GATEWAY_COMPAT_BASE_URL,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0.95, output: 4, cacheRead: 0.16, cacheWrite: 0 },
+			contextWindow: 262144,
+			maxTokens: 256000,
+			compat: {
+				supportsStore: false,
+				supportsDeveloperRole: false,
+				supportsReasoningEffort: false,
+				maxTokensField: "max_tokens",
+				supportsStrictMode: false,
+				supportsLongCacheRetention: false,
+				sendSessionAffinityHeaders: true,
+			},
+		},
+	];
+	for (const model of cloudflareAiGatewayCompatModels) {
+		if (!allModels.some((candidate) => candidate.provider === model.provider && candidate.id === model.id)) {
+			allModels.push(model);
+		}
+	}
+
 	const deepseekCompat: OpenAICompletionsCompat = {
 		requiresReasoningContentOnAssistantMessages: true,
 		thinkingFormat: "deepseek",
