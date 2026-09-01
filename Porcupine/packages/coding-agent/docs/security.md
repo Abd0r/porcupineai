@@ -40,7 +40,9 @@ Injected context is hardened against frame-breaking: content loaded from `AGENTS
 
 ## Interaction Modes and the Fail-Closed Gate
 
-Interaction modes choose how tool actions are approved, independent of reasoning settings: **Ask** confirms every bash command and file mutation, **Normal** confirms flagged bash (file edits run directly), and **Auto** permits safe operations while routing flagged bash through a fail-closed LLM safety gate. In every mode, hardline destructive actions (`rm -rf /`, disk format, raw-device writes, fork bombs, power-off, kill-all) remain blocked. Force-push and destructive SQL are flagged, not hardline. Auto mode is autonomy, not a permission upgrade: it never makes destructive actions unrestricted, and it runs only while an interactive session is open and attended.
+Interaction modes choose how tool actions are approved, independent of reasoning settings: **Ask** confirms every bash command and file mutation, **Normal** confirms flagged bash (file edits run directly), and **Auto** permits safe operations while routing flagged bash through a fail-closed LLM safety gate. In every mode, hardline destructive actions (`rm -rf /`, disk format, raw-device writes, overwriting protected system or SSH paths, fork bombs, power-off, kill-all) remain blocked. Force-push and destructive SQL are flagged, not hardline. Auto mode is autonomy, not a permission upgrade: it never makes destructive actions unrestricted, and it runs only while an interactive session is open and attended.
+
+Auto classification is time-boxed to eight seconds. Identical, model-scoped flagged commands may reuse the same verdict for up to one minute; three unavailable or invalid classifier responses open a 30-second fail-closed circuit breaker. The breaker denies quickly rather than turning an upstream outage into repeated slow waits.
 
 ### Recursive deletes: intent from scope
 
@@ -49,7 +51,7 @@ Interaction modes choose how tool actions are approved, independent of reasoning
 - **Inside the workspace** (the session's project directory): recursive deletes are the agent's own domain and run without friction in Auto and Normal.
 - **Outside the workspace** (home, other repos, system areas): stays flagged — confirmed in Normal, LLM-gated in Auto.
 - **Protected paths**: root, system directories (`/etc`, `/usr`, `/bin`, `/sbin`, `/var`, `/Library`, `/System`, `/Applications`) and anything in the `safety.protectedPaths` setting are hardline-blocked in every mode, even inside the workspace. Deleting the working directory itself (`rm -rf .`) is always blocked.
-- Path equivalences (`rm -rf //`, `rm -rf /./`, `rm -rf -- /`, quoted roots) are normalized before matching, and executing a script the agent just wrote is content-scanned with the same detector (no write-then-execute bypass).
+- Path equivalences (`rm -rf //`, `rm -rf /./`, `rm -rf -- /`, quoted roots) are normalized before matching. Recently written files are content-scanned before execution through shell and common language evaluators, including Python, Node, Bun, Deno, Perl, Ruby, and PHP (no write-then-execute bypass).
 
 ### Monotonic hardline policy
 

@@ -51,6 +51,22 @@ describe("SAFETY PROOF (FIXED): write-then-execute is blocked", () => {
 		expect(decision.message).toContain("BLOCKED");
 	});
 
+	it("Auto mode blocks a recently written dangerous Python script", async () => {
+		const scriptPath = join(tmp, "payload.py");
+		writeFileSync(scriptPath, "import os\nos.system('rm -rf /')", "utf8");
+		recordWrittenPath(scriptPath);
+
+		const decision = await guardBashCommand({
+			command: "python payload.py",
+			mode: "auto",
+			modelRuntime: undefined as never,
+			model: undefined,
+			confirm: modelStub,
+			cwd: tmp,
+		});
+		expect(decision).toMatchObject({ approved: false, via: "hardline" });
+	});
+
 	it("Auto mode also blocks execution via source / absolute path", async () => {
 		const scriptPath = join(tmp, "s2.sh");
 		writeFileSync(scriptPath, "mkfs /dev/sdb", "utf8");

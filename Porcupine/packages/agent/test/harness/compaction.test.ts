@@ -488,6 +488,24 @@ describe("harness compaction", () => {
 		expect(result).toContain("[... 3000 more characters truncated]");
 	});
 
+	it("preserves the tail of oversized error results", () => {
+		const tail = "fatal: final diagnostic";
+		const messages = convertMessages([
+			{
+				role: "toolResult",
+				toolCallId: "tc1",
+				toolName: "bash",
+				content: [{ type: "text", text: `${"x".repeat(5000)}${tail}` }],
+				isError: true,
+				timestamp: Date.now(),
+			},
+		]);
+
+		const result = serializeConversation(messages);
+		expect(result).toContain("error tail preserved");
+		expect(result).toContain(tail);
+	});
+
 	it("passes reasoning through generateSummary only for reasoning models with thinking enabled", async () => {
 		const messages: AgentMessage[] = [createUserMessage("Summarize this.")];
 		const seenOptions: Array<Record<string, unknown> | undefined> = [];
