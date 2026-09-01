@@ -421,17 +421,14 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
 		// reassembles it.
 		const { sequences, remainder } = extractCompleteSequences(this.buffer);
 		this.buffer = remainder;
-		// A lone ESC is almost certainly a real Esc keypress (the timeout exists
-		// precisely to disambiguate ESC-from-a-split-sequence): emit it. Other
-		// incomplete prefixes (CSI/OSC/SS3) stay buffered so a sequence split
-		// across the timeout boundary reassembles when its tail arrives.
-		if (this.buffer === ESC) {
+		// The timeout is the boundary between an escape sequence and literal input.
+		// Keeping an expired CSI/OSC prefix lets a later printable key complete a
+		// different shortcut (for example ESC + [ + a becoming CSI a). Emit every
+		// expired prefix literally so late input cannot become a ghost sequence.
+		if (this.buffer.length > 0) {
+			sequences.push(...Array.from(this.buffer));
 			this.buffer = "";
-			sequences.push(ESC);
 		}
-		// No re-arm here: process() arms a fresh timeout whenever it leaves an
-		// incomplete remainder — re-arming from flush() would create an endless
-		// timer chain for a partial that may never complete.
 
 		this.pendingKittyPrintableCodepoint = undefined;
 		return sequences;
