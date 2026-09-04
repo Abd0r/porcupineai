@@ -15,7 +15,8 @@ import type { ChildProcess } from "child_process";
 import { execSync, spawn } from "child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { complete, getModel, getModels } from "../src/compat.ts";
-import type { AssistantMessage, Context, Model, Usage } from "../src/types.ts";
+import { getBuiltinModels } from "../src/providers/all.ts";
+import type { Api, AssistantMessage, Context, Model, Usage } from "../src/types.ts";
 import { isContextOverflow } from "../src/utils/overflow.ts";
 import { hasAzureOpenAICredentials } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
@@ -24,6 +25,17 @@ import { resolveApiKey } from "./oauth.ts";
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([resolveApiKey("github-copilot"), resolveApiKey("openai-codex")]);
 const [githubCopilotToken, openaiCodexToken] = oauthTokens;
+
+/**
+ * Dynamic catalog read. Pinned model-id literals vanish from CI's truncated
+ * full-JSON type inference (see c367cc8), so resolve at runtime and fail with
+ * a clear error when the catalog genuinely drops the id.
+ */
+function mustGetModel(provider: "github-copilot", id: string): Model<Api> {
+	const model = getBuiltinModels(provider).find((candidate) => candidate.id === id);
+	if (!model) throw new Error(`model ${provider}/${id} missing from the generated catalog`);
+	return model;
+}
 
 // Lorem ipsum paragraph for realistic token estimation
 const LOREM_IPSUM = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. `;
@@ -127,7 +139,7 @@ describe("Context overflow error handling", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gemini-2.5-pro - should detect overflow via isContextOverflow",
 			async () => {
-				const model = getModel("github-copilot", "gemini-3.1-pro-preview");
+				const model = mustGetModel("github-copilot", "gemini-3.1-pro-preview");
 				const result = await testContextOverflow(model, githubCopilotToken!);
 				logResult(result);
 
