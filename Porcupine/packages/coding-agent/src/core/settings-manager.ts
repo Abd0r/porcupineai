@@ -28,7 +28,7 @@ export interface SubagentSettings {
 	contextWindow?: number;
 	/** Max concurrent sub-agents. Default 3. */
 	maxConcurrent?: number;
-	/** Custom sub-agent names (tags are `@` + name). Unset = buck, fuddy, tinker. */
+	/** Custom sub-agent names (tags are `@` + name). Unset = buck, fudgy, tinker. */
 	names?: string[];
 }
 

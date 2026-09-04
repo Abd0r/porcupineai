@@ -30,7 +30,7 @@ function makeTool(options: Partial<Parameters<typeof createSubagentToolDefinitio
 			maxSteps: 30,
 			contextWindow: 256_000,
 			maxConcurrent: 1,
-			names: ["buck", "fuddy", "tinker"],
+			names: ["buck", "fudgy", "tinker"],
 		}),
 		...options,
 	});
@@ -40,7 +40,7 @@ describe("stop_subagent tool", () => {
 	const stopTool = createStopSubagentToolDefinition({
 		stop: (id) => id === "sa-1",
 		stopAll: () => 2,
-		getActiveRefs: () => ["@buck", "@fuddy"],
+		getActiveRefs: () => ["@buck", "@fudgy"],
 	});
 
 	it("stops a single sub-agent by id", async () => {
@@ -60,7 +60,7 @@ describe("stop_subagent tool", () => {
 			.map((part) => part.text)
 			.join("\n");
 		expect(text).toContain('No running sub-agent "sa-9"');
-		expect(text).toContain("@buck, @fuddy");
+		expect(text).toContain("@buck, @fudgy");
 		expect(result.details).toMatchObject({ stopped: 0 });
 	});
 
@@ -102,7 +102,7 @@ describe("subagent tool", () => {
 				maxSteps: 30,
 				contextWindow: 256_000,
 				maxConcurrent: 3,
-				names: ["buck", "fuddy", "tinker"],
+				names: ["buck", "fudgy", "tinker"],
 			}),
 			getActiveSubagentRuns: () => active,
 		});
@@ -164,11 +164,11 @@ describe("buildSpawnRoster", () => {
 	it("lists the main agent and active peers with tasks", () => {
 		const roster = buildSpawnRoster([
 			{ tag: "@buck", task: "Research harness" },
-			{ tag: "@fuddy", task: "Write docs" },
+			{ tag: "@fudgy", task: "Write docs" },
 		]);
 		expect(roster).toContain("@porcupine (main, your parent)");
 		expect(roster).toContain("@buck (Research harness)");
-		expect(roster).toContain("@fuddy (Write docs)");
+		expect(roster).toContain("@fudgy (Write docs)");
 		expect(roster).toContain("told you just came online");
 	});
 });

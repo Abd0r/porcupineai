@@ -37,9 +37,9 @@ describe("WoT sub-agent message bus", () => {
 	it("resolves tags with or without @ and reaches the main agent as @porcupine", () => {
 		const bus = new SubagentMessageBus();
 		bus.register("sa-a", "group-1", "buck");
-		bus.register("sa-b", "group-1", "fuddy");
-		expect(bus.resolveTarget("@fuddy")).toBe("sa-b");
-		expect(bus.resolveTarget("FUDDY")).toBe("sa-b");
+		bus.register("sa-b", "group-1", "fudgy");
+		expect(bus.resolveTarget("@fudgy")).toBe("sa-b");
+		expect(bus.resolveTarget("FUDGY")).toBe("sa-b");
 		expect(bus.resolveTarget("sa-b")).toBe("sa-b");
 		expect(bus.displayRef("sa-a")).toBe("@buck");
 		expect(bus.displayRef("sa-unknown-id")).toBe("sa-unknown");

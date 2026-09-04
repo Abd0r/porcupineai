@@ -386,7 +386,7 @@ export class AgentSession {
 	private readonly _subagentSteerers = new Map<string, (text: string) => void>();
 	/** Web of Thoughts (WoT): shared peer-messaging bus for gated sub-agent conversations. */
 	private readonly _subagentMessageBus = new SubagentMessageBus();
-	/** Human tags for running sub-agents (@buck/@fuddy/@tinker by default). */
+	/** Human tags for running sub-agents (@buck/@fudgy/@tinker by default). */
 	private _subagentNamePool: SubagentNamePool | undefined;
 	/** Short task excerpts per run id, used for spawn rosters and peer notices. */
 	private readonly _subagentTaskExcerpts = new Map<string, string>();
