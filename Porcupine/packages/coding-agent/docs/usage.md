@@ -275,8 +275,9 @@ claimed run for the next idle moment — the same attended, locked, append-only
 paths as `/task run` and the cron tick — so an agent-scheduled task starts right
 after the current turn instead of waiting for the next 15-second tick. When a
 run finishes (completed or failed), its one-line summary is fanned out to any
-connected chat bridge, so you learn a scheduled task finished without sitting in
-the TUI. Toggle with the `notifyOnTaskCompletion` setting (default on).
+connected chat bridge that heard from you recently (30-minute default, see
+`PORCUPINE_BRIDGE_NOTIFY_MAX_AGE_MS`), so you learn a scheduled task finished
+without sitting in the TUI. Toggle with the `notifyOnTaskCompletion` setting (default on).
 
 ### Project Workspaces
 
@@ -324,19 +325,21 @@ A bot token from @BotFather starts the Telegram bridge on launch:
   TUI, and the agent's response comes back to Telegram (shown in both places).
 - **Turn started in the TUI** → stays in the TUI only.
 - **Ask-mode confirmations** (bash commands, file edits) arrive as
-  `✅ Approve / ⛔ Deny` buttons in Telegram while the TUI dialog stays open;
-  the first response wins.
+  `✅ Approve / ⛔ Deny` buttons in Telegram racing the TUI dialog; the first
+  response wins and the losing dialog closes, so a stale button can never act
+  on a later request.
 - **`ask_question` dialogs** arrive as option buttons in Telegram (free-text
   questions become "Reply with your answer") and race the TUI dialog — the
   first response wins, so every interactive decision is answerable from the
   phone. Unanswered dialogs still time out and let the agent continue.
-- **Long responses are chunked** past Telegram's 4096-char limit, so nothing
-  is ever dropped. The bot registers a `/` command menu (`/start`, `/status`,
-  `/help`) and shows a 🟢 Online / 🔴 Offline indicator on its profile.
+- **Long responses are chunked** past Telegram's 4096-char limit at line
+  boundaries, never inside fenced code blocks, so nothing is ever dropped.
+  The bot registers a `/` command menu (`/start`, `/status`, `/help`) and shows
+  a 🟢 Online / 🔴 Offline indicator on its profile.
 - **Messages queue while the agent is busy.** If you send a message mid-task,
   it is not lost — it runs as a follow-up after the current turn, and the
   response still comes back to Telegram. A typing indicator acknowledges an
-  accepted prompt immediately.
+  accepted prompt and refreshes until the turn ends.
 - **Restart-safe polling.** After a restart, any updates that accumulated while
   the bridge was offline are drained without being processed, so old messages
   never re-trigger the agent and stale buttons never re-answer. Confirmations
@@ -344,7 +347,10 @@ A bot token from @BotFather starts the Telegram bridge on launch:
   newer one.
 - **Files & images**: a response containing a `MEDIA:/path/to/file` line sends
   that file to Telegram as a document (paths are resolved on the machine
-  running Porcupine).
+  running Porcupine). Only files inside the workspace or the OS temp dir up
+  to 20 MB are shareable; anything else gets a written refusal. Photo
+  captions are used as prompt text; other attachments without usable text get
+  a clear reply instead of silence.
 
 Bot commands: `/start` (welcome + session info), `/status` (session, cwd, mode),
 `/help`. Any other message is sent to the agent as a prompt.
@@ -371,8 +377,11 @@ remote control. Both the channel and the sender must match:
   exact prompt message, so stale reactions cannot answer a newer dialog.
 - **Commands:** `/status` · `/help`. Bot messages and messages from the bot
   itself are ignored; channels outside the allowlist are ignored.
-- Accepted prompts trigger Discord's typing indicator. `MEDIA:/path/to/file`
-  lines send local files as native attachments.
+- Accepted prompts trigger Discord's typing indicator, refreshed until the
+  turn ends. `MEDIA:/path/to/file` lines send local files as native
+  attachments (same workspace/temp-dir and size rules as Telegram). Oversized
+  option lists and attachment-only messages get an explicit notice instead of
+  silence.
 - The bridge is **zero-dependency**: it uses Node's built-in WebSocket for the
   gateway and REST for sending, with bounded 429 backoff and 2000-char
   chunking. Reconnects use Discord Opcode 6 session resume; missed heartbeat
@@ -391,15 +400,18 @@ participant. Group chats additionally require explicit senders in
 - **Confirmations** are text-based: reply `APPROVE` / `DENY`.
 - **`ask_question` options** are numbered; reply with a number. Free-text
   questions: reply with your answer.
-- **Commands:** `/status` · `/help`.
+- **Commands:** `/status` · `/help` (plus `!status` · `!tasks` · `!run` · `!help`).
 - Requires macOS + Messages.app signed in. Polling is AppleScript-based
-  (`osascript`); sending chunks long responses.
+  (`osascript`); sending chunks long responses without tearing code blocks.
+  The bridge's own sent texts are filtered from the poll, so replies are never
+  re-read as new prompts. `MEDIA:` results arrive as `File ready` paths.
 
 All three bridges forward responses only to the channel that started the turn
 (response provenance), queue messages while the agent is busy, bind remote
 dialogs to the authorized actor whose turn actually started, and fail closed
 when a reply/reaction comes from a different participant. Telegram and Discord
-also scope interactive controls to their exact request or message.
+also scope interactive controls to their exact request or message. When any
+side answers a dialog first, every losing dialog is cancelled and cleaned up.
 
 ### Scientific Research
 

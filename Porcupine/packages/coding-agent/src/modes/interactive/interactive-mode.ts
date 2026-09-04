@@ -154,7 +154,7 @@ import {
 	type RemoteSlashResult,
 } from "../../porcupine/remote-command-dispatcher.ts";
 import type { RemoteCommandDescriptor } from "../../porcupine/remote-slash-commands.ts";
-import { artifactChangeFromToolCall, buildCapabilityTreeFromSession } from "../../porcupine/session-bridge.ts";
+import { artifactChangeFromToolCall, buildCapabilityTreeFromSession } from "../../porcupine/session-capabilities.ts";
 import { PorcupineSessionOrchestrator } from "../../porcupine/session-orchestrator.ts";
 
 /** Autonomous refiner pass: at most once per 10 minutes per session. */
@@ -221,7 +221,7 @@ import { DynamicBorder } from "./components/dynamic-border.ts";
 import { EarendilAnnouncementComponent } from "./components/earendil-announcement.ts";
 import { ExtensionEditorComponent } from "./components/extension-editor.ts";
 import { ExtensionInputComponent } from "./components/extension-input.ts";
-import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
+import { ExtensionSelectorComponent, type ExtensionSelectorOptions } from "./components/extension-selector.ts";
 import { FooterComponent, formatTokens } from "./components/footer.ts";
 import { InteractionModeSelectorComponent } from "./components/interaction-mode-selector.ts";
 import { formatKeyText, keyDisplayText, keyHint, keyText, rawKeyHint } from "./components/keybinding-hints.ts";
@@ -261,6 +261,7 @@ import { TreeSelectorComponent } from "./components/tree-selector.ts";
 import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
+import { DialogCoordinator } from "./dialog-coordinator.ts";
 import { editInExternalEditor } from "./external-editor.ts";
 import { parseLearningCommand } from "./learning-command.ts";
 import { getModelSearchText } from "./model-search.ts";
@@ -507,7 +508,7 @@ export function createInteractiveTui(options: InteractiveTuiOptions): TUI {
  */
 interface RemoteBridgeLike {
 	isRunning: boolean;
-	remoteConfirm(title: string, message: string): Promise<boolean> | undefined;
+	remoteConfirm(title: string, message: string, opts?: { signal?: AbortSignal }): Promise<boolean> | undefined;
 	select(
 		title: string,
 		options: string[],
@@ -618,6 +619,8 @@ export class InteractiveMode {
 	private discordBridge: DiscordBridge | undefined;
 	private imessageBridge: IMessageBridge | undefined;
 	private remoteBridgeUnsubscribe: (() => void) | undefined;
+	/** TUI-owned coordinator that cancels every losing dialog participant. */
+	private readonly dialogCoordinator = new DialogCoordinator();
 	/** Voice Mode: push-to-talk (Space) → Moonshine STT → prompt; Kokoro TTS speaks replies. */
 	private voiceMode: VoiceMode | undefined;
 	private voiceEnabled = false;
@@ -2590,15 +2593,24 @@ export class InteractiveMode {
 		this.updateTerminalTitle();
 	}
 
-	/** Ask-mode and flagged-Normal commands confirm through the TUI selector + every running remote bridge. */
+	/** Ask-mode and flagged-Normal commands confirm through the TUI coordinator. */
 	private wireModeConfirmations(): void {
-		this.session.setConfirmCallback(async (title, message) => {
-			const decisions: Promise<boolean>[] = [this.showExtensionConfirm(title, message)];
+		this.session.setConfirmCallback((title, message) => this.raceConfirmation(title, message));
+	}
+
+	/**
+	 * Race one logical confirmation across the TUI and every active bridge.
+	 * The TUI-owned coordinator cancels every losing participant.
+	 */
+	private raceConfirmation(title: string, message: string, opts?: ExtensionUIDialogOptions): Promise<boolean> {
+		return this.dialogCoordinator.race(opts, (signal) => {
+			const dialogOpts = { ...opts, signal };
+			const decisions: Promise<boolean>[] = [this.showExtensionConfirm(title, message, dialogOpts)];
 			for (const bridge of this.remoteBridges) {
-				const remote = bridge.remoteConfirm(title, message);
+				const remote = bridge.remoteConfirm(title, message, { signal });
 				if (remote) decisions.push(remote);
 			}
-			return Promise.race(decisions);
+			return decisions;
 		});
 	}
 
@@ -3078,6 +3090,7 @@ export class InteractiveMode {
 	}
 
 	private resetExtensionUI(): void {
+		this.dialogCoordinator.abortAll();
 		if (this.extensionSelector) {
 			this.hideExtensionSelector();
 		}
@@ -3254,30 +3267,34 @@ export class InteractiveMode {
 
 	private createExtensionUIContext(): ExtensionUIContext {
 		return {
-			// When any remote bridge is live, dialogs race TUI + every channel (first
-			// response wins); the closures read the bridges at call time so this
-			// works regardless of when a bridge starts. The TUI prompt is created
-			// ONCE and shared so the selector/input does not open N times.
+			// When any remote bridge is live, the TUI coordinator owns one logical
+			// dialog and aborts every losing channel after the first valid answer.
 			select: (title, options, opts) => {
 				const bridges = this.remoteBridges;
 				if (bridges.length === 0) return this.showExtensionSelector(title, options, opts);
-				const tuiPromise = this.showExtensionSelector(title, options, opts);
-				const candidates: Promise<string | undefined>[] = [tuiPromise];
-				for (const bridge of bridges) {
-					candidates.push(bridge.select(title, options, () => tuiPromise, opts));
-				}
-				return Promise.race(candidates);
+				return this.dialogCoordinator.race(opts, (signal) => {
+					const dialogOpts = { ...opts, signal };
+					const tuiPromise = this.showExtensionSelector(title, options, dialogOpts);
+					const candidates: Promise<string | undefined>[] = [tuiPromise];
+					for (const bridge of bridges) {
+						candidates.push(bridge.select(title, options, () => tuiPromise, dialogOpts));
+					}
+					return candidates;
+				});
 			},
-			confirm: (title, message, opts) => this.showExtensionConfirm(title, message, opts),
+			confirm: (title, message, opts) => this.raceConfirmation(title, message, opts),
 			input: (title, placeholder, opts) => {
 				const bridges = this.remoteBridges;
 				if (bridges.length === 0) return this.showExtensionInput(title, placeholder, opts);
-				const tuiPromise = this.showExtensionInput(title, placeholder, opts);
-				const candidates: Promise<string | undefined>[] = [tuiPromise];
-				for (const bridge of bridges) {
-					candidates.push(bridge.input(title, () => tuiPromise, opts));
-				}
-				return Promise.race(candidates);
+				return this.dialogCoordinator.race(opts, (signal) => {
+					const dialogOpts = { ...opts, signal };
+					const tuiPromise = this.showExtensionInput(title, placeholder, dialogOpts);
+					const candidates: Promise<string | undefined>[] = [tuiPromise];
+					for (const bridge of bridges) {
+						candidates.push(bridge.input(title, () => tuiPromise, dialogOpts));
+					}
+					return candidates;
+				});
 			},
 			notify: (message, type) => this.showExtensionNotify(message, type),
 			onTerminalInput: (handler) => this.addExtensionTerminalInputListener(handler),
@@ -3346,6 +3363,7 @@ export class InteractiveMode {
 		title: string,
 		options: string[],
 		opts?: ExtensionUIDialogOptions,
+		selectorOptions?: ExtensionSelectorOptions,
 	): Promise<string | undefined> {
 		return new Promise((resolve) => {
 			if (opts?.signal?.aborted) {
@@ -3376,6 +3394,7 @@ export class InteractiveMode {
 					tui: this.ui,
 					timeout: opts?.timeout,
 					onToggleToolsExpanded: () => this.toggleToolOutputExpansion(),
+					...selectorOptions,
 				},
 			);
 
@@ -3406,7 +3425,10 @@ export class InteractiveMode {
 		message: string,
 		opts?: ExtensionUIDialogOptions,
 	): Promise<boolean> {
-		const result = await this.showExtensionSelector(`${title}\n${message}`, ["Yes", "No"], opts);
+		const result = await this.showExtensionSelector(title, ["Yes", "No"], opts, {
+			variant: "confirm",
+			description: message,
+		});
 		return result === "Yes";
 	}
 
@@ -6887,6 +6909,8 @@ export class InteractiveMode {
 		const { steering: steeringMessages, followUp: followUpMessages } = this.getAllQueuedMessages();
 		if (steeringMessages.length > 0 || followUpMessages.length > 0) {
 			this.pendingMessagesContainer.addChild(new Spacer(1));
+			const queuedCount = steeringMessages.length + followUpMessages.length;
+			this.pendingMessagesContainer.addChild(new Text(theme.fg("accent", `Queued (${queuedCount})`), 1, 0));
 			for (const message of steeringMessages) {
 				const text = theme.fg("dim", `Steering: ${message}`);
 				this.pendingMessagesContainer.addChild(new TruncatedText(text, 1, 0));
@@ -8659,6 +8683,11 @@ export class InteractiveMode {
 					? "Reloaded keybindings, extensions, skills, prompts, themes, and context files; saved project trust"
 					: "Reloaded keybindings, extensions, skills, prompts, themes, and context files",
 			);
+			// /reload swaps skills/extensions/templates in place without restarting
+			// bridges — re-register the Telegram menu so new commands are discoverable.
+			// (Discord/iMessage build their /commands listing on demand, so only
+			// Telegram needs an explicit refresh.)
+			void this.telegramBridge?.refreshCommands();
 			dismissReloadBox(this.editor as Component);
 			reloadBoxDismissed = true;
 		} catch (error) {
@@ -9573,6 +9602,7 @@ export class InteractiveMode {
 	}
 
 	stop(): void {
+		this.dialogCoordinator.abortAll();
 		this.remoteBridgeUnsubscribe?.();
 		this.remoteBridgeUnsubscribe = undefined;
 		this.stopSubagentFooterTimer();

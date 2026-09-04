@@ -1,10 +1,17 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	BRIDGE_NOTIFY_DEFAULT_MAX_AGE_MS,
+	bridgeNotifyMaxAgeMs,
 	extractAssistantText,
 	extractMediaMarkers,
+	hasNonVoiceAttachment,
+	isNotifyFresh,
+	MEDIA_MAX_BYTES,
+	resolveShareableMediaPath,
+	splitMessage,
 	summarizeToolCalls,
 	TelegramBridge,
 } from "../src/porcupine/telegram-bridge.ts";
@@ -61,6 +68,7 @@ function internals(bridge: TelegramBridge): {
 	pendingTelegram: Array<{ chatId: number; text: string }>;
 	activeChatId: number | undefined;
 	activeUserId: number | undefined;
+	lastPromptAt: number | undefined;
 	offset: number;
 	handleMessage(message: unknown): Promise<void>;
 	handleCallbackQuery(query: {
@@ -307,6 +315,17 @@ describe("TelegramBridge confirmations", () => {
 		});
 		expect(await bridge2.confirm("x", "y")).toBe(false);
 		expect(await bridge.confirm("x", "y")).toBe(false);
+	});
+
+	it("cancels a remote confirmation when its signal aborts", async () => {
+		const { bridge } = makeBridge([], { confirmTimeoutMs: 60_000 });
+		internals(bridge).activeChatId = ALLOWED;
+		internals(bridge).activeUserId = ALLOWED;
+		const controller = new AbortController();
+		const confirmation = bridge.remoteConfirm("Run command", "npm test", { signal: controller.signal });
+		if (!confirmation) throw new Error("confirmation was not created");
+		controller.abort();
+		expect(await confirmation).toBe(false);
 	});
 });
 
@@ -698,5 +717,200 @@ describe("TelegramBridge follow-up turn routing (the visibility bug)", () => {
 		expect(sent).toHaveLength(1);
 		expect(decoded(sent[0]?.body ?? "")).toContain("Compaction explained.");
 		expect(bridge.pendingTurns).toBe(0);
+	});
+});
+
+describe("TelegramBridge attachments", () => {
+	it("prompts with a photo caption instead of dropping it", async () => {
+		const { bridge, prompts } = makeBridge([]);
+		await internals(bridge).handleMessage({
+			message_id: 80,
+			chat: { id: ALLOWED, type: "private" },
+			from: { id: ALLOWED },
+			photo: [{ file_id: "pic" }],
+			caption: "summarize this chart",
+		});
+		expect(prompts).toEqual(["summarize this chart"]);
+	});
+
+	it("answers attachment-only messages instead of going silent", async () => {
+		const { bridge, calls, prompts } = makeBridge([]);
+		await internals(bridge).handleMessage({
+			message_id: 81,
+			chat: { id: ALLOWED, type: "private" },
+			from: { id: ALLOWED },
+			document: { file_id: "doc" },
+		});
+		expect(prompts).toEqual([]);
+		const sent = calls.filter((call) => call.method === "sendMessage");
+		expect(sent).toHaveLength(1);
+		expect(decodeURIComponent(sent[0]?.body ?? "").replace(/\+/g, " ")).toContain("can't see");
+	});
+
+	it("detects non-voice attachments", () => {
+		expect(hasNonVoiceAttachment({ message_id: 1, chat: { id: 1, type: "private" }, sticker: {} })).toBe(true);
+		expect(hasNonVoiceAttachment({ message_id: 1, chat: { id: 1, type: "private" }, text: "hi" })).toBe(false);
+	});
+});
+
+describe("TelegramBridge typing keepalive", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("refreshes typing while a turn is open and stops when it ends", async () => {
+		vi.useFakeTimers();
+		const { bridge, calls } = makeBridge([]);
+		const typingCount = () => calls.filter((call) => call.method === "sendChatAction").length;
+		await internals(bridge).handleMessage({
+			message_id: 90,
+			chat: { id: ALLOWED, type: "private" },
+			from: { id: ALLOWED },
+			text: "long task",
+		});
+		expect(typingCount()).toBe(1);
+		await vi.advanceTimersByTimeAsync(12000);
+		expect(typingCount()).toBeGreaterThan(1);
+
+		internals(bridge).pendingTelegram.push({ chatId: ALLOWED, text: "long task" });
+		await bridge.handleAgentEnd(
+			[
+				{ role: "user", content: [{ type: "text", text: "long task" }] },
+				{ role: "assistant", content: [{ type: "text", text: "done" }] },
+			] as never,
+			false,
+		);
+		const afterEnd = typingCount();
+		await vi.advanceTimersByTimeAsync(12000);
+		expect(typingCount()).toBe(afterEnd);
+		await bridge.stop();
+	});
+});
+
+describe("resolveShareableMediaPath", () => {
+	it("allows files inside the OS temp dir", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "porcupine-tg-share-"));
+		const file = join(dir, "ok.txt");
+		writeFileSync(file, "results");
+		const result = await resolveShareableMediaPath(file);
+		expect(result.path).toBe(file);
+		expect(result.refusal).toBeUndefined();
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("refuses files outside the workspace and temp dir", async () => {
+		const result = await resolveShareableMediaPath("/etc/passwd");
+		expect(result.path).toBeUndefined();
+		expect(result.refusal).toContain("outside the workspace");
+	});
+
+	it("refuses unreadable files with a clear reason", async () => {
+		const result = await resolveShareableMediaPath(join(tmpdir(), "porcupine-no-such-file.txt"));
+		expect(result.path).toBeUndefined();
+		expect(result.refusal).toContain("couldn't read");
+	});
+
+	it("refuses oversized files", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "porcupine-tg-big-"));
+		const file = join(dir, "big.bin");
+		writeFileSync(file, "x");
+		truncateSync(file, MEDIA_MAX_BYTES + 1);
+		const result = await resolveShareableMediaPath(file);
+		expect(result.path).toBeUndefined();
+		expect(result.refusal).toContain("too large");
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("refuses exfiltration attempts through the bridge send path", async () => {
+		const { bridge, calls, prompts } = makeBridge([]);
+		internals(bridge).activeChatId = ALLOWED;
+		internals(bridge).pendingTelegram.push({ chatId: ALLOWED, text: "leak" });
+		await bridge.handleAgentEnd(
+			[
+				{ role: "user", content: [{ type: "text", text: "leak" }] },
+				{ role: "assistant", content: [{ type: "text", text: "MEDIA:/etc/passwd" }] },
+			] as never,
+			false,
+		);
+		expect(prompts).toEqual([]);
+		const sent = calls.filter((call) => call.method === "sendMessage");
+		expect(sent.length).toBeGreaterThan(0);
+		const decoded = (body: string) => decodeURIComponent(body).replace(/\+/g, " ");
+		expect(sent.some((call) => decoded(call.body).includes("outside the workspace"))).toBe(true);
+		expect(calls.some((call) => call.method === "sendDocument")).toBe(false);
+	});
+});
+
+describe("task notification freshness", () => {
+	const ENV_KEY = "PORCUPINE_BRIDGE_NOTIFY_MAX_AGE_MS";
+	const saved = process.env[ENV_KEY];
+	afterEach(() => {
+		if (saved === undefined) delete process.env[ENV_KEY];
+		else process.env[ENV_KEY] = saved;
+	});
+
+	it("defaults to a 30-minute window with env override", () => {
+		delete process.env[ENV_KEY];
+		expect(bridgeNotifyMaxAgeMs()).toBe(BRIDGE_NOTIFY_DEFAULT_MAX_AGE_MS);
+		expect(BRIDGE_NOTIFY_DEFAULT_MAX_AGE_MS).toBe(30 * 60 * 1000);
+		process.env[ENV_KEY] = "60000";
+		expect(bridgeNotifyMaxAgeMs()).toBe(60000);
+		process.env[ENV_KEY] = "nope";
+		expect(bridgeNotifyMaxAgeMs()).toBe(BRIDGE_NOTIFY_DEFAULT_MAX_AGE_MS);
+	});
+
+	it("treats missing activity as stale and 0 as never-expire", () => {
+		delete process.env[ENV_KEY];
+		expect(isNotifyFresh(undefined)).toBe(false);
+		expect(isNotifyFresh(Date.now() - 31 * 60 * 1000)).toBe(false);
+		expect(isNotifyFresh(Date.now())).toBe(true);
+		process.env[ENV_KEY] = "0";
+		expect(isNotifyFresh(Date.now() - 24 * 60 * 60 * 1000)).toBe(true);
+	});
+
+	it("notifies fresh channels and skips stale ones", async () => {
+		delete process.env[ENV_KEY];
+		const { bridge, calls } = makeBridge([]);
+		internals(bridge).activeChatId = ALLOWED;
+		internals(bridge).lastPromptAt = Date.now();
+		await bridge.notifyTaskResult("task done");
+		expect(calls.filter((call) => call.method === "sendMessage")).toHaveLength(1);
+
+		internals(bridge).lastPromptAt = Date.now() - 31 * 60 * 1000;
+		await bridge.notifyTaskResult("task done");
+		expect(calls.filter((call) => call.method === "sendMessage")).toHaveLength(1);
+	});
+});
+
+describe("splitMessage", () => {
+	it("passes short text through as a single chunk", () => {
+		expect(splitMessage("hello", 4000)).toEqual(["hello"]);
+		expect(splitMessage("", 4000)).toEqual([]);
+	});
+
+	it("splits long paragraphs at line boundaries within the limit", () => {
+		const text = ["para one.", "", "para two.", "", "para three."].join("\n");
+		const chunks = splitMessage(text, 22);
+		expect(chunks.length).toBeGreaterThan(1);
+		for (const chunk of chunks) expect(chunk.length).toBeLessThanOrEqual(22);
+		expect(chunks.join("\n")).toBe(text);
+	});
+
+	it("never tears a fenced code block across chunks", () => {
+		const code = Array.from({ length: 30 }, (_, i) => `const x${i} = ${i};`).join("\n");
+		const text = ["Here:", "", "```ts", code, "```", "", "Done."].join("\n");
+		const chunks = splitMessage(text, 200);
+		expect(chunks.length).toBeGreaterThan(1);
+		for (const chunk of chunks) {
+			expect(chunk.length).toBeLessThanOrEqual(200);
+			const fences = chunk.split("\n").filter((line) => line.trimStart().startsWith("```"));
+			expect(fences.length % 2).toBe(0);
+		}
+	});
+
+	it("hard-slices a single over-long line as a last resort", () => {
+		const chunks = splitMessage("x".repeat(9000), 4000);
+		expect(chunks).toHaveLength(3);
+		expect(chunks.join("")).toBe("x".repeat(9000));
 	});
 });

@@ -94,6 +94,7 @@ These variables are read by Porcupine itself:
 | `PORCUPINE_DISCORD_USER_ALLOW` | Comma-separated Discord user ids allowed to prompt, control, or approve work; required in addition to the channel allowlist |
 | `PORCUPINE_IMESSAGE_ALLOW` | Comma-separated chat ids (or phone/email handles) in which the iMessage bridge may operate (macOS only) |
 | `PORCUPINE_IMESSAGE_SENDER_ALLOW` | Comma-separated phone/email senders authorized inside allowed iMessage group chats; direct chats infer their participant |
+| `PORCUPINE_BRIDGE_NOTIFY_MAX_AGE_MS` | How long after the last user prompt a channel still receives background task notifications (default 30 minutes); `0` never expires |
 | `VISUAL`, `EDITOR` | External editor fallback when `externalEditor` is unset |
 | `HTTP_PROXY`, `HTTPS_PROXY` | Proxy outbound HTTP requests |
 

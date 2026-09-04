@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- **TUI-first talking channels:** the terminal owns the canonical conversation lifecycle (`received` → `working` → `completed`/`failed`/`cancelled`) and Telegram, Discord, and iMessage mirror it. One logical approval/question/input races the TUI and every channel with a `DialogCoordinator`: the first valid authorized answer wins and all losers are cancelled. Shared `conversation-lifecycle` contract (mapper, origin resolution, ordered tracker) for future adapters.
+- **Channel presentation upgrades:** fence-aware message chunking on all three bridges, typing keepalives during open turns (Telegram/Discord), Telegram photo captions as prompts, explicit notices for unsupported attachments and oversized option lists, `/reload` re-registers the Telegram command menu, iMessage self-echo filtering and `MEDIA:` file-ready fallback.
+- **Bridge safety bounds:** `MEDIA:` sharing vetted to workspace/temp files under 20 MB with written refusals, document-send failure fallbacks, and freshness-gated task notifications (`PORCUPINE_BRIDGE_NOTIFY_MAX_AGE_MS`, 30-minute default).
+- **TUI dialog clarity:** confirmation framing (`Confirm:` heading, consequence line, allow/cancel labels), free-text input placeholders, tool state glyphs, terminal-failure `Failed` chip, and `Queued (N)` header.
+
+### Fixed
+
+- **Remote dialog leaks:** losing-side confirmation/selection/input waiters no longer survive the race (previously lived until 5–10 minute timeouts); stale buttons and reactions cannot resolve newer requests.
+- **Silent drops:** attachment-only messages, undeliverable files, and post-timeout responses now reply with reasons instead of going quiet.
+- Renamed misleading `session-bridge.ts` to `session-capabilities.ts` (compat re-export kept).
+
 ## [0.1.74] - 2026-09-01
 
 ### Added

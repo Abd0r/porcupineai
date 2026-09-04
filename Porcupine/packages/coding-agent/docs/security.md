@@ -106,6 +106,12 @@ bridges. Treat any bridge as remote access to a local agent session:
   `PORCUPINE_DISCORD_TOKEN` in `~/.porcupine/agent/.env` (chmod 600) or your
   environment; never commit them. iMessage needs no token (it uses the signed-in
   Messages.app on the local machine).
+- **Bounded file sharing**: `MEDIA:` attachments only leave the machine when
+  the file sits inside the workspace or the OS temp dir (20 MB cap); anything
+  else is refused with a written reply, so injected paths cannot exfiltrate.
+- **Fresh notifications only**: background task summaries push solely to a
+  channel with recent user activity (30-minute default,
+  `PORCUPINE_BRIDGE_NOTIFY_MAX_AGE_MS`).
 
 See [usage.md](usage.md) for the full bridge feature list.
 

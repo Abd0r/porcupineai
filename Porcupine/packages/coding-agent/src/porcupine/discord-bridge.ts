@@ -16,8 +16,7 @@
 
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
 import type { AgentMessage } from "@porcupineai/agent-core";
 import { type BridgeCommandContext, handleBridgeCommand, parseBridgeCommand } from "./bridge-commands.ts";
 import type { RemoteSlashResult } from "./remote-command-dispatcher.ts";
@@ -31,7 +30,10 @@ import {
 import {
 	extractAssistantText,
 	extractMediaMarkers,
+	isNotifyFresh,
 	lastUserMessageText,
+	resolveShareableMediaPath,
+	splitMessage,
 	summarizeToolCalls,
 	textsMatch,
 } from "./telegram-bridge.ts";
@@ -68,6 +70,7 @@ interface DiscordMessage {
 	channel_id: string;
 	author?: { id: string; bot?: boolean };
 	content?: string;
+	attachments?: Array<{ url?: string; filename?: string }>;
 }
 
 interface DiscordReaction {
@@ -106,6 +109,8 @@ export class DiscordBridge {
 	private selfId: string | undefined;
 	private heartbeatIntervalMs = 0;
 	private heartbeatAwaitingAck = false;
+	/** Re-sent typing indicator while a Discord turn is open so long runs never look dead. */
+	private typingTimer: ReturnType<typeof setInterval> | undefined;
 	/** Epoch ms when the bridge connected; drives the !status uptime line. */
 	private startedAt: number | undefined;
 	/** Materialized remote slash catalog (rebuilt on demand). */
@@ -116,6 +121,8 @@ export class DiscordBridge {
 	/** Most recent authorized actor that sent a real prompt; confirmations go only to that actor. */
 	private activeChannelId: string | undefined;
 	private activeUserId: string | undefined;
+	/** Last inbound user activity; bounds background task notifications. */
+	private lastPromptAt: number | undefined;
 	/** Approve/Deny waiters keyed by confirm request id, scoped to message and actor. */
 	private confirmWaiters = new Map<
 		string,
@@ -188,19 +195,23 @@ export class DiscordBridge {
 		return response.json() as Promise<unknown>;
 	}
 
-	/** Send an outbound notification to the most recently active channel (if any). Attended-only; silently skipped when no channel has prompted yet. */
+	/**
+	 * Send an outbound notification to the most recently active channel.
+	 * Attended-only and freshness-gated: skipped when no channel has prompted
+	 * yet or the last prompt is older than the notify window.
+	 */
 	async notifyTaskResult(text: string): Promise<void> {
-		if (!text || this.activeChannelId === undefined) return;
+		if (!text || this.activeChannelId === undefined || !isNotifyFresh(this.lastPromptAt)) return;
 		await this.sendText(this.activeChannelId, text).catch(() => {});
 	}
 
 	async sendText(channelId: string, text: string): Promise<string | undefined> {
 		if (!text) return undefined;
 		let lastId: string | undefined;
-		for (let i = 0; i < text.length; i += CHUNK) {
+		for (const part of splitMessage(text, CHUNK)) {
 			const result = await this.rest(`/channels/${channelId}/messages`, {
 				method: "POST",
-				body: JSON.stringify({ content: text.slice(i, i + CHUNK) }),
+				body: JSON.stringify({ content: part }),
 			}).catch((error: unknown) => {
 				console.warn(`[discord] send failed: ${error instanceof Error ? error.message : String(error)}`);
 				return undefined;
@@ -214,12 +225,32 @@ export class DiscordBridge {
 	}
 
 	async sendDocument(channelId: string, filePath: string): Promise<void> {
-		const resolved = filePath.startsWith("~") ? join(homedir(), filePath.slice(1)) : filePath;
-		const buffer = await readFile(resolved);
+		const vetted = await resolveShareableMediaPath(filePath);
+		if (!vetted.path) {
+			await this.sendText(channelId, vetted.refusal ?? "I couldn't share that file.").catch(() => {});
+			return;
+		}
+		const buffer = await readFile(vetted.path);
 		const form = new FormData();
 		form.append("payload_json", JSON.stringify({ content: "" }));
-		form.append("files[0]", new Blob([buffer]), basename(resolved));
+		form.append("files[0]", new Blob([buffer]), basename(vetted.path));
 		await this.rest(`/channels/${channelId}/messages`, { method: "POST", body: form });
+	}
+
+	/** Show typing now and refresh it until the turn ends (Discord shows each action ~10s). */
+	private startTypingKeepalive(channelId: string): void {
+		this.stopTypingKeepalive();
+		const send = () => this.rest(`/channels/${channelId}/typing`, { method: "POST" }).catch(() => {});
+		void send();
+		this.typingTimer = setInterval(send, 8000);
+		(this.typingTimer as unknown as { unref?: () => void }).unref?.();
+	}
+
+	private stopTypingKeepalive(): void {
+		if (this.typingTimer) {
+			clearInterval(this.typingTimer);
+			this.typingTimer = undefined;
+		}
 	}
 
 	private async addReaction(channelId: string, messageId: string, emoji: string): Promise<void> {
@@ -233,18 +264,20 @@ export class DiscordBridge {
 	// ---------------------------------------------------------------------
 
 	/** Remote-only confirm (no TUI): Approve/Deny reactions on the active channel. */
-	remoteConfirm(title: string, message: string): Promise<boolean> | undefined {
+	remoteConfirm(title: string, message: string, opts?: { signal?: AbortSignal }): Promise<boolean> | undefined {
 		const channelId = this.activeChannelId;
 		const userId = this.activeUserId;
 		if (channelId === undefined || userId === undefined) return undefined;
 		return new Promise<boolean>((resolve) => {
 			const requestId = randomUUID();
+			let onAbort: (() => void) | undefined;
 			const timeout = this.options.confirmTimeoutMs ?? 5 * 60 * 1000;
 			const entry = {
 				waiter: (ok: boolean) => {
 					const current = this.confirmWaiters.get(requestId);
 					if (!current) return;
 					clearTimeout(current.timer);
+					if (onAbort && opts?.signal) opts.signal.removeEventListener("abort", onAbort);
 					this.confirmWaiters.delete(requestId);
 					resolve(ok);
 				},
@@ -255,6 +288,14 @@ export class DiscordBridge {
 			};
 			entry.timer = setTimeout(() => entry.waiter(false), timeout);
 			this.confirmWaiters.set(requestId, entry);
+			if (opts?.signal) {
+				onAbort = () => entry.waiter(false);
+				if (opts.signal.aborted) {
+					entry.waiter(false);
+					return;
+				}
+				opts.signal.addEventListener("abort", onAbort, { once: true });
+			}
 			void this.sendText(channelId, `❓ ${title}\n\n${message}\n\nReact ✅ to approve, ❌ to deny.`).then(
 				(messageId) => {
 					try {
@@ -284,7 +325,15 @@ export class DiscordBridge {
 		const userId = this.activeUserId;
 		const tuiPromise = tui(title, options);
 		if (channelId === undefined || userId === undefined || options.length === 0) return tuiPromise;
-		if (options.length > NUMBER_EMOJI.length) return tuiPromise;
+		if (options.length > NUMBER_EMOJI.length) {
+			// Numbered reactions cover ten options; say where the question went
+			// instead of silently moving it to the terminal.
+			await this.sendText(
+				channelId,
+				`❓ ${title}\n\nToo many options (${options.length}) for reactions — please answer in the terminal.`,
+			).catch(() => {});
+			return tuiPromise;
+		}
 
 		const requestId = randomUUID();
 		const selection = new Promise<string | undefined>((resolve) => {
@@ -366,6 +415,7 @@ export class DiscordBridge {
 		if (index === -1) return;
 		const entry = this.pendingDiscord[index]!;
 		this.pendingDiscord.splice(index, 1);
+		this.stopTypingKeepalive();
 		try {
 			const raw = extractAssistantText(messages);
 			const { clean, paths } = extractMediaMarkers(raw);
@@ -373,7 +423,11 @@ export class DiscordBridge {
 			const body = [clean, tools ? `\n${tools}` : ""].join("").trim();
 			if (body) await this.sendText(entry.channelId, body);
 			else if (paths.length === 0) await this.sendText(entry.channelId, "Done.");
-			for (const path of paths) await this.sendDocument(entry.channelId, path).catch(() => {});
+			for (const path of paths) {
+				await this.sendDocument(entry.channelId, path).catch(() =>
+					this.sendText(entry.channelId, "⚠️ I couldn't send an attached file.").catch(() => {}),
+				);
+			}
 		} catch (error) {
 			console.warn(
 				`[discord] failed to forward response: ${error instanceof Error ? error.message : String(error)}`,
@@ -592,7 +646,14 @@ export class DiscordBridge {
 		const userId = message.author?.id;
 		if (userId === undefined || !this.isAllowed(channelId, userId)) return;
 		const text = message.content?.trim();
-		if (!text) return;
+		// Never drop an attachment-only message silently: files cannot be
+		// seen, so say so instead of going quiet.
+		if (!text) {
+			if (message.attachments && message.attachments.length > 0) {
+				await this.sendText(channelId, "I can't see attached files here yet — send text instead.").catch(() => {});
+			}
+			return;
+		}
 
 		// A pending free-text answer consumes this message (bound to its channel).
 		if (
@@ -634,7 +695,8 @@ export class DiscordBridge {
 		}
 
 		this.pendingDiscord.push({ channelId, userId, text });
-		void this.rest(`/channels/${channelId}/typing`, { method: "POST" }).catch(() => {});
+		this.lastPromptAt = Date.now();
+		this.startTypingKeepalive(channelId);
 		try {
 			await this.options.prompt(text, { streamingBehavior: "followUp" });
 		} catch (error) {
@@ -642,6 +704,7 @@ export class DiscordBridge {
 				(entry) => entry.channelId === channelId && entry.userId === userId && entry.text === text,
 			);
 			if (index !== -1) this.pendingDiscord.splice(index, 1);
+			this.stopTypingKeepalive();
 			await this.sendText(
 				channelId,
 				`⚠️ Could not start the task: ${error instanceof Error ? error.message : String(error)}`,
@@ -686,6 +749,7 @@ export class DiscordBridge {
 			if (result.notificationTarget && userId !== undefined) {
 				this.activeChannelId = channelId;
 				this.activeUserId = userId;
+				this.lastPromptAt = Date.now();
 			}
 			await this.sendText(channelId, result.text).catch(() => {});
 			return;
@@ -751,6 +815,7 @@ export class DiscordBridge {
 
 	async stop(): Promise<void> {
 		this.running = false;
+		this.stopTypingKeepalive();
 		this.stopHeartbeat();
 		if (this.reconnectTimer) {
 			clearTimeout(this.reconnectTimer);

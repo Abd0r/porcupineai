@@ -140,8 +140,14 @@ export class ToolExecutionComponent extends Container {
 		};
 	}
 
+	/** State glyph mirroring the task-graph convention so success/error never rely on background color alone. */
+	private statusGlyph(): string {
+		if (this.isPartial) return "●";
+		return this.result?.isError ? "✗" : "✓";
+	}
+
 	private createCallFallback(): Component {
-		return new Text(theme.fg("toolTitle", theme.bold(this.toolName)), 0, 0);
+		return new Text(theme.fg("toolTitle", theme.bold(`${this.statusGlyph()} ${this.toolName}`)), 0, 0);
 	}
 
 	private createResultFallback(): Component | undefined {
@@ -373,7 +379,7 @@ export class ToolExecutionComponent extends Container {
 	}
 
 	private formatToolExecution(): string {
-		let text = theme.fg("toolTitle", theme.bold(this.toolName));
+		let text = theme.fg("toolTitle", theme.bold(`${this.statusGlyph()} ${this.toolName}`));
 		const content = JSON.stringify(this.args, null, 2);
 		if (content) {
 			text += `\n\n${content}`;

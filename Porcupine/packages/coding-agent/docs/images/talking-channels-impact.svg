@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">TUI-first talking channels coverage before and through this PR</title>
+  <desc id="desc">A six-axis radar diagram comparing qualitative coverage before the PR with the coverage delivered by this PR. The axes are dialog ownership, response integrity, progress visibility, lifecycle contract, outbound safety, and dialog clarity.</desc>
+  <rect width="1200" height="900" fill="#ffffff"/>
+  <text x="600" y="55" text-anchor="middle" fill="#172033" font-family="ui-sans-serif, system-ui, sans-serif" font-size="28" font-weight="700">TUI-First Talking Channels</text>
+  <text x="600" y="85" text-anchor="middle" fill="#526072" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16">Qualitative implementation coverage, before vs through this PR</text>
+  <text x="600" y="112" text-anchor="middle" fill="#718096" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13">0 absent · 1 partial · 2 explicit · 3 deterministic — not a benchmark</text>
+
+  <g fill="none" stroke="#d7dee8" stroke-width="2">
+    <polygon points="600,363 675,407 675,493 600,537 525,493 525,407"/>
+    <polygon points="600,277 750,363 750,537 600,623 450,537 450,363"/>
+    <polygon points="600,190 825,320 825,580 600,710 375,580 375,320"/>
+    <line x1="600" y1="450" x2="600" y2="190"/>
+    <line x1="600" y1="450" x2="825" y2="320"/>
+    <line x1="600" y1="450" x2="825" y2="580"/>
+    <line x1="600" y1="450" x2="600" y2="710"/>
+    <line x1="600" y1="450" x2="375" y2="580"/>
+    <line x1="600" y1="450" x2="375" y2="320"/>
+  </g>
+  <g fill="#718096" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13">
+    <text x="610" y="365">1</text><text x="610" y="279">2</text><text x="610" y="192">3</text>
+  </g>
+
+  <polygon points="600,363 675,407 675,493 600,450 525,493 525,407" fill="#f59e0b" fill-opacity="0.13" stroke="#f59e0b" stroke-width="4" stroke-dasharray="10 8"/>
+  <g fill="#ffffff" stroke="#f59e0b" stroke-width="4">
+    <circle cx="600" cy="363" r="7"/><circle cx="675" cy="407" r="7"/><circle cx="675" cy="493" r="7"/><circle cx="600" cy="450" r="7"/><circle cx="525" cy="493" r="7"/><circle cx="525" cy="407" r="7"/>
+  </g>
+
+  <polygon points="600,190 825,320 750,537 600,623 375,537 375,363" fill="#1463d7" fill-opacity="0.16" stroke="#1463d7" stroke-width="5"/>
+  <g fill="#1463d7" stroke="#ffffff" stroke-width="3">
+    <circle cx="600" cy="190" r="8"/><circle cx="825" cy="320" r="8"/><circle cx="750" cy="537" r="8"/><circle cx="600" cy="623" r="8"/><circle cx="375" cy="537" r="8"/><circle cx="375" cy="363" r="8"/>
+  </g>
+
+  <g fill="#172033" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="650">
+    <text x="600" y="154" text-anchor="middle">Dialog ownership</text>
+    <text x="900" y="274">Response integrity</text>
+    <text x="900" y="610">Progress visibility</text>
+    <text x="600" y="760" text-anchor="middle">Lifecycle contract</text>
+    <text x="300" y="610" text-anchor="end">Outbound safety</text>
+    <text x="300" y="274" text-anchor="end">Dialog clarity</text>
+  </g>
+  <g fill="#667085" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">
+    <text x="600" y="177" text-anchor="middle">one AbortController per race</text>
+    <text x="900" y="296">fence-aware chunks, no silent drops</text>
+    <text x="900" y="632">typing keepalive on open turns</text>
+    <text x="600" y="783" text-anchor="middle">mapper, origin, ordered tracker</text>
+    <text x="300" y="632" text-anchor="end">MEDIA vetting, fresh notifications</text>
+    <text x="300" y="296" text-anchor="end">confirm framing, glyphs, counts</text>
+  </g>
+
+  <g transform="translate(454 834)" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16">
+    <line x1="0" y1="0" x2="42" y2="0" stroke="#f59e0b" stroke-width="4" stroke-dasharray="10 8"/>
+    <text x="52" y="6" fill="#374151">Before</text>
+    <line x1="148" y1="0" x2="190" y2="0" stroke="#1463d7" stroke-width="5"/>
+    <text x="200" y="6" fill="#374151">Through this PR</text>
+  </g>
+</svg>

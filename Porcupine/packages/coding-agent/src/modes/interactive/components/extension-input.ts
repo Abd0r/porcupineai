@@ -33,7 +33,7 @@ export class ExtensionInputComponent extends Container implements Focusable {
 
 	constructor(
 		title: string,
-		_placeholder: string | undefined,
+		placeholder: string | undefined,
 		onSubmit: (value: string) => void,
 		onCancel: () => void,
 		opts?: ExtensionInputOptions,
@@ -47,15 +47,18 @@ export class ExtensionInputComponent extends Container implements Focusable {
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
 
-		this.titleText = new Text(theme.fg("accent", title), 1, 0);
+		this.titleText = new Text(theme.fg("accent", `❯ ${title}`), 1, 0);
 		this.addChild(this.titleText);
+		if (placeholder) {
+			this.addChild(new Text(theme.fg("dim", placeholder), 1, 0));
+		}
 		this.addChild(new Spacer(1));
 
 		if (opts?.timeout && opts.timeout > 0 && opts.tui) {
 			this.countdown = new CountdownTimer(
 				opts.timeout,
 				opts.tui,
-				(s) => this.titleText.setText(theme.fg("accent", `${this.baseTitle} (${s}s)`)),
+				(s) => this.titleText.setText(theme.fg("accent", `❯ ${this.baseTitle} (${s}s)`)),
 				() => this.onCancelCallback(),
 			);
 		}

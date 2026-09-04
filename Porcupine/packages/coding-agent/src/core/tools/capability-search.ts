@@ -11,7 +11,7 @@ import { Text } from "@porcupineai/tui";
 import { type Static, Type } from "typebox";
 import { getAgentDir, getBundledSkillsDir } from "../../config.ts";
 import { theme } from "../../modes/interactive/theme/theme.ts";
-import { buildCapabilityTreeFromSession } from "../../porcupine/session-bridge.ts";
+import { buildCapabilityTreeFromSession } from "../../porcupine/session-capabilities.ts";
 import { formatStacksCommandOutput, searchStacks } from "../../porcupine/stacks.ts";
 import type { ToolDefinition } from "../extensions/types.ts";
 import { loadSkills, type Skill } from "../skills.ts";

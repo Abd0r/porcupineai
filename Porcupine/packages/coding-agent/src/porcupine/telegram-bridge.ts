@@ -18,9 +18,9 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve, sep } from "node:path";
 import type { AgentMessage } from "@porcupineai/agent-core";
 import type { AssistantMessage } from "@porcupineai/ai";
 import { type BridgeCommandContext, handleBridgeCommand, parseBridgeCommand } from "./bridge-commands.ts";
@@ -80,6 +80,22 @@ interface TelegramMessage {
 	chat: { id: number; type: string };
 	from?: { id: number };
 	text?: string;
+	/** Caption on a photo/document/video attachment; used as prompt text when present. */
+	caption?: string;
+	photo?: unknown;
+	document?: unknown;
+	video?: unknown;
+	sticker?: unknown;
+}
+
+/** True when the message carries a non-voice attachment (photo, file, video, sticker). */
+export function hasNonVoiceAttachment(message: TelegramMessage): boolean {
+	return (
+		message.photo !== undefined ||
+		message.document !== undefined ||
+		message.video !== undefined ||
+		message.sticker !== undefined
+	);
 }
 
 interface TelegramUpdate {
@@ -242,6 +258,8 @@ export class TelegramBridge {
 	/** Most recent authorized actor that sent a prompt; confirmations go only to that actor. */
 	private activeChatId: number | undefined;
 	private activeUserId: number | undefined;
+	/** Last inbound user activity; bounds background task notifications. */
+	private lastPromptAt: number | undefined;
 	private confirmWaiters = new Map<
 		string,
 		{ chatId: number; userId: number; resolve: (ok: boolean) => void; timer: ReturnType<typeof setTimeout> }
@@ -263,6 +281,8 @@ export class TelegramBridge {
 	private pollPromise: Promise<void> | undefined;
 	/** Consecutive update-handling failures; after a cap an update is dead-lettered so one stuck update can't stall the poll. */
 	private consecutiveFailures = 0;
+	/** Re-sent typing indicator while a Telegram turn is open so long runs never look dead. */
+	private typingTimer: ReturnType<typeof setInterval> | undefined;
 	/** Epoch ms when the bridge started polling; drives the !status uptime line. */
 	private startedAt: number | undefined;
 	/** Materialized remote slash catalog for this bridge (rebuilt on refresh). */
@@ -314,26 +334,50 @@ export class TelegramBridge {
 	async sendText(chatId: number, text: string): Promise<void> {
 		if (!text) return;
 		// Telegram rejects messages over 4096 characters; chunk long responses
-		// so a long agent reply can never be lost to an API error.
-		const CHUNK = 4000;
-		for (let i = 0; i < text.length; i += CHUNK) {
-			await this.api("sendMessage", { chat_id: String(chatId), text: text.slice(i, i + CHUNK) });
+		// so a long agent reply can never be lost to an API error. Splits are
+		// line- and fence-aware so code blocks survive chunking intact.
+		for (const part of splitMessage(text, 4000)) {
+			await this.api("sendMessage", { chat_id: String(chatId), text: part });
 		}
 	}
 
 	/** Send a local file as a Telegram document (multipart upload). */
-	/** Send an outbound notification to the most recently active chat (if any). Attended-only; silently skipped when no chat has prompted yet. */
+	/**
+	 * Send an outbound notification to the most recently active chat.
+	 * Attended-only and freshness-gated: skipped when no chat has prompted
+	 * yet or the last prompt is older than the notify window.
+	 */
 	async notifyTaskResult(text: string): Promise<void> {
-		if (!text || this.activeChatId === undefined) return;
+		if (!text || this.activeChatId === undefined || !isNotifyFresh(this.lastPromptAt)) return;
 		await this.sendText(this.activeChatId, text).catch(() => {});
 	}
 
+	/** Show typing now and refresh it until the turn ends (Telegram shows each action ~5s). */
+	private startTypingKeepalive(chatId: number): void {
+		this.stopTypingKeepalive();
+		const send = () => this.api("sendChatAction", { chat_id: String(chatId), action: "typing" }).catch(() => {});
+		void send();
+		this.typingTimer = setInterval(send, 4000);
+		(this.typingTimer as unknown as { unref?: () => void }).unref?.();
+	}
+
+	private stopTypingKeepalive(): void {
+		if (this.typingTimer) {
+			clearInterval(this.typingTimer);
+			this.typingTimer = undefined;
+		}
+	}
+
 	async sendDocument(chatId: number, filePath: string): Promise<void> {
-		const resolved = filePath.startsWith("~") ? join(homedir(), filePath.slice(1)) : filePath;
-		const buffer = await readFile(resolved);
+		const vetted = await resolveShareableMediaPath(filePath);
+		if (!vetted.path) {
+			await this.sendText(chatId, vetted.refusal ?? "I couldn't share that file.").catch(() => {});
+			return;
+		}
+		const buffer = await readFile(vetted.path);
 		const form = new FormData();
 		form.append("chat_id", String(chatId));
-		form.append("document", new Blob([buffer]), basename(resolved));
+		form.append("document", new Blob([buffer]), basename(vetted.path));
 		const response = await (this.options.fetchImpl ?? fetch)(`${API}${this.options.token}/sendDocument`, {
 			method: "POST",
 			body: form,
@@ -377,10 +421,10 @@ export class TelegramBridge {
 	}
 
 	/** Remote-only confirmation (no TUI): Telegram buttons on the active chat. */
-	remoteConfirm(title: string, message: string): Promise<boolean> | undefined {
+	remoteConfirm(title: string, message: string, opts?: { signal?: AbortSignal }): Promise<boolean> | undefined {
 		const chatId = this.activeChatId;
 		if (chatId === undefined) return undefined;
-		return this.telegramConfirm(chatId, this.activeUserId ?? chatId, title, message);
+		return this.telegramConfirm(chatId, this.activeUserId ?? chatId, title, message, opts);
 	}
 
 	/** Point the session's confirm callback at the combined TUI+Telegram flow. */
@@ -474,21 +518,37 @@ export class TelegramBridge {
 		return pending;
 	}
 
-	private telegramConfirm(chatId: number, userId: number, title: string, message: string): Promise<boolean> {
+	private telegramConfirm(
+		chatId: number,
+		userId: number,
+		title: string,
+		message: string,
+		opts?: { signal?: AbortSignal },
+	): Promise<boolean> {
 		return new Promise((resolve) => {
 			// Each confirm gets its own request id; callback data carries it so a
 			// late tap on an OLD button can never resolve a NEWER confirmation.
 			const requestId = randomUUID();
+			let onAbort: (() => void) | undefined;
 			const finish = (ok: boolean) => {
 				const current = this.confirmWaiters.get(requestId);
 				if (!current) return;
 				clearTimeout(current.timer);
+				if (onAbort && opts?.signal) opts.signal.removeEventListener("abort", onAbort);
 				this.confirmWaiters.delete(requestId);
 				resolve(ok);
 			};
 			const timeout = this.options.confirmTimeoutMs ?? 5 * 60 * 1000;
 			const timer = setTimeout(() => finish(false), timeout);
 			this.confirmWaiters.set(requestId, { chatId, userId, resolve: finish, timer });
+			if (opts?.signal) {
+				onAbort = () => finish(false);
+				if (opts.signal.aborted) {
+					finish(false);
+					return;
+				}
+				opts.signal.addEventListener("abort", onAbort, { once: true });
+			}
 			const body = `${title}\n\n${message}`.slice(0, 3800);
 			void this.api("sendMessage", {
 				chat_id: String(chatId),
@@ -529,6 +589,7 @@ export class TelegramBridge {
 		if (index === -1) return; // TUI-originated turn → stays in the TUI
 		const entry = this.pendingTelegram[index]!;
 		this.pendingTelegram.splice(index, 1);
+		this.stopTypingKeepalive();
 
 		try {
 			const raw = extractAssistantText(messages);
@@ -541,7 +602,9 @@ export class TelegramBridge {
 				await this.sendText(entry.chatId, "Done.");
 			}
 			for (const path of paths) {
-				await this.sendDocument(entry.chatId, path).catch(() => {});
+				await this.sendDocument(entry.chatId, path).catch(() =>
+					this.sendText(entry.chatId, "⚠️ I couldn't send an attached file.").catch(() => {}),
+				);
 			}
 		} catch (error) {
 			// Never drop a response silently: log the failure so it can be fixed.
@@ -577,6 +640,7 @@ export class TelegramBridge {
 
 	async stop(): Promise<void> {
 		this.running = false;
+		this.stopTypingKeepalive();
 		await this.setPresence("🔴 Offline").catch(() => {});
 		await this.pollPromise;
 		this.startedAt = undefined;
@@ -794,12 +858,21 @@ export class TelegramBridge {
 			}
 			return;
 		}
-		const text = message.text?.trim();
+		// A captioned attachment prompts with its caption; other text lives in `text`.
+		const text = message.text?.trim() || message.caption?.trim();
 		if (!text) {
-			// A voice/audio attachment is transcribed and submitted as a prompt;
-			// other attachment-only messages (photos, files, stickers) are ignored.
+			// A voice/audio attachment is transcribed and submitted as a prompt.
 			if (isVoiceMessage(message)) {
 				await this.handleVoiceMessage(chatId, userId, message);
+				return;
+			}
+			// Never drop an attachment silently: photos, files, videos, and
+			// stickers cannot be seen, so say so instead of going quiet.
+			if (hasNonVoiceAttachment(message)) {
+				await this.sendText(
+					chatId,
+					"I can't see photos, files, videos, or stickers here yet — send text or a voice note instead.",
+				).catch(() => {});
 			}
 			return;
 		}
@@ -853,7 +926,8 @@ export class TelegramBridge {
 		// Only actual prompts update the confirmation target chat — /status and
 		// /help must not reroute an in-flight confirmation to a different chat.
 		this.pendingTelegram.push({ chatId, userId, text });
-		void this.api("sendChatAction", { chat_id: String(chatId), action: "typing" }).catch(() => {});
+		this.lastPromptAt = Date.now();
+		this.startTypingKeepalive(chatId);
 		try {
 			// Queue as a follow-up when the agent is mid-turn: the message is never
 			// lost to a "already processing" throw, and its response still comes
@@ -866,6 +940,7 @@ export class TelegramBridge {
 				(entry) => entry.chatId === chatId && entry.userId === userId && entry.text === text,
 			);
 			if (index !== -1) this.pendingTelegram.splice(index, 1);
+			this.stopTypingKeepalive();
 			await this.sendText(
 				chatId,
 				`⚠️ Could not start the task: ${error instanceof Error ? error.message : String(error)}`,
@@ -886,7 +961,7 @@ export class TelegramBridge {
 	): Promise<void> {
 		const fileId = extractVoiceFileId(message);
 		if (!fileId) return; // malformed attachment; nothing to transcribe
-		void this.api("sendChatAction", { chat_id: String(chatId), action: "typing" }).catch(() => {});
+		this.startTypingKeepalive(chatId);
 
 		let text: string | undefined;
 		try {
@@ -910,9 +985,11 @@ export class TelegramBridge {
 		}
 
 		this.pendingTelegram.push({ chatId, userId, text });
+		this.lastPromptAt = Date.now();
 		try {
 			await this.options.prompt(text, { streamingBehavior: "followUp" });
 		} catch (error) {
+			this.stopTypingKeepalive();
 			const index = this.pendingTelegram.findIndex(
 				(entry) => entry.chatId === chatId && entry.userId === userId && entry.text === text,
 			);
@@ -956,6 +1033,7 @@ export class TelegramBridge {
 				// A queued task run's completion should be reported back here.
 				this.activeChatId = chatId;
 				this.activeUserId = userId;
+				this.lastPromptAt = Date.now();
 			}
 			await this.sendText(chatId, result.text).catch(() => {});
 			return;
@@ -980,6 +1058,58 @@ export function formatBridgeStatus(sessionId: string, cwd: string, mode: string)
 	return `session: ${sessionId}\ncwd: ${cwd}\nmode: ${mode}`;
 }
 
+/**
+ * Split outbound text into chunks that fit a platform limit without tearing
+ * Markdown apart. Breaks at line boundaries, never inside a fenced code
+ * block: an open fence is closed at the chunk end and reopened (with its
+ * language tag) at the next chunk start. A single over-long line is
+ * hard-sliced as a last resort.
+ */
+export function splitMessage(text: string, maxLength: number): string[] {
+	if (text.length === 0) return [];
+	if (text.length <= maxLength) return [text];
+	const chunks: string[] = [];
+	let current: string[] = [];
+	let currentLen = 0;
+	let fenceLang: string | undefined;
+	const flush = () => {
+		if (fenceLang !== undefined) current.push("```");
+		chunks.push(current.join("\n"));
+		current = fenceLang !== undefined ? [`\`\`\`${fenceLang}`] : [];
+		currentLen = current.length > 0 ? current[0]!.length : 0;
+	};
+	for (const line of text.split("\n")) {
+		const fenceMatch = /^\s*```(.*?)\s*$/.exec(line);
+		if (fenceMatch) fenceLang = fenceLang === undefined ? (fenceMatch[1] ?? "") : undefined;
+		if (line.length > maxLength) {
+			// Over-long line: flush pending text, then hard-slice the line itself.
+			if (current.length > 0) flush();
+			// Slice inside a fence stays fenced on both sides; shrink the slice
+			// so the added fences never push the chunk over the limit.
+			const inFence = fenceLang !== undefined;
+			const sliceLen = inFence ? Math.max(1, maxLength - 8) : maxLength;
+			for (let i = 0; i < line.length; i += sliceLen) {
+				const piece = line.slice(i, i + sliceLen);
+				if (inFence) chunks.push(`\`\`\`\n${piece}\n\`\`\``);
+				else chunks.push(piece);
+			}
+			current = fenceLang !== undefined ? [`\`\`\`${fenceLang}`] : [];
+			currentLen = current.length > 0 ? current[0]!.length : 0;
+			continue;
+		}
+		// Reserve room for the closing fence when one is open, so a chunk can
+		// never overshoot the platform limit after the fence is closed.
+		if (current.length > 0 && currentLen + 1 + line.length + (fenceLang !== undefined ? 4 : 0) > maxLength) flush();
+		current.push(line);
+		currentLen += (current.length > 1 ? 1 : 0) + line.length;
+	}
+	if (current.length > 0) {
+		if (fenceLang !== undefined) current.push("```");
+		chunks.push(current.join("\n"));
+	}
+	return chunks;
+}
+
 /** Split into rows of up to `size` items (Telegram inline keyboards). */
 function chunk<T>(items: T[], size: number): T[][] {
 	const rows: T[][] = [];
@@ -987,6 +1117,58 @@ function chunk<T>(items: T[], size: number): T[][] {
 		rows.push(items.slice(i, i + size));
 	}
 	return rows;
+}
+
+/** Maximum bytes forwarded for one `MEDIA:` attachment (Bot API-friendly). */
+export const MEDIA_MAX_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Vet a `MEDIA:` path before it leaves the machine. Only files inside the
+ * workspace or the OS temp dir are shareable, and oversized files are
+ * refused — so a prompt-injected `MEDIA:/etc/passwd` can never exfiltrate
+ * to a phone. Returns the absolute path or a human-readable refusal.
+ */
+export async function resolveShareableMediaPath(rawPath: string): Promise<{ path?: string; refusal?: string }> {
+	const expanded = rawPath.startsWith("~") ? join(homedir(), rawPath.slice(1)) : rawPath;
+	const absolute = resolve(expanded);
+	const inside = (root: string) => absolute === root || absolute.startsWith(root + sep);
+	if (!inside(process.cwd()) && !inside(tmpdir())) {
+		return { refusal: `I can't share files outside the workspace: ${rawPath}` };
+	}
+	let size: number;
+	try {
+		size = (await stat(absolute)).size;
+	} catch {
+		return { refusal: `I couldn't read that file: ${rawPath}` };
+	}
+	if (size > MEDIA_MAX_BYTES) {
+		return { refusal: `That file is too large to send (${(size / 1048576).toFixed(1)} MB).` };
+	}
+	return { path: absolute };
+}
+
+/** Default recency window for background task notifications (30 minutes). */
+export const BRIDGE_NOTIFY_DEFAULT_MAX_AGE_MS = 30 * 60 * 1000;
+
+/**
+ * Maximum age of the last user prompt for a background task notification to
+ * still push to a channel. Override with PORCUPINE_BRIDGE_NOTIFY_MAX_AGE_MS
+ * (0 = never expire). Prevents stale pushes long after the user walked away.
+ */
+export function bridgeNotifyMaxAgeMs(): number {
+	const raw = process.env.PORCUPINE_BRIDGE_NOTIFY_MAX_AGE_MS;
+	if (raw === undefined || raw.trim() === "") return BRIDGE_NOTIFY_DEFAULT_MAX_AGE_MS;
+	const parsed = Number(raw);
+	if (!Number.isFinite(parsed) || parsed < 0) return BRIDGE_NOTIFY_DEFAULT_MAX_AGE_MS;
+	return parsed;
+}
+
+/** True when a channel heard from its user recently enough to notify. */
+export function isNotifyFresh(lastPromptAt: number | undefined, now: number = Date.now()): boolean {
+	if (lastPromptAt === undefined) return false;
+	const maxAge = bridgeNotifyMaxAgeMs();
+	if (maxAge === 0) return true;
+	return now - lastPromptAt <= maxAge;
 }
 
 /** Keep button labels readable; callback data carries the real index. */

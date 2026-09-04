@@ -2,7 +2,12 @@ import type { TUI } from "@porcupineai/tui";
 import { describe, expect, it, vi } from "vitest";
 import { WorkingStatusIndicator } from "../src/modes/interactive/components/status-indicator.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { animationLoaderOptions, buildDotFrames, resolveToolActivity } from "../src/porcupine/animations.ts";
+import {
+	animationLoaderOptions,
+	buildDotFrames,
+	getAnimation,
+	resolveToolActivity,
+} from "../src/porcupine/animations.ts";
 
 function fakeTui() {
 	const renders = { n: 0 };
@@ -63,5 +68,10 @@ describe("animation pipeline (live integration proof)", () => {
 		const frames = buildDotFrames("🔎", "Searching for skills");
 		expect(frames.length).toBeGreaterThan(1);
 		expect(frames[0]).toContain("🔎 Searching for skills");
+	});
+
+	it("labels terminal tool failure as failed, never as recovering", () => {
+		expect(getAnimation("error").label).toBe("Failed");
+		expect(animationLoaderOptions("error").frames[0]).toContain("Failed");
 	});
 });

@@ -13,13 +13,25 @@
 import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
 import { completeSimple, getEnvApiKey, getModel } from "../src/compat.ts";
-import type { AssistantMessage, Message, Tool, ToolResultMessage } from "../src/types.ts";
+import { getBuiltinModels } from "../src/providers/all.ts";
+import type { Api, AssistantMessage, Message, Model, Tool, ToolResultMessage } from "../src/types.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve API keys
 const copilotToken = await resolveApiKey("github-copilot");
 const openrouterKey = getEnvApiKey("openrouter");
 const codexToken = await resolveApiKey("openai-codex");
+
+/**
+ * Dynamic catalog read. Pinned model-id literals vanish from CI's truncated
+ * full-JSON type inference (see c367cc8), so resolve at runtime and fail with
+ * a clear error when the catalog genuinely drops the id.
+ */
+function mustGetModel(provider: "github-copilot" | "openai-codex" | "openrouter", id: string): Model<Api> {
+	const model = getBuiltinModels(provider).find((candidate) => candidate.id === id);
+	if (!model) throw new Error(`model ${provider}/${id} missing from the generated catalog`);
+	return model;
+}
 
 // Simple echo tool for testing
 const echoToolSchema = Type.Object({
@@ -45,7 +57,7 @@ describe("Tool Call ID Normalization - Live Handoff", () => {
 	it.skipIf(!copilotToken || !openrouterKey)(
 		"github-copilot -> openrouter should normalize pipe-separated IDs",
 		async () => {
-			const copilotModel = getModel("github-copilot", "gpt-5.2-codex");
+			const copilotModel = mustGetModel("github-copilot", "gpt-5.2-codex");
 			const openrouterModel = getModel("openrouter", "openai/gpt-5.2-codex");
 
 			// Step 1: Generate tool call with github-copilot
@@ -115,7 +127,7 @@ describe("Tool Call ID Normalization - Live Handoff", () => {
 	it.skipIf(!copilotToken || !codexToken)(
 		"github-copilot -> openai-codex should normalize pipe-separated IDs",
 		async () => {
-			const copilotModel = getModel("github-copilot", "gpt-5.2-codex");
+			const copilotModel = mustGetModel("github-copilot", "gpt-5.2-codex");
 			const codexModel = getModel("openai-codex", "gpt-5.5");
 
 			// Step 1: Generate tool call with github-copilot
