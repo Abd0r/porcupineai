@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.75] - 2026-09-05
+
 ### Added
 
 - **TUI-first talking channels:** the terminal owns the canonical conversation lifecycle (`received` → `working` → `completed`/`failed`/`cancelled`) and Telegram, Discord, and iMessage mirror it. One logical approval/question/input races the TUI and every channel with a `DialogCoordinator`: the first valid authorized answer wins and all losers are cancelled. Shared `conversation-lifecycle` contract (mapper, origin resolution, ordered tracker) for future adapters.
