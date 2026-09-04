@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
 import { githubCopilotOAuth } from "../src/auth/oauth/github-copilot.ts";
 import { createModels } from "../src/models.ts";
+import { getBuiltinModels } from "../src/providers/all.ts";
 import { githubCopilotProvider } from "../src/providers/github-copilot.ts";
 
 function jsonResponse(body: unknown, status: number = 200): Response {
@@ -60,6 +61,11 @@ describe("GitHub Copilot OAuth device flow", () => {
 	});
 
 	it("filters models to the authenticated account picker catalog", async () => {
+		// Probe id comes from the live static catalog: pinned ids rot when
+		// upstream regenerates provider data. The picker-filtering logic is
+		// identical either way.
+		const probeId = getBuiltinModels("github-copilot")[0]?.id;
+		if (!probeId) throw new Error("github-copilot catalog is empty");
 		const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
 			const url = getUrl(input);
 
@@ -77,7 +83,7 @@ describe("GitHub Copilot OAuth device flow", () => {
 				return jsonResponse({
 					data: [
 						{
-							id: "gpt-4.1",
+							id: probeId,
 							model_picker_enabled: true,
 							capabilities: { supports: { tool_calls: true } },
 						},
@@ -107,13 +113,13 @@ describe("GitHub Copilot OAuth device flow", () => {
 			refresh: "ghu_refresh_token",
 			expires: 0,
 		});
-		expect(credentials.availableModelIds).toEqual(["gpt-4.1"]);
+		expect(credentials.availableModelIds).toEqual([probeId]);
 
 		const store = new InMemoryCredentialStore();
 		await store.modify("github-copilot", async () => ({ ...credentials, type: "oauth" }));
 		const models = createModels({ credentials: store });
 		models.setProvider(githubCopilotProvider());
-		expect((await models.getAvailable("github-copilot")).map((model) => model.id)).toEqual(["gpt-4.1"]);
+		expect((await models.getAvailable("github-copilot")).map((model) => model.id)).toEqual([probeId]);
 	});
 
 	it("reports device-code details through onDeviceCode", async () => {
