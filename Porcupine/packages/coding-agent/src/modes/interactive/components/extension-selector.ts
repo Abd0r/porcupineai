@@ -13,6 +13,9 @@ export interface ExtensionSelectorOptions {
 	tui?: TUI;
 	timeout?: number;
 	onToggleToolsExpanded?: () => void;
+	/** Present a confirmation with explicit consequence and action affordances. */
+	variant?: "default" | "confirm";
+	description?: string;
 }
 
 export class ExtensionSelectorComponent extends Container {
@@ -25,6 +28,7 @@ export class ExtensionSelectorComponent extends Container {
 	private baseTitle: string;
 	private countdown: CountdownTimer | undefined;
 	private onToggleToolsExpanded: (() => void) | undefined;
+	private readonly variant: "default" | "confirm";
 
 	constructor(
 		title: string,
@@ -39,20 +43,31 @@ export class ExtensionSelectorComponent extends Container {
 		this.onSelectCallback = onSelect;
 		this.onCancelCallback = onCancel;
 		this.onToggleToolsExpanded = opts?.onToggleToolsExpanded;
+		this.variant = opts?.variant ?? "default";
 		this.baseTitle = title;
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
 
-		this.titleText = new Text(theme.fg("accent", theme.bold(title)), 1, 0);
+		const heading = this.variant === "confirm" ? `⚠️ Confirm: ${title}` : title;
+		this.titleText = new Text(theme.fg("accent", theme.bold(heading)), 1, 0);
 		this.addChild(this.titleText);
+		if (opts?.description) {
+			this.addChild(new Text(theme.fg("warning", opts.description), 1, 0));
+		}
 		this.addChild(new Spacer(1));
 
 		if (opts?.timeout && opts.timeout > 0 && opts.tui) {
 			this.countdown = new CountdownTimer(
 				opts.timeout,
 				opts.tui,
-				(s) => this.titleText.setText(theme.fg("accent", theme.bold(`${this.baseTitle} (${s}s)`))),
+				(s) =>
+					this.titleText.setText(
+						theme.fg(
+							"accent",
+							theme.bold(`${this.variant === "confirm" ? "⚠️ Confirm: " : ""}${this.baseTitle} (${s}s)`),
+						),
+					),
 				() => this.onCancelCallback(),
 			);
 		}
@@ -81,9 +96,16 @@ export class ExtensionSelectorComponent extends Container {
 		this.listContainer.clear();
 		for (let i = 0; i < this.options.length; i++) {
 			const isSelected = i === this.selectedIndex;
+			const option = this.options[i] ?? "";
+			const label =
+				this.variant === "confirm" && this.options.length === 2 && (option === "Yes" || option === "No")
+					? option === "Yes"
+						? "✅ Yes, allow"
+						: "❌ No, cancel"
+					: option;
 			const text = isSelected
-				? theme.fg("accent", "→ ") + theme.fg("accent", this.options[i])
-				: `  ${theme.fg("text", this.options[i])}`;
+				? theme.fg("accent", "→ ") + theme.fg("accent", label)
+				: `  ${theme.fg("text", label)}`;
 			this.listContainer.addChild(new Text(text, 1, 0));
 		}
 	}

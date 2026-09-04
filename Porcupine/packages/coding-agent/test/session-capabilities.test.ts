@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { artifactChangeFromToolCall, buildCapabilityTreeFromSession } from "../src/porcupine/session-bridge.ts";
+import { artifactChangeFromToolCall, buildCapabilityTreeFromSession } from "../src/porcupine/session-capabilities.ts";
 
 describe("Porcupine session bridge", () => {
 	it("builds a capability tree from tools and skills", () => {

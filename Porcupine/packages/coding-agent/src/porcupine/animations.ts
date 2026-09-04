@@ -128,7 +128,7 @@ export const ANIMATIONS: readonly AnimationSpec[] = [
 	{ id: "sent-message", emoji: "✉️", label: "Sent message", intervalMs: 300 },
 	{ id: "using-tool", emoji: "🧰", label: "Using", intervalMs: 300 },
 	{ id: "compacting", emoji: "🗜️", label: "Compacting", intervalMs: 340 },
-	{ id: "error", emoji: "⚠️", label: "Recovering", intervalMs: 340 },
+	{ id: "error", emoji: "⚠️", label: "Failed", intervalMs: 340 },
 	// --- easter eggs (rare stand-ins for Working / Thinking) ---
 	{ id: "vibing", emoji: "🎧", label: "Vibing", intervalMs: 320, easterEggOf: "working" },
 	{ id: "caffeinated", emoji: "☕", label: "Caffeinated", intervalMs: 300, easterEggOf: "working" },

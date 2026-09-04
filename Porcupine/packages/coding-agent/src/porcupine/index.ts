@@ -97,11 +97,11 @@ export {
 	userRequestedPlanning,
 } from "./personality.ts";
 export { createHeuristicRuntimeAdapters } from "./session-adapters.ts";
-export type { CatalogSkill, CatalogTool } from "./session-bridge.ts";
+export type { CatalogSkill, CatalogTool } from "./session-capabilities.ts";
 export {
 	artifactChangeFromToolCall,
 	buildCapabilityTreeFromSession,
-} from "./session-bridge.ts";
+} from "./session-capabilities.ts";
 export {
 	augmentPromptWithPlan,
 	formatPlanContextBlock,

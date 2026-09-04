@@ -134,6 +134,25 @@ describe("ToolExecutionComponent parity", () => {
 		expect(rendered).toContain("README.md");
 	});
 
+	test("marks renderer-less tool rows with a state glyph (running, done, failed)", () => {
+		const component = new ToolExecutionComponent(
+			"mystery_widget",
+			"tool-glyph-1",
+			{ action: "frob" },
+			{},
+			undefined,
+			createFakeTui(),
+			process.cwd(),
+		);
+		expect(stripAnsi(component.render(120).join("\n"))).toContain("● mystery_widget");
+
+		component.updateResult({ content: [{ type: "text", text: "ok" }], details: {}, isError: false }, false);
+		expect(stripAnsi(component.render(120).join("\n"))).toContain("✓ mystery_widget");
+
+		component.updateResult({ content: [{ type: "text", text: "boom" }], details: {}, isError: true }, false);
+		expect(stripAnsi(component.render(120).join("\n"))).toContain("✗ mystery_widget");
+	});
+
 	test("bash execute emits an initial empty partial update before output arrives", async () => {
 		const updates: Array<{ content: Array<{ type: string; text?: string }>; details?: unknown }> = [];
 		const operations: BashOperations = {

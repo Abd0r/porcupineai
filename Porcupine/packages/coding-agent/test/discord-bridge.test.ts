@@ -189,6 +189,31 @@ describe("DiscordBridge", () => {
 		expect(await confirmation).toBe(true);
 	});
 
+	it("cancels a remote confirmation when its signal aborts", async () => {
+		const { bridge } = makeBridge({ confirmTimeoutMs: 60_000 });
+		const anyBridge = bridge as unknown as { activeChannelId?: string; activeUserId?: string };
+		anyBridge.activeChannelId = "channel-1";
+		anyBridge.activeUserId = "user-1";
+		const controller = new AbortController();
+		const confirmation = bridge.remoteConfirm("Run", "npm test", { signal: controller.signal });
+		if (!confirmation) throw new Error("confirmation was not created");
+		controller.abort();
+		expect(await confirmation).toBe(false);
+	});
+
+	it("tells the channel when a selection is too large for reactions", async () => {
+		const { bridge, calls } = makeBridge();
+		const anyBridge = bridge as unknown as { activeChannelId?: string; activeUserId?: string };
+		anyBridge.activeChannelId = "channel-1";
+		anyBridge.activeUserId = "user-1";
+		const options = Array.from({ length: 11 }, (_, i) => `Option ${i + 1}`);
+		const result = await bridge.select("Choose", options, async () => "Option 3");
+		expect(result).toBe("Option 3");
+		const notice = calls.find((call) => call.path === "/channels/channel-1/messages" && call.method === "POST");
+		expect(notice).toBeDefined();
+		expect(JSON.parse(notice!.body!).content).toContain("Too many options");
+	});
+
 	it("scopes numbered selection reactions to the exact prompt message", async () => {
 		let sentId = 0;
 		const { bridge } = makeBridge();
@@ -254,6 +279,50 @@ describe("DiscordBridge", () => {
 		expect(sent.some((payload) => payload.op === 6)).toBe(true);
 		expect(sent.some((payload) => payload.op === 2)).toBe(false);
 		anyBridge.stopHeartbeat();
+	});
+
+	it("refreshes typing while a turn is open and stops when it ends", async () => {
+		vi.useFakeTimers();
+		try {
+			const { bridge, calls } = makeBridge();
+			const anyBridge = bridge as unknown as { handleMessage(message: unknown): Promise<void> };
+			const typingCount = () => calls.filter((call) => call.path === "/channels/channel-1/typing").length;
+			await anyBridge.handleMessage({
+				id: "m-typing",
+				channel_id: "channel-1",
+				author: { id: "user-1", bot: false },
+				content: "long task",
+			});
+			expect(typingCount()).toBe(1);
+			await vi.advanceTimersByTimeAsync(24000);
+			expect(typingCount()).toBeGreaterThan(1);
+
+			await (
+				bridge as unknown as { handleAgentEnd(messages: unknown[], willRetry: boolean): Promise<void> }
+			).handleAgentEnd(assistantMessage("done.", "long task"), false);
+			const afterEnd = typingCount();
+			await vi.advanceTimersByTimeAsync(24000);
+			expect(typingCount()).toBe(afterEnd);
+			await bridge.stop();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("answers attachment-only messages instead of going silent", async () => {
+		const { bridge, calls, prompts } = makeBridge();
+		const anyBridge = bridge as unknown as { handleMessage(message: unknown): Promise<void> };
+		await anyBridge.handleMessage({
+			id: "m-attach",
+			channel_id: "channel-1",
+			author: { id: "user-1", bot: false },
+			content: "   ",
+			attachments: [{ filename: "shot.png" }],
+		});
+		expect(prompts).toHaveLength(0);
+		const notice = calls.find((call) => call.path === "/channels/channel-1/messages" && call.method === "POST");
+		expect(notice).toBeDefined();
+		expect(JSON.parse(notice!.body!).content).toContain("can't see");
 	});
 
 	it("a retry turn is never forwarded", async () => {

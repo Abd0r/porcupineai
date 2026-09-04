@@ -28,7 +28,15 @@ import {
 	type RemoteCommandDescriptor,
 	resolveRemoteCommand,
 } from "./remote-slash-commands.ts";
-import { extractAssistantText, lastUserMessageText, summarizeToolCalls, textsMatch } from "./telegram-bridge.ts";
+import {
+	extractAssistantText,
+	extractMediaMarkers,
+	isNotifyFresh,
+	lastUserMessageText,
+	splitMessage,
+	summarizeToolCalls,
+	textsMatch,
+} from "./telegram-bridge.ts";
 
 const POLL_INTERVAL_MS = 3000;
 const SEND_CHUNK = 1500;
@@ -71,6 +79,8 @@ export class IMessageBridge {
 	/** Most recent authorized actor that sent a real prompt; confirmations go only to that actor. */
 	private activeChatId: string | undefined;
 	private activeSender: string | undefined;
+	/** Last inbound user activity; bounds background task notifications. */
+	private lastPromptAt: number | undefined;
 	private pendingConfirms = new Map<string, { chatId: string; sender: string; resolve: (ok: boolean) => void }>();
 	private pendingSelects = new Map<
 		string,
@@ -79,6 +89,12 @@ export class IMessageBridge {
 	private pendingTextRequest:
 		| { chatId: string; sender: string; resolve: (value: string | undefined) => void }
 		| undefined;
+	/**
+	 * Echo guard: texts the bridge just sent. macOS no longer exposes a
+	 * portable `is from me` property (fromMe is always false), so without this
+	 * the bridge would re-ingest its own replies as new prompts.
+	 */
+	private recentOutbound: string[] = [];
 	/** Epoch ms when the bridge started polling; drives the !status uptime line. */
 	private startedAt: number | undefined;
 	/** Materialized remote slash catalog (rebuilt on demand). */
@@ -117,16 +133,34 @@ export class IMessageBridge {
 		});
 	}
 
-	/** Send an outbound notification to the most recently active chat (if any). Attended-only; silently skipped when no chat has prompted yet. */
+	/**
+	 * Send an outbound notification to the most recently active chat.
+	 * Attended-only and freshness-gated: skipped when no chat has prompted
+	 * yet or the last prompt is older than the notify window.
+	 */
 	async notifyTaskResult(text: string): Promise<void> {
-		if (!text || this.activeChatId === undefined) return;
+		if (!text || this.activeChatId === undefined || !isNotifyFresh(this.lastPromptAt)) return;
 		await this.sendText(this.activeChatId, text).catch(() => {});
+	}
+
+	/** Remember an outbound chunk for the consume-once echo guard (bounded). */
+	private rememberOutbound(chunk: string): void {
+		this.recentOutbound.push(chunk);
+		if (this.recentOutbound.length > 20) this.recentOutbound.splice(0, this.recentOutbound.length - 20);
+	}
+
+	/** True once when the text matches a remembered outbound send (self-echo). */
+	private consumeOutboundEcho(text: string): boolean {
+		const index = this.recentOutbound.indexOf(text);
+		if (index === -1) return false;
+		this.recentOutbound.splice(index, 1);
+		return true;
 	}
 
 	async sendText(chatId: string, text: string): Promise<void> {
 		if (!text) return;
-		for (let i = 0; i < text.length; i += SEND_CHUNK) {
-			const chunk = text.slice(i, i + SEND_CHUNK);
+		for (const chunk of splitMessage(text, SEND_CHUNK)) {
+			this.rememberOutbound(chunk);
 			const script = `tell application "Messages"\nsend "${appleScriptEscape(chunk)}" to chat id "${appleScriptEscape(chatId)}"\nend tell`;
 			try {
 				await this.osascript(script);
@@ -208,21 +242,31 @@ export class IMessageBridge {
 	// Confirmation / selection / input (text-based, same contract as Telegram)
 	// ---------------------------------------------------------------------
 
-	remoteConfirm(title: string, message: string): Promise<boolean> | undefined {
+	remoteConfirm(title: string, message: string, opts?: { signal?: AbortSignal }): Promise<boolean> | undefined {
 		const chatId = this.activeChatId;
 		const sender = this.activeSender;
 		if (chatId === undefined || sender === undefined) return undefined;
 		return new Promise<boolean>((resolve) => {
 			const requestId = randomUUID();
+			let onAbort: (() => void) | undefined;
 			const waiter = (ok: boolean) => {
 				if (!this.pendingConfirms.has(requestId)) return;
 				clearTimeout(timer);
+				if (onAbort && opts?.signal) opts.signal.removeEventListener("abort", onAbort);
 				this.pendingConfirms.delete(requestId);
 				resolve(ok);
 			};
 			const timeout = this.options.confirmTimeoutMs ?? 5 * 60 * 1000;
 			const timer = setTimeout(() => waiter(false), timeout);
 			this.pendingConfirms.set(requestId, { chatId, sender, resolve: waiter });
+			if (opts?.signal) {
+				onAbort = () => waiter(false);
+				if (opts.signal.aborted) {
+					waiter(false);
+					return;
+				}
+				opts.signal.addEventListener("abort", onAbort, { once: true });
+			}
 			void this.sendText(chatId, `❓ ${title}\n\n${message}\n\nReply APPROVE to allow, DENY to block.`).catch(() =>
 				waiter(false),
 			);
@@ -309,9 +353,16 @@ export class IMessageBridge {
 		this.pendingMessages.splice(index, 1);
 		try {
 			const raw = extractAssistantText(messages);
+			const { clean, paths } = extractMediaMarkers(raw);
 			const tools = summarizeToolCalls(messages);
-			const body = [raw, tools ? `\n${tools}` : ""].join("").trim();
-			await this.sendText(entry.chatId, body || "Done.");
+			const body = [clean, tools ? `\n${tools}` : ""].join("").trim();
+			if (body) await this.sendText(entry.chatId, body);
+			else if (paths.length === 0) await this.sendText(entry.chatId, "Done.");
+			// Messages.app attachments need a Mac-side handoff; until then name
+			// the file so the response is never silently incomplete.
+			for (const path of paths) {
+				await this.sendText(entry.chatId, `📎 File ready: ${path}`).catch(() => {});
+			}
 		} catch (error) {
 			console.warn(
 				`[imessage] failed to forward response: ${error instanceof Error ? error.message : String(error)}`,
@@ -406,6 +457,10 @@ export class IMessageBridge {
 	private async handleIncoming(chatId: string, text: string, sender: string): Promise<void> {
 		if (!this.pollChats.includes(chatId) && !this.options.allowlist.includes(chatId)) return;
 		if (!this.isAuthorizedSender(chatId, sender)) return;
+		// Self-echo: the bridge's own sent texts reappear in the poll with no
+		// reliable fromMe flag. Consume each remembered send once so an echo can
+		// never start a turn or answer a dialog.
+		if (this.consumeOutboundEcho(text)) return;
 
 		// A pending free-text answer consumes this message (bound to its actor).
 		if (
@@ -461,7 +516,7 @@ export class IMessageBridge {
 		if (text === "/help") {
 			await this.sendText(
 				chatId,
-				"Send any message and the agent works on the shared session (shown in the TUI too).\n\nCommands: /status · /help · /commands. Confirmations arrive as text (reply APPROVE/DENY); questions as numbered replies.",
+				"Send any message and the agent works on the shared session (shown in the TUI too).\n\nCommands: /status · /help · /commands · !status · !tasks · !run <taskId> · !help. Confirmations arrive as text (reply APPROVE/DENY); questions as numbered replies.",
 			);
 			return;
 		}
@@ -477,6 +532,7 @@ export class IMessageBridge {
 		}
 
 		this.pendingMessages.push({ chatId, sender, text });
+		this.lastPromptAt = Date.now();
 		try {
 			await this.options.prompt(text, { streamingBehavior: "followUp" });
 		} catch (error) {
@@ -533,6 +589,7 @@ export class IMessageBridge {
 			if (result.notificationTarget && sender !== undefined) {
 				this.activeChatId = chatId;
 				this.activeSender = sender;
+				this.lastPromptAt = Date.now();
 			}
 			await this.sendText(chatId, result.text).catch(() => {});
 			return;
