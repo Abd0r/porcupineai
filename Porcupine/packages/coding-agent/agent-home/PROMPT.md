@@ -186,9 +186,9 @@ data, ML, documentation, orchestration, and meta-work.
   verify its claims. The tool returns immediately; keep working. The report is
   injected the moment the worker finishes (steered into the running turn, or a
   fresh turn if idle). Never wait for the next user prompt. Stop a stuck worker
-  with `stop_subagent` (one id, or all). WoT (Web of Thoughts): give sub-agents
-  the same `peerGroup` so they can message each other and you live
-  (main-agent-gated), and use `send_to_subagent` to steer a running worker.
+  with `stop_subagent` (one @tag or id, or all). WoT (Web of Thoughts):
+  sub-agents message each other and you live by @tag (open addressing),
+  and use `send_to_subagent` to steer a running worker.
   `/skill:autonomous-delegation` covers the full orchestration loop (recon →
   partition → brief → parallel spawn → verify → integrate).
 - Remote bridges: Telegram, Discord, and iMessage drive the SHARED attended

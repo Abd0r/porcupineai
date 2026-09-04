@@ -40,7 +40,7 @@ Bad brief: `"investigate the TUI"`. Good brief: `"Bug audit of modes/interactive
 ### 4. Spawn in parallel, keep working
 Spawn up to `subagent.maxConcurrent` (default 3) in one pass. While they run, do your own track (usually the core/highest-risk one). Reports are injected the moment each finishes — steer mid-turn or fresh turn — never wait for the user.
 
-**WoT coordination (Web of Thoughts):** when tracks must share findings or hand off work, assign the SAME `peerGroup` to the workers — they can then message each other and the main agent **live** (injected into context instantly, main-agent-gated). Tell each worker the peers' ids in the brief so they can coordinate directly instead of round-tripping through you. Use `send_to_subagent` to steer a worker mid-flight ("drop X, focus on Y"). Default: no group = fully isolated workers.
+**WoT coordination (Web of Thoughts):** when tracks must share findings or hand off work, workers message each other and the main agent **live** by @tag (injected into context instantly, open addressing). Tell each worker the peers' @tags in the brief so they can coordinate directly instead of round-tripping through you. Use `send_to_subagent` to steer a worker mid-flight ("drop X, focus on Y").
 
 ### 5. Verify every report — never trust blindly
 A report is a claim, not a fact. Spot-check the highest-impact claims against source (`grep`/`read` the file:line the worker cited). Cross-check against your own recon. This is non-negotiable: sub-agents can hallucinate, misread, or stop early.

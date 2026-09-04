@@ -28,6 +28,7 @@ describe("setPorcupineActivity UI wiring (animations.ts)", () => {
 				toolChip(t: string, a?: unknown): { phase: string; name?: string };
 				subagentActivityIndicator(
 					runs: Array<{
+						name: string;
 						lastTool?: string;
 						lastToolArgs?: unknown;
 						phase?: "tool" | "thinking";
@@ -39,23 +40,28 @@ describe("setPorcupineActivity UI wiring (animations.ts)", () => {
 
 		// One worker extracting.
 		const one = prototype.prototype.subagentActivityIndicator.call(fakeThis, [
-			{ lastTool: "web_extract", phase: "tool" },
+			{ name: "buck", lastTool: "web_extract", phase: "tool" },
 		]);
-		expect(one!.frames[0]).toBe("🤖(📄 Extracting).");
+		expect(one!.frames[0]).toBe("🤖(@buck 📄 Extracting).");
 
 		// Two workers, slot order preserved: #1 extracting, #2 searching.
 		const two = prototype.prototype.subagentActivityIndicator.call(fakeThis, [
-			{ lastTool: "web_extract", phase: "tool" },
-			{ lastTool: "web_search", phase: "tool" },
+			{ name: "buck", lastTool: "web_extract", phase: "tool" },
+			{ name: "tinker", lastTool: "web_search", phase: "tool" },
 		]);
-		expect(two!.frames[0]).toBe("🤖(📄 Extracting, 🌐 Searching).");
+		expect(two!.frames[0]).toBe("🤖(@buck 📄 Extracting, @tinker 🌐 Searching).");
 
 		// Slot order never changes even if #2 was active most recently.
 		const ordered = prototype.prototype.subagentActivityIndicator.call(fakeThis, [
-			{ lastTool: "read", lastToolArgs: { path: "/x/skills/vcs/git-basics/SKILL.md" }, phase: "tool" },
-			{ phase: "thinking" },
+			{
+				name: "buck",
+				lastTool: "read",
+				lastToolArgs: { path: "/x/skills/vcs/git-basics/SKILL.md" },
+				phase: "tool",
+			},
+			{ name: "fuddy", phase: "thinking" },
 		]);
-		expect(ordered!.frames[0]).toBe("🤖(📖 Reading skill: git-basics, 🧠 Thinking).");
+		expect(ordered!.frames[0]).toBe("🤖(@buck 📖 Reading skill: git-basics, @fuddy 🧠 Thinking).");
 	});
 
 	it("does not restart glyphs when the animation id is unchanged", () => {

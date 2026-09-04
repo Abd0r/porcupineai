@@ -237,7 +237,13 @@ describe("BUG-9: report-injection failure does not fabricate a failed sub-agent 
 				]),
 			resolveModel: () => faux.getModel(),
 			getStreamFn: () => streamSimple,
-			getSettings: () => ({ model: undefined, maxSteps: 30, contextWindow: 256_000, maxConcurrent: 1 }),
+			getSettings: () => ({
+				model: undefined,
+				maxSteps: 30,
+				contextWindow: 256_000,
+				maxConcurrent: 1,
+				names: ["buck", "fuddy", "tinker"],
+			}),
 			onEvent: (event) => events.push(event),
 			// Report injection throws -> must NOT corrupt the run result.
 			onComplete: async () => {

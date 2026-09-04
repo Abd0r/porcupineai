@@ -3,12 +3,15 @@ import { runSubagent, type SubagentProgressEvent, type SubagentResult } from "@p
 import type { Model, TextContent } from "@porcupineai/ai";
 import { type Static, Type } from "typebox";
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
+import { formatAgentTag, SubagentNamePool } from "../subagent-names.ts";
 
 export interface SubagentToolSettings {
 	model?: string;
 	maxSteps: number;
 	contextWindow: number;
 	maxConcurrent: number;
+	/** Effective sub-agent name pool (settings override or buck/fuddy/tinker). */
+	names: [string, string, string];
 }
 
 export interface SubagentToolOptions {
@@ -29,9 +32,13 @@ export interface SubagentToolOptions {
 	onComplete?: (id: string, result: SubagentResult) => void | Promise<void>;
 	/** Called when a background sub-agent starts; registers a cancel handle. */
 	onRegister?: (id: string, cancel: () => void) => void;
+	/** Claim a human tag for a new run id (session-owned pool). Falls back to a local pool when unset. */
+	claimName?: (id: string, preferred?: string, task?: string) => string;
+	/** Live agents for the spawn roster (tags + short task excerpts). */
+	getActiveAgents?: () => Array<{ tag: string; task: string }>;
 	/** Called when a background sub-agent settles; removes its cancel handle. */
 	onUnregister?: (id: string) => void;
-	/** Web of Thoughts (WoT): shared peer-messaging bus. Wired only when a sub-agent gets a peerGroup. */
+	/** Web of Thoughts (WoT): shared peer-messaging bus for open agent addressing. */
 	getMessageBus?: () => import("../subagent-messaging.ts").SubagentMessageBus | undefined;
 	/** WoT: called with a live steer handle so the session can inject messages into this sub-agent's context instantly. */
 	onRegisterSteer?: (id: string, steer: (text: string) => void) => void;
@@ -64,19 +71,19 @@ const SUBAGENT_TOOL_NAMES = [
 	"literature",
 ] as const;
 
-/** Extra messaging tools handed to a sub-agent when the main agent assigns a peerGroup. */
-function buildMessagingTools(
-	bus: import("../subagent-messaging.ts").SubagentMessageBus,
-	id: string,
-	peerGroup: string,
-): AgentTool<any>[] {
+/**
+ * Messaging tools handed to every bus-registered sub-agent (open addressing):
+ * any running agent may message any other running agent by @tag, including
+ * @porcupine (the main agent). The bus keeps the full audit trail.
+ */
+function buildMessagingTools(bus: import("../subagent-messaging.ts").SubagentMessageBus, id: string): AgentTool<any>[] {
 	return [
 		{
 			name: "send_message",
 			label: "send_message",
-			description: `Send a message to another sub-agent in your peer group (${peerGroup}). The peer must be running and in the same group. Use check_messages to receive replies.`,
+			description: `Send a message to any running agent by @tag (e.g. @buck) or id — a peer sub-agent or @porcupine, the main agent. Use check_messages to receive replies.`,
 			parameters: Type.Object({
-				to: Type.String({ description: "Target sub-agent id (the parent tells you peer ids in the task/notes)." }),
+				to: Type.String({ description: "Target agent tag (@buck) or id." }),
 				text: Type.String({ description: "Message text (<= 4000 chars)." }),
 			}),
 			execute: async (_callId: string, params: unknown) => {
@@ -94,19 +101,30 @@ function buildMessagingTools(
 			name: "check_messages",
 			label: "check_messages",
 			description:
-				"Check for incoming messages from peer sub-agents. Returns any messages addressed to you (draining the queue).",
+				"Check for incoming messages from other agents. Returns any messages addressed to you (draining the queue).",
 			parameters: Type.Object({}),
 			execute: async () => {
 				const messages = bus.drainInbox(id);
 				const text =
-					messages.length === 0 ? "No messages." : messages.map((m) => `[from ${m.from}] ${m.text}`).join("\n\n");
+					messages.length === 0
+						? "No messages."
+						: messages.map((m) => `[from ${bus.displayRef(m.from)}] ${m.text}`).join("\n\n");
 				return { content: [{ type: "text", text }], details: { messageCount: messages.length } };
 			},
 		},
 	];
 }
 
-const SUBAGENT_SYSTEM_PROMPT = `You are a Porcupine sub-agent: a focused, disposable worker with an isolated context window and a hard step/token budget.
+/**
+ * Spawn-time roster paragraph: who else is active right now, so a new
+ * worker never starts blind. Empty when nobody else is active.
+ */
+export function buildSpawnRoster(peers: Array<{ tag: string; task: string }>): string {
+	if (peers.length === 0) return "";
+	return `\n\nActive agents right now: @porcupine (main, your parent)${peers.map((peer) => `, ${peer.tag} (${peer.task})`).join("")}. They have been told you just came online.`;
+}
+
+const SUBAGENT_SYSTEM_PROMPT = `You are {tag}, a Porcupine sub-agent: a focused, disposable worker with an isolated context window and a hard step/token budget.
 
 Rules:
 - Complete the assigned task using the tools provided. Work autonomously and efficiently.
@@ -127,16 +145,23 @@ const subagentSchema = Type.Object({
 		}),
 	),
 	/**
-	 * WoT (Web of Thoughts): sub-agents sharing the same peerGroup may message
-	 * each other, and may message the main agent (@main). The MAIN AGENT decides
-	 * by assigning a group at spawn — default: no messaging.
+	 * WoT (Web of Thoughts): optional peer-group label (shown in status views).
+	 * Messaging is open: any running agent may message any other by @tag.
 	 */
 	peerGroup: Type.Optional(
 		Type.String({
-			description:
-				"Optional peer group name. Sub-agents with the same peerGroup may exchange messages with each other (send_message / check_messages) and message the main agent. Omit to keep the sub-agent isolated.",
+			description: "Optional peer-group label for status views (messaging is open regardless).",
 			minLength: 2,
 			maxLength: 48,
+		}),
+	),
+	/** Optional tag name for this sub-agent (@name). Falls back to the next free default when taken or invalid. */
+	name: Type.Optional(
+		Type.String({
+			description:
+				"Optional tag for this sub-agent (e.g. buck, addressable as @buck). Lowercase letters, digits, hyphens.",
+			minLength: 1,
+			maxLength: 24,
 		}),
 	),
 });
@@ -161,13 +186,31 @@ function textResult(
 	return { content: [{ type: "text", text }], details };
 }
 
+/**
+ * Local fallback pool for tool uses without a session-owned pool (tests,
+ * headless). Rebuilt when the configured names change.
+ */
+let fallbackPoolKey = "";
+let fallbackPool: SubagentNamePool | undefined;
+function fallbackNamePool(names: [string, string, string]): SubagentNamePool {
+	const key = JSON.stringify(names);
+	if (!fallbackPool || fallbackPoolKey !== key) {
+		fallbackPoolKey = key;
+		fallbackPool = new SubagentNamePool(names);
+	}
+	return fallbackPool;
+}
+function releaseFallbackName(id: string): void {
+	fallbackPool?.release(id);
+}
+
 export function createSubagentToolDefinition(options: SubagentToolOptions): ToolDefinition {
 	const getActiveSubagentRuns = options.getActiveSubagentRuns ?? (() => 0);
 	return {
 		name: "subagent",
 		label: "subagent",
 		description:
-			"Start a focused sub-agent in the background: fresh context window (128K–256K), the full tool stack minus agent-level tools (no sub-spawning, no GUI, no user questions), hard step budget. Returns IMMEDIATELY with an id — the main agent keeps working while the sub-agent runs. When the sub-agent finishes, its report is injected into the session INSTANTLY: steered into the running turn if you are mid-task, or a fresh turn is started if you are idle — the report lands in your context without waiting for the next user prompt. Up to subagent.maxConcurrent run at a time (default 3). WoT (Web of Thoughts): assign the same peerGroup to sub-agents that should message each other (and you) live; use send_to_subagent to steer a running sub-agent yourself.",
+			"Start a focused sub-agent in the background: fresh context window (128K–256K), the full tool stack minus agent-level tools (no sub-spawning, no GUI, no user questions), hard step budget. Returns IMMEDIATELY with an id — the main agent keeps working while the sub-agent runs. When the sub-agent finishes, its report is injected into the session INSTANTLY: steered into the running turn if you are mid-task, or a fresh turn is started if you are idle — the report lands in your context without waiting for the next user prompt. Up to subagent.maxConcurrent run at a time (default 3). Each run gets a @tag (buck/fuddy/tinker by default, or pass `name`) returned with its id. WoT (Web of Thoughts): every sub-agent carries send_message/check_messages and any running agent may message any other by @tag, including @porcupine (you); use send_to_subagent to steer a running sub-agent yourself.",
 		promptSnippet: "Spawn an isolated sub-agent for a focused task",
 		promptGuidelines: [
 			"Use subagent for self-contained work that would otherwise pollute the main context (long research, big refactors, multi-file drafts).",
@@ -176,7 +219,7 @@ export function createSubagentToolDefinition(options: SubagentToolOptions): Tool
 			"The sub-agent shares your cwd, permission policy, and safety gates. It cannot spawn sub-agents and cannot ask the user questions.",
 			"You can STOP a running sub-agent directly with stop_subagent (by id, or all of them) when it is stuck, off-track, or no longer needed — a stopped run reports '\u23f9 cancelled'. The user can also cancel all running sub-agents with Escape on an empty editor. Run abort always stops a runaway sub-agent at its budget.",
 			"Up to subagent.maxConcurrent sub-agents run at a time (default 3; set it in settings or just ask).",
-			"WoT: pass the same peerGroup to sub-agents that should talk to each other and to you; use send_to_subagent to steer a running sub-agent. Default (no group) = fully isolated.",
+			"WoT: every sub-agent can message any other by @tag (and @porcupine reaches you); use send_to_subagent to steer a running sub-agent. peerGroup is an optional status label.",
 			"It runs on its own model (cheap by default, set via subagent.model).",
 		],
 		parameters: subagentSchema,
@@ -211,18 +254,21 @@ export function createSubagentToolDefinition(options: SubagentToolOptions): Tool
 			const streamFn = options.getStreamFn();
 			const getApiKey = options.getApiKey?.();
 
-			// WoT: when the main agent assigns a peerGroup, register this sub-agent on
-			// the shared bus and hand it the messaging tools (send/check). Peers must
-			// share the group — everything else is refused by the bus.
+			// Every bus-registered sub-agent carries send/check tools (open addressing).
+			// peerGroup is an optional status label, not a messaging gate.
 			const peerGroup = args.peerGroup?.trim();
-			const bus = peerGroup ? options.getMessageBus?.() : undefined;
+			const bus = options.getMessageBus?.();
 
 			// BACKGROUND execution: the tool returns immediately with an id; the
 			// main agent keeps working while the sub-agent runs. When the sub-agent
 			// finishes, options.onComplete injects its report into the session
 			// (visible in the TUI and in the main agent's next-turn context).
 			const id = `sa-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-			if (peerGroup && bus) bus.register(id, peerGroup);
+			const name = options.claimName
+				? options.claimName(id, args.name, args.task)
+				: fallbackNamePool(settings.names).claim(id, args.name);
+			const tag = formatAgentTag(name);
+			if (bus) bus.register(id, peerGroup && peerGroup.length > 0 ? peerGroup : "open", name);
 			const controller = new AbortController();
 
 			const emit = (event: SubagentProgressEvent) => {
@@ -233,18 +279,20 @@ export function createSubagentToolDefinition(options: SubagentToolOptions): Tool
 				options.onEvent?.({ ...event, subagentId: id });
 			};
 
+			const roster = (options.getActiveAgents?.() ?? []).filter((peer) => peer.tag !== tag);
 			const systemPrompt =
-				SUBAGENT_SYSTEM_PROMPT +
-				(peerGroup && bus
-					? `\n\nPeer messaging is ENABLED for you (group: ${peerGroup}). You may send messages to other sub-agents in the same group via send_message and read incoming via check_messages. Only message sub-agents the parent explicitly listed as peers. Do not message sub-agents outside your group.`
-					: "");
+				SUBAGENT_SYSTEM_PROMPT.replace("{tag}", tag) +
+				(bus
+					? `\n\nYou can message any running agent by @tag via send_message and read incoming via check_messages — a peer sub-agent or @porcupine, the main agent who spawned you. Address peers by @tag, never by guessing ids.`
+					: "") +
+				buildSpawnRoster(roster);
 			const promise = runSubagent({
 				task: args.task,
 				notes: args.notes,
 				model,
 				streamFn,
 				getApiKey,
-				tools: peerGroup && bus ? [...tools, ...buildMessagingTools(bus, id, peerGroup)] : tools,
+				tools: bus ? [...tools, ...buildMessagingTools(bus, id)] : tools,
 				systemPrompt,
 				maxSteps: settings.maxSteps,
 				maxContextTokens: settings.contextWindow,
@@ -289,10 +337,11 @@ export function createSubagentToolDefinition(options: SubagentToolOptions): Tool
 					});
 				})
 				.finally(() => {
-					// Unregister from the bus FIRST so a peer send to a settled id is
-					// refused ("unknown peer") instead of queued into a dead inbox;
+					// Unregister from the bus FIRST so a send to a settled id is
+					// refused ("unknown agent") instead of queued into a dead inbox;
 					// then drop the steerer/cancel handles.
-					if (peerGroup && bus) bus.unregister(id);
+					if (bus) bus.unregister(id);
+					if (!options.claimName) releaseFallbackName(id);
 					options.onUnregister?.(id);
 				});
 
@@ -300,14 +349,16 @@ export function createSubagentToolDefinition(options: SubagentToolOptions): Tool
 				content: [
 					{
 						type: "text",
-						text: `Sub-agent started (id: ${id}) — ${
+						text: `Sub-agent started (${tag}, id: ${id}) — ${
 							settings.model ?? "parent model"
-						}, max ${settings.maxSteps} steps, ~${settings.contextWindow.toLocaleString()} ctx. Continue working normally; its report will be added to this conversation when it finishes.`,
+						}, max ${settings.maxSteps} steps, ~${settings.contextWindow.toLocaleString()} ctx. Message or stop it by tag (${tag}) or id. Continue working normally; its report will be added to this conversation when it finishes.`,
 					},
 				],
 				details: {
 					started: true,
 					id,
+					name,
+					tag,
 					background: true,
 				},
 			};
@@ -336,10 +387,10 @@ export function createUnavailableSubagentToolDefinition(): ToolDefinition {
 // ---------------------------------------------------------------------------
 
 export interface SendToSubagentToolOptions {
-	/** Inject a message into a running sub-agent's live context. Returns false when the id is not running. */
+	/** Inject a message into a running sub-agent's live context. Returns false when the ref is not running. */
 	send: (to: string, text: string) => boolean;
-	/** Live running sub-agent ids (for the error message). */
-	getActiveIds: () => string[];
+	/** Live running sub-agent tags (for the error message). */
+	getActiveRefs: () => string[];
 }
 
 /** Main agent → running sub-agent: message is steered into its context instantly. */
@@ -348,15 +399,15 @@ export function createSendToSubagentToolDefinition(options: SendToSubagentToolOp
 		name: "send_to_subagent",
 		label: "send_to_subagent",
 		description:
-			"Send a message to a running sub-agent. It is injected into the sub-agent's LIVE context instantly — the sub-agent acts on it at its next step. Use it to steer a worker mid-task (refine the target, ask for a status, redirect). Only works for sub-agents spawned earlier in this session.",
+			"Send a message to a running sub-agent by @tag or id. It is injected into the sub-agent's LIVE context instantly — the sub-agent acts on it at its next step. Use it to steer a worker mid-task (refine the target, ask for a status, redirect). Only works for sub-agents spawned earlier in this session.",
 		parameters: Type.Object({
-			to: Type.String({ description: "Running sub-agent id (returned when you spawned it, e.g. sa-...)." }),
+			to: Type.String({ description: "Running sub-agent tag (@buck) or id." }),
 			text: Type.String({ description: "Message text (<= 4000 chars)." }),
 		}),
 		async execute(_toolCallId: string, params: unknown) {
 			const args = params as { to: string; text: string };
 			if (!options.send(args.to, args.text)) {
-				const active = options.getActiveIds();
+				const active = options.getActiveRefs();
 				return textResult(
 					`No running sub-agent "${args.to}". Active: ${active.join(", ") || "none"} — only running sub-agents can be messaged.`,
 					{ ok: false },
@@ -388,12 +439,12 @@ export function createUnavailableSendToSubagentToolDefinition(): ToolDefinition 
 // ---------------------------------------------------------------------------
 
 export interface StopSubagentToolOptions {
-	/** Stop one sub-agent by id. False when it already settled. */
+	/** Stop one sub-agent by tag or id. False when it already settled. */
 	stop: (id: string) => boolean;
 	/** Stop ALL running sub-agents; returns how many were stopped. */
 	stopAll: () => number;
-	/** Live running sub-agent ids (for the error message). */
-	getActiveIds: () => string[];
+	/** Live running sub-agent tags (for the error message). */
+	getActiveRefs: () => string[];
 }
 
 /** Main agent → running sub-agents: stop one or all immediately (cancels the run). */
@@ -402,17 +453,17 @@ export function createStopSubagentToolDefinition(options: StopSubagentToolOption
 		name: "stop_subagent",
 		label: "stop_subagent",
 		description:
-			"Stop one or all running sub-agents immediately. Pass `id` to stop a single worker, or omit it to stop ALL. A stopped run reports '⏹ cancelled' instead of completing — use it when a worker is stuck, off-track, or no longer needed. Only works for sub-agents spawned earlier in this session.",
+			"Stop one or all running sub-agents immediately. Pass a @tag or id to stop a single worker, or omit it to stop ALL. A stopped run reports '⏹ cancelled' instead of completing — use it when a worker is stuck, off-track, or no longer needed. Only works for sub-agents spawned earlier in this session.",
 		parameters: Type.Object({
 			id: Type.Optional(
-				Type.String({ description: "Sub-agent id to stop (e.g. sa-...). Omit to stop ALL running sub-agents." }),
+				Type.String({ description: "Sub-agent tag (@buck) or id to stop. Omit to stop ALL running sub-agents." }),
 			),
 		}),
 		async execute(_toolCallId: string, params: unknown) {
 			const args = params as { id?: string };
 			if (args.id) {
 				if (!options.stop(args.id)) {
-					const active = options.getActiveIds();
+					const active = options.getActiveRefs();
 					return textResult(`No running sub-agent "${args.id}". Active: ${active.join(", ") || "none"}.`, {
 						stopped: 0,
 					});

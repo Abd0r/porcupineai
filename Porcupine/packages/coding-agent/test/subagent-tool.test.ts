@@ -1,6 +1,10 @@
 import type { AgentTool } from "@porcupineai/agent-core";
 import { describe, expect, it } from "vitest";
-import { createStopSubagentToolDefinition, createSubagentToolDefinition } from "../src/core/tools/subagent.ts";
+import {
+	buildSpawnRoster,
+	createStopSubagentToolDefinition,
+	createSubagentToolDefinition,
+} from "../src/core/tools/subagent.ts";
 
 function noopTool(name: string): AgentTool<any> {
 	return {
@@ -21,7 +25,13 @@ function makeTool(options: Partial<Parameters<typeof createSubagentToolDefinitio
 			]),
 		resolveModel: () => undefined,
 		getStreamFn: () => (async () => undefined) as never,
-		getSettings: () => ({ model: undefined, maxSteps: 30, contextWindow: 256_000, maxConcurrent: 1 }),
+		getSettings: () => ({
+			model: undefined,
+			maxSteps: 30,
+			contextWindow: 256_000,
+			maxConcurrent: 1,
+			names: ["buck", "fuddy", "tinker"],
+		}),
 		...options,
 	});
 }
@@ -30,7 +40,7 @@ describe("stop_subagent tool", () => {
 	const stopTool = createStopSubagentToolDefinition({
 		stop: (id) => id === "sa-1",
 		stopAll: () => 2,
-		getActiveIds: () => ["sa-1", "sa-2"],
+		getActiveRefs: () => ["@buck", "@fuddy"],
 	});
 
 	it("stops a single sub-agent by id", async () => {
@@ -43,14 +53,14 @@ describe("stop_subagent tool", () => {
 		expect(result.details).toMatchObject({ stopped: 1 });
 	});
 
-	it("reports when the id is not running and lists active ids", async () => {
+	it("reports when the ref is not running and lists active tags", async () => {
 		const result = await stopTool.execute("id", { id: "sa-9" }, undefined, undefined, undefined as never);
 		const text = result.content
 			.filter((part) => part.type === "text")
 			.map((part) => part.text)
 			.join("\n");
 		expect(text).toContain('No running sub-agent "sa-9"');
-		expect(text).toContain("sa-1, sa-2");
+		expect(text).toContain("@buck, @fuddy");
 		expect(result.details).toMatchObject({ stopped: 0 });
 	});
 
@@ -87,7 +97,13 @@ describe("subagent tool", () => {
 		const tool = makeTool({
 			resolveModel: () => faux.getModel(),
 			getStreamFn: () => streamSimple,
-			getSettings: () => ({ model: undefined, maxSteps: 30, contextWindow: 256_000, maxConcurrent: 3 }),
+			getSettings: () => ({
+				model: undefined,
+				maxSteps: 30,
+				contextWindow: 256_000,
+				maxConcurrent: 3,
+				names: ["buck", "fuddy", "tinker"],
+			}),
 			getActiveSubagentRuns: () => active,
 		});
 
@@ -140,6 +156,57 @@ describe("subagent tool activation (regression: default tool list)", () => {
 	});
 });
 
+describe("buildSpawnRoster", () => {
+	it("is empty when nobody else is active", () => {
+		expect(buildSpawnRoster([])).toBe("");
+	});
+
+	it("lists the main agent and active peers with tasks", () => {
+		const roster = buildSpawnRoster([
+			{ tag: "@buck", task: "Research harness" },
+			{ tag: "@fuddy", task: "Write docs" },
+		]);
+		expect(roster).toContain("@porcupine (main, your parent)");
+		expect(roster).toContain("@buck (Research harness)");
+		expect(roster).toContain("@fuddy (Write docs)");
+		expect(roster).toContain("told you just came online");
+	});
+});
+
+describe("subagent spawn roster", () => {
+	async function spawnWithPeers(peers: Array<{ tag: string; task: string }>) {
+		const { registerFauxProvider, fauxAssistantMessage, streamSimple } = await import("@porcupineai/ai/compat");
+		const faux = registerFauxProvider();
+		faux.setResponses([fauxAssistantMessage("Report: done.")]);
+		const claimed: Array<{ id: string; preferred?: string; task?: string }> = [];
+		const tool = makeTool({
+			resolveModel: () => faux.getModel(),
+			getStreamFn: () => streamSimple,
+			claimName: (id, preferred, task) => {
+				claimed.push({ id, preferred, task });
+				return "tinker";
+			},
+			getActiveAgents: () => peers,
+		});
+		return { tool, faux, claimed };
+	}
+
+	it("tells the new worker who else is active", async () => {
+		const { tool, faux, claimed } = await spawnWithPeers([{ tag: "@buck", task: "Research harness" }]);
+		const result = await tool.execute("id-1", { task: "Write docs" }, undefined, undefined, undefined as never);
+		expect(result.details).toMatchObject({ started: true, name: "tinker" });
+		expect(claimed[0]).toMatchObject({ preferred: undefined, task: "Write docs" });
+		faux.unregister();
+	});
+
+	it("omits the roster when nobody else is active", async () => {
+		const { tool, faux } = await spawnWithPeers([]);
+		const result = await tool.execute("id-1", { task: "Solo task" }, undefined, undefined, undefined as never);
+		expect(result.details).toMatchObject({ started: true });
+		faux.unregister();
+	});
+});
+
 describe("subagent tool — background mode", () => {
 	it("registers a cancel handle and unregisters it when the run settles", async () => {
 		const { registerFauxProvider, fauxAssistantMessage, streamSimple } = await import("@porcupineai/ai/compat");
@@ -168,7 +235,7 @@ describe("subagent tool — background mode", () => {
 		faux.unregister();
 	});
 
-	it("returns immediately with an id while the sub-agent runs in the background", async () => {
+	it("returns immediately with an id and tag while the sub-agent runs in the background", async () => {
 		const { registerFauxProvider, fauxAssistantMessage, streamSimple } = await import("@porcupineai/ai/compat");
 		const faux = registerFauxProvider();
 		faux.setResponses([fauxAssistantMessage("Report: done.")]);
@@ -190,7 +257,8 @@ describe("subagent tool — background mode", () => {
 
 		// Background: returns immediately, no final report yet.
 		expect(text).toContain("Sub-agent started");
-		expect(result.details).toMatchObject({ started: true, background: true });
+		expect(text).toContain("@buck");
+		expect(result.details).toMatchObject({ started: true, background: true, name: "buck", tag: "@buck" });
 		expect(typeof (result.details as { id?: string }).id).toBe("string");
 
 		// The report lands via onComplete once the background run finishes.
