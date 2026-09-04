@@ -835,13 +835,13 @@ Porcupine can spawn an **isolated sub-agent** to offload focused, self-contained
 - Sub-agents run on their **own model** — cheap/small by default (unset = the parent model; recommended: `opencode-go/deepseek-v4-flash`). Configure via `subagent.model` in settings.
 - Sub-agents share your **cwd, permission policy, and safety gates** — Ask mode still confirms their flagged commands. They cannot spawn sub-agents and cannot ask the user questions.
 - **UI**: sub-agent activity lives in the footer — the animated chip beside the
-  thread counter (`🤖(📄 Extracting, 🌐 Searching) • 🧵 0/3 • (opencode-go) …`); no
+  thread counter (`🤖(@buck 📄 Extracting, @tinker 🌐 Searching) • 🧵 0/3 • (opencode-go) …`); no
   split panel. Up to **3** sub-agents run at a time by default
   (`subagent.maxConcurrent`, user-configurable — edit `subagent.maxConcurrent`
   in settings.json or ask the agent).
-- **WoT (Web of Thoughts) — live peer messaging**: assign the same `peerGroup` to sub-agents that should coordinate, and they can message each other **and you, instantly** (injected into the recipient's live context — not gated on reports):
-  - Sub→Sub: `send_message` / `check_messages` tools, only within the same group (the main agent decides the group at spawn; default = fully isolated)
-  - Sub→Main: `send_message` to `@main` — lands in the main agent's context immediately (steered mid-turn, or a fresh turn when idle)
+- **WoT (Web of Thoughts) — live peer messaging**: every sub-agent carries `send_message` / `check_messages`, and any running agent can message any other by @tag — **instantly** (injected into the recipient's live context — not gated on reports):
+  - Sub→Sub: `send_message` to `@buck` (or id) / `check_messages` to drain the inbox — open addressing, no groups required
+  - Sub→Main: `send_message` to `@porcupine` (`@main` still works) — lands in the main agent's context immediately (steered mid-turn, or a fresh turn when idle)
   - Main→Sub: the **`send_to_subagent`** tool steers any running sub-agent — the message lands in its context before its next step
   - Every routed message is audited on the bus (`session.subagentMessageBus`)
 - **Stopping sub-agents**: the main agent can stop workers directly with the

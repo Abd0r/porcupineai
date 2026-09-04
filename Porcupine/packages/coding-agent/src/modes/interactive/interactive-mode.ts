@@ -2887,6 +2887,7 @@ export class InteractiveMode {
 
 	private subagentActivityIndicator(
 		runs: Array<{
+			name: string;
 			lastTool?: string;
 			lastToolArgs?: unknown;
 			phase?: "tool" | "thinking" | "compacting";
@@ -2895,19 +2896,20 @@ export class InteractiveMode {
 		if (runs.length === 0) return undefined;
 		const parts: string[] = [];
 		for (const run of runs) {
+			const tag = `@${run.name}`;
 			if (run.phase === "tool" && run.lastTool) {
 				const chip = this.toolChip(run.lastTool, run.lastToolArgs);
 				const anim = getAnimation(chip.phase);
-				parts.push(`${anim.emoji} ${chip.name ? `${anim.label}: ${chip.name}` : anim.label}`);
+				parts.push(`${tag} ${anim.emoji} ${chip.name ? `${anim.label}: ${chip.name}` : anim.label}`);
 			} else if (run.phase === "thinking") {
-				parts.push("🧠 Thinking");
+				parts.push(`${tag} 🧠 Thinking`);
 			} else if (run.phase === "compacting") {
-				parts.push("🧹 Compacting");
+				parts.push(`${tag} 🧹 Compacting`);
 			} else {
-				parts.push("🤖");
+				parts.push(tag);
 			}
 		}
-		const chipBase = parts.every((part) => part === "🤖") ? "🤖 Sub-agent" : `🤖(${parts.join(", ")})`;
+		const chipBase = `🤖(${parts.join(", ")})`;
 		return { frames: DOT_FRAMES.map((dots) => `${chipBase}${dots}`), intervalMs: 320 };
 	}
 
@@ -4353,8 +4355,9 @@ export class InteractiveMode {
 
 	/**
 	 * /subagents [sessionId]
-	 * Read-only recall of persisted sub-agent sessions. Without an id, lists the
-	 * most recent runs; with an id, prints that run's transcript summary.
+	 * Live roster (tags + what each agent is doing) plus read-only recall of
+	 * persisted sub-agent sessions. Without an id, lists live runs first, then
+	 * the most recent persisted runs; with an id, prints that run's transcript.
 	 */
 	private async handleSubagentsCommand(text: string): Promise<void> {
 		const arg = text.replace(/^\/subagents\b/i, "").trim();
@@ -4363,12 +4366,18 @@ export class InteractiveMode {
 			const { formatSubagentSessionList, formatSubagentSessionView } = await import(
 				"../../porcupine/subagent-session-format.ts"
 			);
+			const { formatLiveSubagentList } = await import("./components/subagent-panel.ts");
 			const sessionDir = this.sessionManager.getSessionDir();
 			const sessions = await listSubagentSessions(sessionDir);
 			this.chatContainer.addChild(new Spacer(1));
 			this.chatContainer.addChild(new Text(theme.fg("accent", "Sub-agents"), 1, 0));
-			const output = arg ? formatSubagentSessionView(sessions, arg) : formatSubagentSessionList(sessions);
-			this.chatContainer.addChild(new Text(output, 1, 0));
+			if (arg) {
+				this.chatContainer.addChild(new Text(formatSubagentSessionView(sessions, arg), 1, 0));
+			} else {
+				const live = formatLiveSubagentList(this.session.subagentState.runs, this.session.subagentState.capacity);
+				const parts = [live, formatSubagentSessionList(sessions)].filter((part): part is string => !!part);
+				this.chatContainer.addChild(new Text(parts.join("\n\n"), 1, 0));
+			}
 			this.ui.requestRender();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);

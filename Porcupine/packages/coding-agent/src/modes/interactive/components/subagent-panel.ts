@@ -103,6 +103,22 @@ function shortId(id: string): string {
 	return id.length > 10 ? id.slice(0, 10) : id;
 }
 
+/**
+ * Plain-text live view for `/subagents`: how many agents are working and
+ * their tags. Returns undefined when nothing is live.
+ */
+export function formatLiveSubagentList(runs: SubagentRunInfo[], capacity: number): string | undefined {
+	if (runs.length === 0) return undefined;
+	const running = runs.filter((run) => run.status === "running").length;
+	const lines = [`Live (${running}/${capacity}):`];
+	for (const run of runs) {
+		const activity =
+			run.status === "running" ? `step ${run.steps}${run.lastTool ? ` · ${run.lastTool}` : ""}` : run.status;
+		lines.push(`  @${run.name}  ${activity}  ${run.task}`);
+	}
+	return lines.join("\n");
+}
+
 function formatTokens(tokens: number): string {
 	if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
 	if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;

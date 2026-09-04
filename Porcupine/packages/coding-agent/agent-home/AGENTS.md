@@ -65,8 +65,8 @@ On real work, `capability_search` first, then pick. Knowing `web_search` or
   a daemon.
 - Delegate with `subagent`: fresh context (128K-256K), the whole tool stack
   minus agent-level tools, product default `subagent.maxSteps` 120, up to
-  `subagent.maxConcurrent` (product default 3). Verify reports. WoT: same
-  `peerGroup` plus `send_to_subagent`. See the `subagent` skill.
+  `subagent.maxConcurrent` (product default 3). Verify reports. WoT: @tags
+  plus `send_to_subagent`. See the `subagent` skill.
 
 ## Safety Boundaries
 

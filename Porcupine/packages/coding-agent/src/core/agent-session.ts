@@ -131,6 +131,7 @@ import type { SettingsManager } from "./settings-manager.ts";
 import type { SlashCommandInfo } from "./slash-commands.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 import { SubagentMessageBus } from "./subagent-messaging.ts";
+import { formatAgentTag, SubagentNamePool } from "./subagent-names.ts";
 import { type BuildSystemPromptOptions, buildSystemPrompt } from "./system-prompt.ts";
 import { type BashCommandGuard, type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
@@ -336,6 +337,8 @@ const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "hi
 /** Live per-slot view of one running sub-agent (WoT multi-panel). */
 export interface SubagentRunInfo {
 	id: string;
+	/** Human tag name (without `@`); shown in status views and used for addressing. */
+	name: string;
 	/** First ~90 chars of the task — the "what it's working on" label. */
 	task: string;
 	status: "running" | "done" | "cancelled" | "failed";
@@ -383,6 +386,25 @@ export class AgentSession {
 	private readonly _subagentSteerers = new Map<string, (text: string) => void>();
 	/** Web of Thoughts (WoT): shared peer-messaging bus for gated sub-agent conversations. */
 	private readonly _subagentMessageBus = new SubagentMessageBus();
+	/** Human tags for running sub-agents (@buck/@fuddy/@tinker by default). */
+	private _subagentNamePool: SubagentNamePool | undefined;
+	/** Short task excerpts per run id, used for spawn rosters and peer notices. */
+	private readonly _subagentTaskExcerpts = new Map<string, string>();
+	private _subagentNames(): SubagentNamePool {
+		if (!this._subagentNamePool) {
+			this._subagentNamePool = new SubagentNamePool(this.settingsManager.getSubagentSettings().names);
+		}
+		return this._subagentNamePool;
+	}
+	/** Display tag for a run id (`@buck`), falling back to a short id. */
+	private _subagentTag(id: string): string {
+		const name = this._subagentNamePool?.nameOf(id);
+		return name ? formatAgentTag(name) : id.length > 10 ? id.slice(0, 10) : id;
+	}
+	/** Resolve a @tag, name, or raw id to a run id. */
+	private _resolveSubagentRef(ref: string): string | undefined {
+		return this._subagentNames().resolveRef(ref);
+	}
 
 	/** The WoT message bus (main agent + tests can inspect routed peer messages). */
 	get subagentMessageBus(): SubagentMessageBus {
@@ -396,13 +418,35 @@ export class AgentSession {
 	 * report-injection window — steering there would enqueue into an abandoned
 	 * loop and record a message nobody acked).
 	 */
+	private _notifyPeersOfNewAgent(newId: string): void {
+		const name = this._subagentNames().nameOf(newId);
+		if (!name) return;
+		const task = this._subagentTaskExcerpts.get(newId);
+		const roster = this._subagentNames()
+			.active()
+			.map((entry) => entry.tag)
+			.join(", ");
+		const what = task ? ` (${task})` : "";
+		const note = `[system] ${formatAgentTag(name)} is now active${what}. Active agents: @porcupine${roster ? `, ${roster}` : ""}.`;
+		for (const [otherId, steer] of this._subagentSteerers) {
+			if (otherId === newId) continue;
+			try {
+				steer(note);
+			} catch {
+				continue;
+			}
+			this._subagentMessageBus.recordMainToSub(otherId, note);
+		}
+	}
+
 	sendMessageToSubagent(id: string, text: string): boolean {
-		const run = this._subagentRuns.get(id);
+		const resolved = this._resolveSubagentRef(id) ?? id;
+		const run = this._subagentRuns.get(resolved);
 		if (!run || run.status !== "running") return false;
-		const steer = this._subagentSteerers.get(id);
+		const steer = this._subagentSteerers.get(resolved);
 		if (!steer) return false;
 		steer(text);
-		this._subagentMessageBus.recordMainToSub(id, text);
+		this._subagentMessageBus.recordMainToSub(resolved, text);
 		return true;
 	}
 
@@ -429,16 +473,21 @@ export class AgentSession {
 	/** Remove settled (done/cancelled/failed) runs so the panel map stays bounded. */
 	pruneSettledSubagentRuns(): void {
 		for (const [id, run] of this._subagentRuns) {
-			if (run.status !== "running") this._subagentRuns.delete(id);
+			if (run.status !== "running") {
+				this._subagentRuns.delete(id);
+				this._subagentNames().release(id);
+				this._subagentTaskExcerpts.delete(id);
+			}
 		}
 	}
 
-	/** Cancel one running sub-agent by id. Returns false if it already settled. */
+	/** Cancel one running sub-agent by tag or id. Returns false if it already settled. */
 	cancelSubagent(id: string): boolean {
-		const cancel = this._subagentCancellers.get(id);
+		const resolved = this._resolveSubagentRef(id) ?? id;
+		const cancel = this._subagentCancellers.get(resolved);
 		if (!cancel) return false;
 		cancel();
-		this._subagentCancellers.delete(id);
+		this._subagentCancellers.delete(resolved);
 		return true;
 	}
 
@@ -466,6 +515,7 @@ export class AgentSession {
 			if (event.subagentId) {
 				this._subagentRuns.set(event.subagentId, {
 					id: event.subagentId,
+					name: this._subagentNames().nameOf(event.subagentId) ?? this._subagentNames().claim(event.subagentId),
 					task: event.task.slice(0, 90),
 					status: "running",
 					steps: 0,
@@ -499,6 +549,8 @@ export class AgentSession {
 					run.status = event.result.ok ? "done" : event.result.cancelled ? "cancelled" : "failed";
 					run.steps = event.result.steps;
 				}
+				this._subagentNames().release(event.subagentId);
+				this._subagentTaskExcerpts.delete(event.subagentId);
 			}
 		}
 		for (const listener of [...this._subagentListeners]) {
@@ -541,7 +593,7 @@ export class AgentSession {
 			await this.sendCustomMessage(
 				{
 					customType: "subagent_message",
-					content: [{ type: "text", text: `📨 Sub-agent ${message.from}: ${message.text}` }],
+					content: [{ type: "text", text: `📨 Sub-agent ${this._subagentTag(message.from)}: ${message.text}` }],
 					display: true,
 					details: { from: message.from, to: message.to },
 				},
@@ -568,7 +620,7 @@ export class AgentSession {
 						? "⏹ budget exhausted"
 						: "✗ failed";
 			const text = [
-				`⚙️ Sub-agent ${id} ${status} after ${result.steps} step(s) (~${result.usage.contextTokens.toLocaleString()} ctx).`,
+				`⚙️ Sub-agent ${this._subagentTag(id)} ${status} after ${result.steps} step(s) (~${result.usage.contextTokens.toLocaleString()} ctx).`,
 				"",
 				result.summary.trim(),
 			];
@@ -3409,10 +3461,20 @@ export class AgentSession {
 						getActiveSubagentRuns: () => this._activeSubagentRuns,
 						onRegister: (id, cancel) => {
 							this._subagentCancellers.set(id, cancel);
+							this._notifyPeersOfNewAgent(id);
 						},
+						claimName: (id, preferred, task) => {
+							if (task) this._subagentTaskExcerpts.set(id, task.slice(0, 120));
+							return this._subagentNames().claim(id, preferred);
+						},
+						getActiveAgents: () =>
+							[...this._subagentRuns.values()]
+								.filter((run) => run.status === "running")
+								.map((run) => ({ tag: formatAgentTag(run.name), task: run.task.slice(0, 80) })),
 						onUnregister: (id) => {
 							this._subagentCancellers.delete(id);
 							this._subagentSteerers.delete(id);
+							this._subagentTaskExcerpts.delete(id);
 						},
 						// Web of Thoughts (WoT): shared peer-messaging bus for sub-agents.
 						getMessageBus: () => this.subagentMessageBus,
@@ -3422,7 +3484,10 @@ export class AgentSession {
 					},
 					sendToSubagent: {
 						send: (to, text) => this.sendMessageToSubagent(to, text),
-						getActiveIds: () => [...this._subagentSteerers.keys()],
+						getActiveRefs: () =>
+							this._subagentNames()
+								.active()
+								.map((entry) => entry.tag),
 					},
 					stopSubagent: {
 						stop: (id) => this.cancelSubagent(id),
@@ -3431,7 +3496,7 @@ export class AgentSession {
 							this.cancelAllSubagents();
 							return before;
 						},
-						getActiveIds: () => [...this._subagentCancellers.keys()],
+						getActiveRefs: () => [...this._subagentCancellers.keys()].map((id) => this._subagentTag(id)),
 					},
 					mcpResources: {
 						list: (serverKey) => this._ensureMcpManager().listResources(serverKey),

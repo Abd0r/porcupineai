@@ -34,17 +34,18 @@ Bad: `"investigate the TUI"`. Good: `"Audit interactive-mode.ts for event leaks.
 
 ## WoT — Web of Thoughts (live peer messaging)
 
-Assign the **same `peerGroup`** to sub-agents that should coordinate:
-- **Sub→Sub**: `send_message` (to a peer id) / `check_messages` (drain inbox) — only within the same group; the MAIN AGENT decides the group at spawn. Default (no group) = fully isolated.
-- **Sub→Main**: `send_message` to `@main` — injected into the main agent's context **instantly** (steered mid-turn, or a fresh turn when idle), never gated on the report.
-- **Main→Sub**: the main agent uses the **`send_to_subagent`** tool to steer any running sub-agent; the message lands in its context before its next step.
+Every sub-agent carries messaging tools and any running agent may message any
+other by @tag (`peerGroup` is an optional status label, not a gate):
+- **Sub→Sub**: `send_message` (to `@buck` or id) / `check_messages` (drain inbox) — open addressing.
+- **Sub→Main**: `send_message` to `@porcupine` (`@main` still works) — injected into the main agent's context **instantly** (steered mid-turn, or a fresh turn when idle), never gated on the report.
+- **Main→Sub**: the main agent uses the **`send_to_subagent`** tool to steer any running sub-agent by tag; the message lands in its context before its next step.
 - Messages deliver live when the recipient has a running loop (steer); otherwise they queue for `check_messages`. Every routed message is audited on the bus (`session.subagentMessageBus`).
 
-Give peers each other's ids in the task/notes so they know whom to address.
+Give peers each other's @tags in the task/notes so they know whom to address.
 
 ## Working with the result
 
-- The tool returns immediately with `{ id, started, background }`. The report is injected into the conversation **the moment** the sub-agent finishes: mid-turn it is steered into the running agent loop; if the session is idle, a fresh turn starts automatically so the parent processes it without a user prompt — `⚙️ Sub-agent <id> ✓ done after N step(s)` followed by the summary. Use the result to continue your work.
+- The tool returns immediately with `{ id, name, tag, started, background }` (e.g. tag `@buck`). The report is injected into the conversation **the moment** the sub-agent finishes: mid-turn it is steered into the running agent loop; if the session is idle, a fresh turn starts automatically so the parent processes it without a user prompt — `⚙️ Sub-agent @buck ✓ done after N step(s)` followed by the summary. Use the result to continue your work.
 - `budgetExhausted: true` means the sub-agent stopped at its step or context cap — read `summary` for partial progress and re-run with a narrower scope or ask the user to raise `subagent.maxSteps`.
 - Verify the sub-agent's claims before trusting them (files may not exist as reported).
 

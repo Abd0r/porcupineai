@@ -14,14 +14,38 @@ describe("WoT sub-agent message bus", () => {
 		expect(inbox[0]?.text).toContain("registry");
 	});
 
-	it("refuses cross-group and unknown-peer sends (main-agent gate)", () => {
+	it("routes across groups: any agent may address any other agent", () => {
 		const bus = new SubagentMessageBus();
-		bus.register("sa-a", "group-1");
-		bus.register("sa-b", "group-2");
-		expect(bus.send("sa-a", "sa-b", "hi").ok).toBe(false); // different group
-		expect(bus.send("sa-a", "sa-ghost", "hi").ok).toBe(false); // unknown peer
-		expect(bus.send("sa-a", "sa-a", "hi").ok).toBe(false); // self
+		bus.register("sa-a", "group-1", "buck");
+		bus.register("sa-b", "group-2", "tinker");
+		const result = bus.send("sa-a", "@tinker", "hi from another group");
+		expect(result.ok).toBe(true);
+		expect(bus.drainInbox("sa-b").length).toBe(1);
+	});
+
+	it("refuses unknown-peer and self sends with addressing help", () => {
+		const bus = new SubagentMessageBus();
+		bus.register("sa-a", "group-1", "buck");
+		const unknown = bus.send("sa-a", "@ghost", "hi");
+		expect(unknown.ok).toBe(false);
+		if (!unknown.ok) expect(unknown.error).toContain("@buck");
+		expect(bus.send("sa-a", "@buck", "hi").ok).toBe(false); // self by tag
+		expect(bus.send("sa-a", "sa-a", "hi").ok).toBe(false); // self by id
 		expect(bus.send("sa-ghost", "sa-a", "hi").ok).toBe(false); // not registered
+	});
+
+	it("resolves tags with or without @ and reaches the main agent as @porcupine", () => {
+		const bus = new SubagentMessageBus();
+		bus.register("sa-a", "group-1", "buck");
+		bus.register("sa-b", "group-1", "fuddy");
+		expect(bus.resolveTarget("@fuddy")).toBe("sa-b");
+		expect(bus.resolveTarget("FUDDY")).toBe("sa-b");
+		expect(bus.resolveTarget("sa-b")).toBe("sa-b");
+		expect(bus.displayRef("sa-a")).toBe("@buck");
+		expect(bus.displayRef("sa-unknown-id")).toBe("sa-unknown");
+		const result = bus.send("sa-a", "@porcupine", "blocker: need user decision on X");
+		expect(result.ok).toBe(true);
+		expect(bus.drainMainInbox().length).toBe(1);
 	});
 
 	it("allows any messaging-enabled sub-agent to reach the main agent (@main)", () => {
