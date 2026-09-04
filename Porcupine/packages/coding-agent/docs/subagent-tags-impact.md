@@ -1,7 +1,7 @@
 # Sub-Agent Tags Impact
 
 Qualitative implementation-coverage map for named sub-agents (`@porcupine`,
-`@buck`, `@fuddy`, `@tinker`) with open addressing. This is not a benchmark:
+`@buck`, `@fudgy`, `@tinker`) with open addressing. This is not a benchmark:
 scores record what the code deterministically does, on a 0–3 scale
 (`0 absent` · `1 partial` · `2 explicit` · `3 deterministic`).
 

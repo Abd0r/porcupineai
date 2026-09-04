@@ -10,14 +10,14 @@ import {
 } from "../src/core/subagent-names.ts";
 
 describe("subagent names", () => {
-	it("ships buck, fuddy, and tinker as defaults", () => {
-		expect([...DEFAULT_SUBAGENT_NAMES]).toEqual(["buck", "fuddy", "tinker"]);
+	it("ships buck, fudgy, and tinker as defaults", () => {
+		expect([...DEFAULT_SUBAGENT_NAMES]).toEqual(["buck", "fudgy", "tinker"]);
 		expect(formatAgentTag("buck")).toBe("@buck");
 	});
 
 	it("normalizes tags and recognizes the main agent", () => {
 		expect(normalizeAgentName("@Buck")).toBe("buck");
-		expect(normalizeAgentName("  @FUDDY  ")).toBe("fuddy");
+		expect(normalizeAgentName("  @FUDGY  ")).toBe("fudgy");
 		expect(isMainAgentRef("@porcupine")).toBe(true);
 		expect(isMainAgentRef("porcupine")).toBe(true);
 		expect(isMainAgentRef("@main")).toBe(true);
@@ -35,9 +35,9 @@ describe("subagent names", () => {
 	});
 
 	it("prefers configured names, dedupes, and backfills defaults", () => {
-		expect(buildAgentNamePool(["Scout", "scout", "@main", "no good!"])).toEqual(["scout", "buck", "fuddy"]);
-		expect(buildAgentNamePool(undefined)).toEqual(["buck", "fuddy", "tinker"]);
-		expect(buildAgentNamePool([])).toEqual(["buck", "fuddy", "tinker"]);
+		expect(buildAgentNamePool(["Scout", "scout", "@main", "no good!"])).toEqual(["scout", "buck", "fudgy"]);
+		expect(buildAgentNamePool(undefined)).toEqual(["buck", "fudgy", "tinker"]);
+		expect(buildAgentNamePool([])).toEqual(["buck", "fudgy", "tinker"]);
 	});
 });
 
@@ -45,10 +45,10 @@ describe("SubagentNamePool", () => {
 	it("claims pool names in order and frees them on release", () => {
 		const pool = new SubagentNamePool(undefined);
 		expect(pool.claim("sa-1")).toBe("buck");
-		expect(pool.claim("sa-2")).toBe("fuddy");
+		expect(pool.claim("sa-2")).toBe("fudgy");
 		pool.release("sa-1");
 		expect(pool.claim("sa-3")).toBe("buck");
-		expect(pool.nameOf("sa-2")).toBe("fuddy");
+		expect(pool.nameOf("sa-2")).toBe("fudgy");
 	});
 
 	it("honors an explicit request when free and valid", () => {
@@ -57,7 +57,7 @@ describe("SubagentNamePool", () => {
 		// Collision falls back to the pool instead of failing the spawn.
 		expect(pool.claim("sa-2", "@scout")).toBe("buck");
 		// Reserved requests fall back too.
-		expect(pool.claim("sa-3", "porcupine")).toBe("fuddy");
+		expect(pool.claim("sa-3", "porcupine")).toBe("fudgy");
 	});
 
 	it("resolves tags, bare names, and raw ids", () => {

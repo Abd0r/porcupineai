@@ -59,9 +59,9 @@ describe("setPorcupineActivity UI wiring (animations.ts)", () => {
 				lastToolArgs: { path: "/x/skills/vcs/git-basics/SKILL.md" },
 				phase: "tool",
 			},
-			{ name: "fuddy", phase: "thinking" },
+			{ name: "fudgy", phase: "thinking" },
 		]);
-		expect(ordered!.frames[0]).toBe("🤖(@buck 📖 Reading skill: git-basics, @fuddy 🧠 Thinking).");
+		expect(ordered!.frames[0]).toBe("🤖(@buck 📖 Reading skill: git-basics, @fudgy 🧠 Thinking).");
 	});
 
 	it("does not restart glyphs when the animation id is unchanged", () => {

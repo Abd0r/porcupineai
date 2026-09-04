@@ -519,16 +519,16 @@ describe("SettingsManager", () => {
 	});
 
 	describe("getSubagentSettings names", () => {
-		it("defaults to buck, fuddy, tinker", () => {
+		it("defaults to buck, fudgy, tinker", () => {
 			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ theme: "dark" }));
 			const manager = SettingsManager.create(projectDir, agentDir);
-			expect(manager.getSubagentSettings().names).toEqual(["buck", "fuddy", "tinker"]);
+			expect(manager.getSubagentSettings().names).toEqual(["buck", "fudgy", "tinker"]);
 		});
 
 		it("prefers configured names and backfills defaults", () => {
 			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ subagent: { names: ["Scout", "@main"] } }));
 			const manager = SettingsManager.create(projectDir, agentDir);
-			expect(manager.getSubagentSettings().names).toEqual(["scout", "buck", "fuddy"]);
+			expect(manager.getSubagentSettings().names).toEqual(["scout", "buck", "fudgy"]);
 		});
 	});
 

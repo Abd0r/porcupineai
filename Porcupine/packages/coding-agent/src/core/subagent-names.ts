@@ -4,7 +4,7 @@
  * The main agent is always `@porcupine` (`@main` stays accepted as an alias).
  * Running sub-agents hold one tag each from a small pool so the TUI, status
  * views, and WoT messages can say `@buck` instead of `sa-mtn1cag1-5k4z1v`.
- * The pool defaults to buck/fuddy/tinker and the user may override it via
+ * The pool defaults to buck/fudgy/tinker and the user may override it via
  * `subagent.names` in settings.
  */
 
@@ -12,7 +12,7 @@ export const MAIN_AGENT_TAG = "porcupine";
 export const MAIN_AGENT_TAG_ALIASES = ["main"] as const;
 
 /** Shipped default sub-agent names (tags are `@` + name). */
-export const DEFAULT_SUBAGENT_NAMES = ["buck", "fuddy", "tinker"] as const;
+export const DEFAULT_SUBAGENT_NAMES = ["buck", "fudgy", "tinker"] as const;
 
 /** A resolved tag always carries its `@` prefix for display and addressing. */
 export function formatAgentTag(name: string): string {
