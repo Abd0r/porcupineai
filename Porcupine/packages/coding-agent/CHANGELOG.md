@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Lazy tool activation:** when the model calls a registered-but-inactive tool, the loop seats it on the spot (safe tools silently in every mode; `computer_use`/`email_send`/`x_post`/`x_reply` through the Ask/Normal confirm or the Auto fail-closed LLM gate) and executes with validated arguments. Dotted guesses resolve via last segment (`default.plan` → `plan`); user-disabled tools and typos keep the plain not-found error.
+
 ## [0.1.76] - 2026-09-05
 
 ### Added
