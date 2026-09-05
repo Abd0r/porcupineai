@@ -103,6 +103,38 @@ export async function classifyLazyToolActivation(options: {
 }
 
 /**
+ * Tools a sub-agent may never lazily activate: worker-lifecycle and
+ * agent-level state owned by the parent, plus the sensitive tier (workers
+ * cannot ask, so anything needing approval stays unavailable).
+ */
+export const SUBAGENT_LAZY_EXCLUDED: ReadonlySet<string> = new Set([
+	"subagent",
+	"ask_question",
+	"computer_use",
+	"tasks",
+	"projects",
+	"send_to_subagent",
+	"stop_subagent",
+	"email_send",
+	"x_post",
+	"x_reply",
+]);
+
+/**
+ * Dormant pool names for a worker: registry names minus active names minus
+ * worker-excluded names. Pure helper so the policy is unit-testable; the
+ * caller maps names back to tool instances.
+ */
+export function subagentLazyPoolNames(allNames: Iterable<string>, activeNames: Iterable<string>): string[] {
+	const active = new Set(activeNames);
+	const pool: string[] = [];
+	for (const name of allNames) {
+		if (!active.has(name) && !SUBAGENT_LAZY_EXCLUDED.has(name)) pool.push(name);
+	}
+	return pool;
+}
+
+/**
  * Resolve an attempted call to a registered-but-inactive tool.
  * Returns `{ tool }` (seated for future turns), `{ error }` guidance, or
  * undefined to keep the generic not-found error. Never throws.

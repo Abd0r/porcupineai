@@ -6,6 +6,8 @@ import {
 	resolveLazyToolActivation,
 	resolveLazyToolName,
 	SENSITIVE_LAZY_TOOLS,
+	SUBAGENT_LAZY_EXCLUDED,
+	subagentLazyPoolNames,
 } from "../src/porcupine/lazy-tool-activation.ts";
 
 function fakeTool(name: string): AgentTool {
@@ -146,5 +148,41 @@ describe("resolveLazyToolActivation", () => {
 			},
 		});
 		expect(await resolveLazyToolActivation("plan", deps)).toBeUndefined();
+	});
+});
+
+describe("subagent lazy pool", () => {
+	const registry = ["read", "plan", "tasks", "computer_use", "email_send", "show_markdown"];
+	const active = ["read"];
+
+	it("keeps safe dormant tools like plan", () => {
+		expect(subagentLazyPoolNames(registry, active)).toContain("plan");
+		expect(subagentLazyPoolNames(registry, active)).toContain("show_markdown");
+	});
+
+	it("excludes active tools", () => {
+		expect(subagentLazyPoolNames(registry, active)).not.toContain("read");
+	});
+
+	it("excludes agent-level tools", () => {
+		for (const name of ["subagent", "ask_question", "computer_use", "tasks", "projects"]) {
+			expect(SUBAGENT_LAZY_EXCLUDED.has(name)).toBe(true);
+		}
+		const pool = subagentLazyPoolNames([...registry, "subagent", "ask_question", "projects"], active);
+		expect(pool).not.toContain("tasks");
+		expect(pool).not.toContain("computer_use");
+		expect(pool).not.toContain("subagent");
+		expect(pool).not.toContain("ask_question");
+		expect(pool).not.toContain("projects");
+	});
+
+	it("excludes the sensitive tier", () => {
+		for (const name of ["email_send", "x_post", "x_reply"]) {
+			expect(SUBAGENT_LAZY_EXCLUDED.has(name)).toBe(true);
+		}
+		const pool = subagentLazyPoolNames([...registry, "x_post", "x_reply"], active);
+		expect(pool).not.toContain("email_send");
+		expect(pool).not.toContain("x_post");
+		expect(pool).not.toContain("x_reply");
 	});
 });
