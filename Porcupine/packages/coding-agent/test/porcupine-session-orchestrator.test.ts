@@ -1,11 +1,7 @@
 import { CapabilityTree, PorcupineAgentRuntime } from "@porcupineai/agent-core";
 import { describe, expect, it } from "vitest";
 import { createHeuristicRuntimeAdapters } from "../src/porcupine/session-adapters.ts";
-import {
-	augmentPromptWithPlan,
-	formatPlanContextBlock,
-	PorcupineSessionOrchestrator,
-} from "../src/porcupine/session-orchestrator.ts";
+import { formatPlanContextBlock, PorcupineSessionOrchestrator } from "../src/porcupine/session-orchestrator.ts";
 
 function createTree(): CapabilityTree {
 	return new CapabilityTree([
@@ -53,7 +49,6 @@ describe("Porcupine session orchestrator", () => {
 		expect(turn.prepare.plan?.steps.length).toBeGreaterThan(0);
 		expect(turn.contextBlock).toContain("[Porcupine orchestration]");
 		expect(turn.contextBlock).toContain("Plan:");
-		expect(turn.augmentedPrompt).toContain("User request:");
 		expect(turn.taskGraph.status).toBe("ready");
 		expect(events).toEqual(["phase:analyze", "phase:route", "route:complete", "phase:plan", "plan:complete"]);
 	});
@@ -83,7 +78,6 @@ describe("Porcupine session orchestrator", () => {
 		const runtime = new PorcupineAgentRuntime({ capabilities: tree, adapters });
 		const prepared = await runtime.prepare("run tests after edit");
 		expect(formatPlanContextBlock(prepared)).toContain("Objective:");
-		expect(augmentPromptWithPlan("please fix", prepared)).toContain("please fix");
 
 		const orchestrator = new PorcupineSessionOrchestrator({
 			getCapabilities: () => tree,

@@ -4,6 +4,8 @@ import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode
 type RebindContext = {
 	session: object;
 	unsubscribe?: () => void;
+	restoreGoalPlanState: () => void;
+	syncGoalPlanStateAfterRebind: () => void;
 	applyRuntimeSettings: () => void;
 	renderCurrentSessionState: () => void;
 	bindCurrentSessionExtensions: () => Promise<void>;
@@ -41,6 +43,8 @@ describe("overlapping startup and replacement session rebinds", () => {
 
 		const context: RebindContext = {
 			session: startupSession,
+			restoreGoalPlanState: () => {},
+			syncGoalPlanStateAfterRebind: () => {},
 			applyRuntimeSettings: () => {},
 			renderCurrentSessionState: () => {},
 			bindCurrentSessionExtensions: () => {

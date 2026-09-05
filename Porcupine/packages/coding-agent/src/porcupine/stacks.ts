@@ -281,6 +281,11 @@ export const TOOL_STACK_MAP: Readonly<Record<string, ToolStackPlacement>> = {
 		lane: ["memory"],
 		tags: ["memory", "remember", "user", "profile", "durable", "note"],
 	},
+	plan: {
+		stack: "orchestration",
+		lane: ["plan"],
+		tags: ["plan", "todo", "milestone", "steps", "verify", "evidence", "multi-step"],
+	},
 	session_search: {
 		stack: "meta",
 		lane: ["history"],

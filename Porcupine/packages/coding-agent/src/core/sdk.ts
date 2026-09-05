@@ -197,6 +197,7 @@ export const defaultActiveToolNames: ToolName[] = [
 	"memory",
 	"session_search",
 	"tasks",
+	"plan",
 	"projects",
 	"literature",
 	"subagent",

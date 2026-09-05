@@ -32,8 +32,6 @@ export interface TaskGraphView {
 export interface PrepareTurnResult {
 	prepare: RuntimePrepareResult;
 	contextBlock: string;
-	/** User message with Porcupine plan context prepended for the model. */
-	augmentedPrompt: string;
 	taskGraph: TaskGraphView;
 }
 
@@ -123,11 +121,6 @@ export function formatPlanContextBlock(prepare: RuntimePrepareResult): string {
 	}
 
 	return lines.join("\n");
-}
-
-export function augmentPromptWithPlan(prompt: string, prepare: RuntimePrepareResult): string {
-	const block = formatPlanContextBlock(prepare);
-	return `${block}\n\nUser request:\n${prompt}`;
 }
 
 export function summarizePlan(plan: ExecutionPlan | undefined): string {
@@ -222,15 +215,11 @@ export class PorcupineSessionOrchestrator {
 		this.taskGraph = graphFromPrepare(prepare);
 		this.explicitPlan = true;
 
-		// Build the plan context block once and reuse it for both the exposed
-		// contextBlock and the augmented prompt (augmentPromptWithPlan would
-		// otherwise re-format the entire block a second time per turn).
 		const contextBlock = formatPlanContextBlock(prepare);
 
 		return {
 			prepare,
 			contextBlock,
-			augmentedPrompt: `${contextBlock}\n\nUser request:\n${prompt}`,
 			taskGraph: this.getTaskGraph(),
 		};
 	}
@@ -365,17 +354,28 @@ export class PorcupineSessionOrchestrator {
 		this.taskGraph = { ...this.taskGraph, status: graphStatus, steps: stepsCopy };
 	}
 
-	/** Finish the turn; remaining pending steps become skipped on success. */
+	/** True when any visible step already failed. Used to keep turn outcome honest. */
+	hasFailedSteps(): boolean {
+		return this.taskGraph.steps.some((step) => step.status === "failed");
+	}
+
+	/**
+	 * Finish the turn; remaining pending steps become skipped on success.
+	 * A turn with an already-failed step never reports done, even when the
+	 * caller passes success=true (for example legacy unconditional calls).
+	 */
 	markTurnComplete(success: boolean): void {
+		const hasFailure = this.taskGraph.steps.some((step) => step.status === "failed");
+		const ok = success && !hasFailure;
 		const steps = this.taskGraph.steps.map((step) => {
 			if (step.status === "pending" || step.status === "active") {
-				return { ...step, status: (success ? "skipped" : "failed") as TaskGraphStepStatus };
+				return { ...step, status: (ok ? "skipped" : "failed") as TaskGraphStepStatus };
 			}
 			return { ...step, capabilityIds: step.capabilityIds.slice() };
 		});
 		this.taskGraph = {
 			...this.taskGraph,
-			status: success ? "done" : "failed",
+			status: ok ? "done" : "failed",
 			steps,
 		};
 	}

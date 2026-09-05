@@ -444,7 +444,6 @@ export {
 	activityIndicatorOptions,
 	animationLoaderOptions,
 	artifactChangeFromToolCall,
-	augmentPromptWithPlan,
 	buildActivityFrames,
 	buildCapabilityTreeFromSession,
 	type CatalogSkill,

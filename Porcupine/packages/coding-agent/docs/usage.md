@@ -179,7 +179,8 @@ runs the objective as a normal first turn, then queues another normal turn only
 after the prior turn has settled and reported neither completion nor a block.
 Each goal has a 20-turn safety budget. It pauses rather than spins when the
 agent requests user input, reports a block, the budget is exhausted, or you
-queue a new instruction. After each settled turn, a strict JSON judge call on
+queue a new instruction, or you interrupt the turn (interrupts pause the
+goal instead of judging stale output). After each settled turn, a strict JSON judge call on
 the active model determines `done`, `continue`, or `blocked`; a failed or
 malformed judge response fails open to `continue`, never false completion. Use `/goal status`
 (or `/goal show`), `/goal pause`, `/goal resume`, `/goal clear` (or `/goal stop`)
@@ -190,12 +191,16 @@ restore when that session is resumed.
 plan-only turn that inspects the codebase and returns an implementation-ready
 Markdown plan: current evidence, files and symbols, numbered steps,
 verification, compatibility/safety risks, and blockers. Its prompt explicitly
-forbids source edits, mutating commands, commits, and implementation. When the
+forbids source edits, mutating commands, commits, and implementation, and the
+turn additionally runs under an inspection-only tool fence: edit, write,
+delegation, and mutating bash commands are denied while the draft is produced
+(read-only inspection still works). When the
 turn settles, Porcupine saves the final Markdown response under
-`.porcupine/plans/<timestamp>-<slug>.md` in the active workspace. Use
+`.porcupine/plans/<timestamp>-<slug>.md` in the active workspace. An
+interrupted plan turn saves nothing. Use
 `/plan status` to retrieve its route and artifact path, or `/plan clear` to
 remove it from future status views. Plans are session-scoped and restore on
-resume.
+resume; starting a new session clears queued goal and plan turns.
 
 `/refresh` (also `/refresh skill` / `/refresh all`) **always** rebuilds the whole
 live Porcupine runtime:
@@ -229,6 +234,17 @@ task title and prompt remain unambiguous:
 /task resume task-abc12345
 /task cancel task-abc12345
 ```
+
+### Structured plan checklist (plan tool)
+
+For multi-step work the agent can keep a structured TODO list with the `plan`
+tool: `create` starts a plan from an objective and steps, `start` begins a
+ready step, `verify` attaches evidence refs, and `complete` finishes a step
+only after evidence was attached — direct completion without evidence is
+rejected. `status` shows the checklist, `export` renders it as Markdown, and
+`block` / `fail` / `skip` / `cancel` / `clear` manage step outcomes. Unlike the
+live task graph (which follows tool calls), the plan checklist tracks outcome
+milestones with dependencies and verification.
 
 `/cron` attaches a standard five-field UTC Cron expression to a stored task:
 

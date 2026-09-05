@@ -108,6 +108,7 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 			"ls",
 			"mcp_resources",
 			"memory",
+			"plan",
 			"projects",
 			"read",
 			"remind_me",
