@@ -1,5 +1,6 @@
 import type { AgentTool } from "@porcupineai/agent-core";
 import { describe, expect, it } from "vitest";
+import { SubagentNamePool } from "../src/core/subagent-names.ts";
 import {
 	buildSpawnRoster,
 	createStopSubagentToolDefinition,
@@ -241,9 +242,14 @@ describe("subagent tool — background mode", () => {
 		faux.setResponses([fauxAssistantMessage("Report: done.")]);
 		const completed: unknown[] = [];
 
+		// Isolated name pool: the module-global fallback pool is shared with
+		// every other spawn in this file, so an in-flight run elsewhere would
+		// shift this claim to @fudgy (the main-CI flake of 2026-09-05).
+		const pool = new SubagentNamePool(["buck", "fudgy", "tinker"]);
 		const tool = makeTool({
 			resolveModel: () => faux.getModel(),
 			getStreamFn: () => streamSimple,
+			claimName: (id, preferred) => pool.claim(id, preferred),
 			onComplete: async (id, result) => {
 				completed.push({ id, result });
 			},
@@ -265,5 +271,35 @@ describe("subagent tool — background mode", () => {
 		await new Promise((resolve) => setTimeout(resolve, 200));
 		expect(completed.length).toBe(1);
 		faux.unregister();
+	});
+
+	it("keeps its tag when another run holds a fallback-pool claim", async () => {
+		const { registerFauxProvider, fauxAssistantMessage, streamSimple } = await import("@porcupineai/ai/compat");
+		const faux = registerFauxProvider();
+		try {
+			faux.setResponses([fauxAssistantMessage("Report: done.")]);
+			// Occupy @buck in the shared fallback pool with a run that never
+			// settles, simulating the in-flight leak behind the CI flake.
+			const cancels: Array<() => void> = [];
+			const hanging = () => new Promise<never>(() => {});
+			const leaker = makeTool({
+				resolveModel: () => faux.getModel(),
+				getStreamFn: () => hanging as never,
+				onRegister: (_id, cancel) => cancels.push(cancel),
+			});
+			await leaker.execute("leak-1", { task: "hang forever" }, undefined, undefined, undefined as never);
+
+			const pool = new SubagentNamePool(["buck", "fudgy", "tinker"]);
+			const tool = makeTool({
+				resolveModel: () => faux.getModel(),
+				getStreamFn: () => streamSimple,
+				claimName: (id, preferred) => pool.claim(id, preferred),
+			});
+			const result = await tool.execute("id-1", { task: "do the thing" }, undefined, undefined, undefined as never);
+			expect(result.details).toMatchObject({ started: true, background: true, name: "buck", tag: "@buck" });
+			for (const cancel of cancels) cancel();
+		} finally {
+			faux.unregister();
+		}
 	});
 });
