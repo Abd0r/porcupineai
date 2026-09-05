@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/storage-sqlite-node",
-	"version": "0.1.76",
+	"version": "0.1.77",
 	"description": "Node sqlite storage backend for @porcupineai/agent-core sessions",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -32,7 +32,7 @@
 		"node": ">=22.19.0"
 	},
 	"dependencies": {
-		"@porcupineai/ai": "^0.1.76",
-		"@porcupineai/agent-core": "^0.1.76"
+		"@porcupineai/ai": "^0.1.77",
+		"@porcupineai/agent-core": "^0.1.77"
 	}
 }
