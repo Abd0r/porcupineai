@@ -2,6 +2,7 @@ import type { AgentTool, AgentToolUpdateCallback, StreamFn } from "@porcupineai/
 import { runSubagent, type SubagentProgressEvent, type SubagentResult } from "@porcupineai/agent-core";
 import type { Model, TextContent } from "@porcupineai/ai";
 import { type Static, Type } from "typebox";
+import { subagentLazyPoolNames } from "../../porcupine/lazy-tool-activation.ts";
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
 import { formatAgentTag, SubagentNamePool } from "../subagent-names.ts";
 
@@ -251,6 +252,16 @@ export function createSubagentToolDefinition(options: SubagentToolOptions): Tool
 			const tools = SUBAGENT_TOOL_NAMES.map((name) => registry.get(name)).filter(
 				(tool): tool is AgentTool<any> => tool !== undefined,
 			);
+			// Dormant pool for worker lazy activation: registry tools outside the
+			// curated set, minus worker-excluded names (agent-level lifecycle +
+			// sensitive tier). Workers can never guess their way into tasks,
+			// projects, computer_use, or outbound sends.
+			const lazyTools = subagentLazyPoolNames(
+				registry.keys(),
+				tools.map((tool) => tool.name),
+			)
+				.map((name) => registry.get(name))
+				.filter((tool): tool is AgentTool<any> => tool !== undefined);
 			const streamFn = options.getStreamFn();
 			const getApiKey = options.getApiKey?.();
 
@@ -292,6 +303,7 @@ export function createSubagentToolDefinition(options: SubagentToolOptions): Tool
 				model,
 				streamFn,
 				getApiKey,
+				lazyTools,
 				tools: bus ? [...tools, ...buildMessagingTools(bus, id)] : tools,
 				systemPrompt,
 				maxSteps: settings.maxSteps,

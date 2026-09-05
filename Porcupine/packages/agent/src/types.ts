@@ -65,6 +65,17 @@ export interface BeforeToolCallResult {
 }
 
 /**
+ * Outcome of lazy unknown-tool resolution.
+ *
+ * - `{ tool }`: execute this tool for the current call.
+ * - `{ error }`: surface this guidance message as an error tool result.
+ */
+export interface UnknownToolResolution {
+	tool?: AgentTool<any>;
+	error?: string;
+}
+
+/**
  * Partial override returned from `afterToolCall`.
  *
  * Merge semantics are field-by-field:
@@ -270,6 +281,20 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	 * The hook receives the agent abort signal and is responsible for honoring it.
 	 */
 	beforeToolCall?: (context: BeforeToolCallContext, signal?: AbortSignal) => Promise<BeforeToolCallResult | undefined>;
+
+	/**
+	 * Called when the model requests a tool that is not in the active set.
+	 *
+	 * Return `{ tool }` to execute it for this call (the caller is expected
+	 * to seat the tool for future turns), `{ error }` to surface a specific
+	 * guidance message, or `undefined` to keep the generic not-found error.
+	 * Never throws — throwing fails closed to the generic not-found error.
+	 */
+	resolveUnknownTool?: (
+		toolName: string,
+		context: AgentContext,
+		signal?: AbortSignal,
+	) => Promise<UnknownToolResolution | undefined>;
 
 	/**
 	 * Called after a tool finishes executing, before `tool_execution_end` and tool-result message events are emitted.

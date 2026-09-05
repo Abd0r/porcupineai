@@ -795,7 +795,24 @@ async function prepareToolCall(
 	config: AgentLoopConfig,
 	signal: AbortSignal | undefined,
 ): Promise<PreparedToolCall | ImmediateToolCallOutcome> {
-	const tool = currentContext.tools?.find((t) => t.name === toolCall.name);
+	let tool = currentContext.tools?.find((t) => t.name === toolCall.name);
+	if (!tool && config.resolveUnknownTool) {
+		try {
+			const resolution = await config.resolveUnknownTool(toolCall.name, currentContext, signal);
+			if (resolution?.error) {
+				return {
+					kind: "immediate",
+					result: createErrorToolResult(resolution.error),
+					isError: true,
+				};
+			}
+			if (resolution?.tool) {
+				tool = resolution.tool;
+			}
+		} catch {
+			// Fail closed: fall through to the generic not-found error below.
+		}
+	}
 	if (!tool) {
 		return {
 			kind: "immediate",

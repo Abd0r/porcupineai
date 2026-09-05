@@ -27,6 +27,7 @@ import type {
 	SubagentProgressEvent,
 	SubagentResult,
 	ThinkingLevel,
+	UnknownToolResolution,
 } from "@porcupineai/agent-core";
 import { type AudioContent, contentText } from "@porcupineai/ai";
 import type {
@@ -57,6 +58,7 @@ import {
 	classifyAdaptiveReasoning,
 } from "../porcupine/adaptive-reasoning.ts";
 import { guardBashCommand } from "../porcupine/auto-mode.ts";
+import { classifyLazyToolActivation, resolveLazyToolActivation } from "../porcupine/lazy-tool-activation.ts";
 import { classifyPlanTurnTool } from "../porcupine/plan-fence.ts";
 import { createRepeatToolGuard } from "../porcupine/repeat-tool-guard.ts";
 import { persistSubagentSession } from "../porcupine/subagent-sessions.ts";
@@ -805,6 +807,7 @@ export class AgentSession {
 		// (session persistence, extensions, auto-compaction, retry logic)
 		this._unsubscribeAgent = this.agent.subscribe(this._handleAgentEvent);
 		this._installAgentToolHooks();
+		this.agent.resolveUnknownTool = (toolName, _context, signal) => this.resolveUnknownToolForLoop(toolName, signal);
 		this._installAgentNextTurnRefresh();
 
 		// Resumed sessions that already compacted should not re-inject the full catalog.
@@ -2452,6 +2455,38 @@ export class AgentSession {
 	/** Enable or disable the inspection-only plan-turn fence. */
 	setPlanFenceActive(active: boolean): void {
 		this._planFenceActive = active;
+	}
+
+	/**
+	 * Lazy tool activation for the agent loop: seat a registered-but-inactive
+	 * tool the moment the model tries to call it. Never throws; fail-closed
+	 * to undefined (generic not-found) on any error.
+	 */
+	async resolveUnknownToolForLoop(toolName: string, signal?: AbortSignal): Promise<UnknownToolResolution | undefined> {
+		try {
+			return await resolveLazyToolActivation(
+				toolName,
+				{
+					hasTool: (name) => this._toolDefinitions.has(name),
+					isActive: (name) => this.agent.state.tools.some((tool) => tool.name === name),
+					getTool: (name) => this._toolRegistry.get(name),
+					seat: (name) => {
+						this.setActiveToolsByName([...this.getActiveToolNames(), name]);
+					},
+					mode: this._interactionMode,
+					confirm: this._confirmCallback,
+					classify: () =>
+						classifyLazyToolActivation({
+							modelRuntime: this._modelRuntime,
+							model: this.model,
+							toolName,
+						}),
+				},
+				signal,
+			);
+		} catch {
+			return undefined;
+		}
 	}
 
 	// =========================================================================

@@ -45,6 +45,13 @@ export interface SubagentOptions {
 	getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
 	/** Curated tool set for the sub-agent. */
 	tools: AgentTool<any>[];
+	/**
+	 * Dormant pool the worker may activate on attempted call (exact name or
+	 * last dot-segment). The parent is expected to pre-filter this pool:
+	 * never agent-level, sensitive, or user-disabled tools. Everything outside
+	 * the pool keeps the generic not-found error.
+	 */
+	lazyTools?: AgentTool<any>[];
 	/** System prompt describing the sub-agent's role and constraints. */
 	systemPrompt: string;
 	/** Maximum tool-call steps before the sub-agent stops gracefully. */
@@ -94,6 +101,34 @@ export type SubagentProgressEvent =
 	| { type: "turn"; subagentId?: string; step: number; contextTokens: number }
 	| { type: "compacting"; subagentId?: string; step: number; contextTokens: number }
 	| { type: "done"; subagentId?: string; result: SubagentResult };
+
+/**
+ * Match an attempted tool name against a pool: exact, lowercase-exact, last
+ * dot-segment, lowercase last dot-segment. No fuzzy matching. Mirrors the
+ * session-level policy in coding-agent lazy-tool-activation.ts.
+ */
+export function resolveLazyPoolName(requested: string, has: (name: string) => boolean): string | undefined {
+	const trimmed = (requested ?? "").trim();
+	if (!trimmed) return undefined;
+	const candidates = [trimmed];
+	const lower = trimmed.toLowerCase();
+	if (lower !== trimmed) candidates.push(lower);
+	const dot = trimmed.lastIndexOf(".");
+	if (dot >= 0 && dot < trimmed.length - 1) {
+		const segment = trimmed.slice(dot + 1).trim();
+		if (segment && !candidates.includes(segment)) candidates.push(segment);
+		const lowerSegment = segment.toLowerCase();
+		if (lowerSegment !== segment && !candidates.includes(lowerSegment)) candidates.push(lowerSegment);
+	}
+	for (const candidate of candidates) {
+		try {
+			if (has(candidate)) return candidate;
+		} catch {
+			return undefined;
+		}
+	}
+	return undefined;
+}
 
 /**
  * Wrap a tool with a step counter. The counter is enforced at the tool-call
@@ -180,23 +215,22 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 	});
 
 	let budgetStopFired = false;
-	const toolWrappers = options.tools.map((tool) =>
-		withStepCounter(tool, (toolName, toolArgs) => {
-			steps += 1;
-			const overBudget = steps > maxSteps;
-			if (overBudget) {
-				budgetHit = true;
-				// Fire the stop only once, when the budget is first consumed (abort is
-				// idempotent, but repeated post-budget invocations must not re-signal).
-				if (!budgetStopFired) {
-					budgetStopFired = true;
-					stopRun?.();
-				}
+	const countStep = (toolName: string, toolArgs?: unknown): boolean => {
+		steps += 1;
+		const overBudget = steps > maxSteps;
+		if (overBudget) {
+			budgetHit = true;
+			// Fire the stop only once, when the budget is first consumed (abort is
+			// idempotent, but repeated post-budget invocations must not re-signal).
+			if (!budgetStopFired) {
+				budgetStopFired = true;
+				stopRun?.();
 			}
-			options.onProgress?.({ type: "step", step: Math.min(steps, maxSteps), toolName, args: toolArgs });
-			return overBudget;
-		}),
-	);
+		}
+		options.onProgress?.({ type: "step", step: Math.min(steps, maxSteps), toolName, args: toolArgs });
+		return overBudget;
+	};
+	const toolWrappers = options.tools.map((tool) => withStepCounter(tool, countStep));
 
 	const agent = new Agent({
 		initialState: {
@@ -209,6 +243,29 @@ export async function runSubagent(options: SubagentOptions): Promise<SubagentRes
 		getApiKey: options.getApiKey,
 		sessionId: options.sessionId ? `${options.sessionId}/subagent` : undefined,
 	});
+
+	// Lazy activation for workers: dormant pool tools seat on attempted call.
+	// The pool arrives pre-filtered by the parent (never agent-level,
+	// sensitive, or user-disabled tools), so resolution here is mechanical and
+	// fail-closed. Pool calls share the run's step budget via withStepCounter.
+	if (options.lazyTools && options.lazyTools.length > 0) {
+		const lazyWrappers = options.lazyTools.map((tool) => withStepCounter(tool, countStep));
+		const lazyPool = new Map(lazyWrappers.map((tool) => [tool.name, tool]));
+		agent.resolveUnknownTool = async (toolName: string) => {
+			try {
+				const canonical = resolveLazyPoolName(toolName, (name) => lazyPool.has(name));
+				if (!canonical) return undefined;
+				const tool = lazyPool.get(canonical);
+				if (!tool) return undefined;
+				if (!agent.state.tools.some((active) => active.name === canonical)) {
+					agent.state.tools = [...agent.state.tools, tool];
+				}
+				return { tool };
+			} catch {
+				return undefined;
+			}
+		};
+	}
 
 	// WoT: hand the parent a live steer handle so messages can be injected into
 	// this sub-agent's context instantly (the loop polls the steering queue).

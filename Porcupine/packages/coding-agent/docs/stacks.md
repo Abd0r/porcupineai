@@ -80,6 +80,11 @@ definition lives in `src/porcupine/stacks.ts`; the tree builder is
    task tracker in the footer).
 4. **Honest discovery.** `capability_search` is deliberately read-only —
    searching identifies a capability, it never mutates the session toolset.
+   If the model then calls a registered-but-inactive tool, the loop seats it
+   on the spot (safe tools silently; sensitive tools through the Ask/Normal
+   confirm or the Auto fail-closed gate) and executes with validated
+   arguments — discovery without a path to availability would only produce
+   `default.*`-style namespace guesses.
 5. **A foundation for learning.** The autonomous learning system records which
    tree paths solved which tasks, so skill improvements land at stable paths
    and can be replayed.

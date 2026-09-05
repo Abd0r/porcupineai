@@ -21,6 +21,9 @@ distinctive capabilities — and one of the best in the class.
   (agent-level durable state). They have `capability_search`, so the full
   skill catalog is reachable too (`capability_search` → `read SKILL.md`) —
   they can match main-agent performance on research, refactors, and audits.
+  Workers also get lazy tool activation within a fenced pool: safe dormant
+  tools (e.g. `plan`) seat on attempted call and count against the step
+  budget, while agent-level and sensitive tools stay unreachable.
 - Sub-agents run on their own model (`subagent.model`), usually a cheaper one,
   so delegation saves both context and cost.
 - The tool returns immediately: the main agent keeps working while the

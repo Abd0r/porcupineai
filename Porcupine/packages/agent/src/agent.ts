@@ -25,6 +25,7 @@ import type {
 	QueueMode,
 	StreamFn,
 	ToolExecutionMode,
+	UnknownToolResolution,
 } from "./types.ts";
 
 export type { QueueMode } from "./types.ts";
@@ -104,6 +105,11 @@ export interface AgentOptions {
 	onResponse?: SimpleStreamOptions["onResponse"];
 	beforeToolCall?: (context: BeforeToolCallContext, signal?: AbortSignal) => Promise<BeforeToolCallResult | undefined>;
 	afterToolCall?: (context: AfterToolCallContext, signal?: AbortSignal) => Promise<AfterToolCallResult | undefined>;
+	resolveUnknownTool?: (
+		toolName: string,
+		context: AgentContext,
+		signal?: AbortSignal,
+	) => Promise<UnknownToolResolution | undefined>;
 	prepareNextTurn?: (
 		signal?: AbortSignal,
 	) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined;
@@ -192,6 +198,11 @@ export class Agent {
 		context: BeforeToolCallContext,
 		signal?: AbortSignal,
 	) => Promise<BeforeToolCallResult | undefined>;
+	public resolveUnknownTool?: (
+		toolName: string,
+		context: AgentContext,
+		signal?: AbortSignal,
+	) => Promise<UnknownToolResolution | undefined>;
 	public afterToolCall?: (
 		context: AfterToolCallContext,
 		signal?: AbortSignal,
@@ -227,6 +238,7 @@ export class Agent {
 		this.onResponse = runtimeOptions.onResponse;
 		this.beforeToolCall = runtimeOptions.beforeToolCall;
 		this.afterToolCall = runtimeOptions.afterToolCall;
+		this.resolveUnknownTool = runtimeOptions.resolveUnknownTool;
 		this.prepareNextTurn = runtimeOptions.prepareNextTurn;
 		this.prepareNextTurnWithContext = runtimeOptions.prepareNextTurnWithContext;
 		this.steeringQueue = new PendingMessageQueue(runtimeOptions.steeringMode ?? "one-at-a-time");
@@ -470,6 +482,7 @@ export class Agent {
 			toolExecution: this.toolExecution,
 			beforeToolCall: this.beforeToolCall,
 			afterToolCall: this.afterToolCall,
+			resolveUnknownTool: this.resolveUnknownTool,
 			prepareNextTurn:
 				this.prepareNextTurnWithContext || this.prepareNextTurn
 					? async (context) => {
