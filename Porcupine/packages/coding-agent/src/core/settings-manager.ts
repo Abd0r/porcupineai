@@ -9,7 +9,7 @@ import lockfile from "proper-lockfile";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
-import { buildAgentNamePool } from "./subagent-names.ts";
+import { buildAgentNamePool, type SubagentNamePoolTuple } from "./subagent-names.ts";
 
 export interface CompactionSettings {
 	enabled?: boolean; // default: true
@@ -28,7 +28,7 @@ export interface SubagentSettings {
 	contextWindow?: number;
 	/** Max concurrent sub-agents. Default 3. */
 	maxConcurrent?: number;
-	/** Custom sub-agent names (tags are `@` + name). Unset = buck, fudgy, tinker. */
+	/** Custom sub-agent names (tags are `@` + name). Unset = buck, fudgy, tinker, rivet, gizmo. */
 	names?: string[];
 }
 
@@ -884,7 +884,7 @@ export class SettingsManager {
 		maxSteps: number;
 		contextWindow: number;
 		maxConcurrent: number;
-		names: [string, string, string];
+		names: SubagentNamePoolTuple;
 	} {
 		return {
 			model: this.settings.subagent?.model,

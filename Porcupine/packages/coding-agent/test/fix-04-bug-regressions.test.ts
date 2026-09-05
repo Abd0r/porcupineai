@@ -242,7 +242,7 @@ describe("BUG-9: report-injection failure does not fabricate a failed sub-agent 
 				maxSteps: 30,
 				contextWindow: 256_000,
 				maxConcurrent: 1,
-				names: ["buck", "fudgy", "tinker"],
+				names: ["buck", "fudgy", "tinker", "rivet", "gizmo"],
 			}),
 			onEvent: (event) => events.push(event),
 			// Report injection throws -> must NOT corrupt the run result.

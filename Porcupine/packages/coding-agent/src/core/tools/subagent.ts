@@ -3,15 +3,15 @@ import { runSubagent, type SubagentProgressEvent, type SubagentResult } from "@p
 import type { Model, TextContent } from "@porcupineai/ai";
 import { type Static, Type } from "typebox";
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
-import { formatAgentTag, SubagentNamePool } from "../subagent-names.ts";
+import { formatAgentTag, SubagentNamePool, type SubagentNamePoolTuple } from "../subagent-names.ts";
 
 export interface SubagentToolSettings {
 	model?: string;
 	maxSteps: number;
 	contextWindow: number;
 	maxConcurrent: number;
-	/** Effective sub-agent name pool (settings override or buck/fudgy/tinker). */
-	names: [string, string, string];
+	/** Effective sub-agent name pool (settings override or the five defaults). */
+	names: SubagentNamePoolTuple;
 }
 
 export interface SubagentToolOptions {
@@ -192,7 +192,7 @@ function textResult(
  */
 let fallbackPoolKey = "";
 let fallbackPool: SubagentNamePool | undefined;
-function fallbackNamePool(names: [string, string, string]): SubagentNamePool {
+function fallbackNamePool(names: SubagentNamePoolTuple): SubagentNamePool {
 	const key = JSON.stringify(names);
 	if (!fallbackPool || fallbackPoolKey !== key) {
 		fallbackPoolKey = key;
@@ -210,7 +210,7 @@ export function createSubagentToolDefinition(options: SubagentToolOptions): Tool
 		name: "subagent",
 		label: "subagent",
 		description:
-			"Start a focused sub-agent in the background: fresh context window (128K–256K), the full tool stack minus agent-level tools (no sub-spawning, no GUI, no user questions), hard step budget. Returns IMMEDIATELY with an id — the main agent keeps working while the sub-agent runs. When the sub-agent finishes, its report is injected into the session INSTANTLY: steered into the running turn if you are mid-task, or a fresh turn is started if you are idle — the report lands in your context without waiting for the next user prompt. Up to subagent.maxConcurrent run at a time (default 3). Each run gets a @tag (buck/fudgy/tinker by default, or pass `name`) returned with its id. WoT (Web of Thoughts): every sub-agent carries send_message/check_messages and any running agent may message any other by @tag, including @porcupine (you); use send_to_subagent to steer a running sub-agent yourself.",
+			"Start a focused sub-agent in the background: fresh context window (128K–256K), the full tool stack minus agent-level tools (no sub-spawning, no GUI, no user questions), hard step budget. Returns IMMEDIATELY with an id — the main agent keeps working while the sub-agent runs. When the sub-agent finishes, its report is injected into the session INSTANTLY: steered into the running turn if you are mid-task, or a fresh turn is started if you are idle — the report lands in your context without waiting for the next user prompt. Up to subagent.maxConcurrent run at a time (default 3). Each run gets a @tag (buck/fudgy/tinker/rivet/gizmo by default, or pass `name`) returned with its id. WoT (Web of Thoughts): every sub-agent carries send_message/check_messages and any running agent may message any other by @tag, including @porcupine (you); use send_to_subagent to steer a running sub-agent yourself.",
 		promptSnippet: "Spawn an isolated sub-agent for a focused task",
 		promptGuidelines: [
 			"Use subagent for self-contained work that would otherwise pollute the main context (long research, big refactors, multi-file drafts).",

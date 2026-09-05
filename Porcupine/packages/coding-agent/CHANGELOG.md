@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-agent name pool grows to five:** new defaults `@rivet` and `@gizmo` join `@buck`, `@fudgy`, `@tinker`, so up to five concurrent workers each hold a tag.
+
 ## [0.1.75] - 2026-09-05
 
 ### Added

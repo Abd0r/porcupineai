@@ -30,7 +30,7 @@ function makeTool(options: Partial<Parameters<typeof createSubagentToolDefinitio
 			maxSteps: 30,
 			contextWindow: 256_000,
 			maxConcurrent: 1,
-			names: ["buck", "fudgy", "tinker"],
+			names: ["buck", "fudgy", "tinker", "rivet", "gizmo"],
 		}),
 		...options,
 	});
@@ -102,7 +102,7 @@ describe("subagent tool", () => {
 				maxSteps: 30,
 				contextWindow: 256_000,
 				maxConcurrent: 3,
-				names: ["buck", "fudgy", "tinker"],
+				names: ["buck", "fudgy", "tinker", "rivet", "gizmo"],
 			}),
 			getActiveSubagentRuns: () => active,
 		});

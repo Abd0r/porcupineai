@@ -150,7 +150,7 @@ Omit `reserveTokens` and `keepRecentTokens` to use the 80/20 rule (compact at 80
 | `subagent.maxSteps` | number | `120` | Maximum tool-call steps per sub-agent run |
 | `subagent.contextWindow` | number | `256000` | Sub-agent context window in tokens (clamped 128K–256K) |
 | `subagent.maxConcurrent` | number | `3` | Maximum concurrent sub-agents (default 3) |
-| `subagent.names` | string[] | `buck, fudgy, tinker` | Custom sub-agent names (addressed as `@name`); invalid entries fall back to defaults |
+| `subagent.names` | string[] | `buck, fudgy, tinker, rivet, gizmo` | Custom sub-agent names (addressed as `@name`); invalid entries fall back to defaults |
 
 ### Voice
 

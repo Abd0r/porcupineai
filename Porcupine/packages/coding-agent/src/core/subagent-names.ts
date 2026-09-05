@@ -4,15 +4,18 @@
  * The main agent is always `@porcupine` (`@main` stays accepted as an alias).
  * Running sub-agents hold one tag each from a small pool so the TUI, status
  * views, and WoT messages can say `@buck` instead of `sa-mtn1cag1-5k4z1v`.
- * The pool defaults to buck/fudgy/tinker and the user may override it via
- * `subagent.names` in settings.
+ * The pool defaults to buck/fudgy/tinker/rivet/gizmo and the user may override
+ * it via `subagent.names` in settings.
  */
 
 export const MAIN_AGENT_TAG = "porcupine";
 export const MAIN_AGENT_TAG_ALIASES = ["main"] as const;
 
 /** Shipped default sub-agent names (tags are `@` + name). */
-export const DEFAULT_SUBAGENT_NAMES = ["buck", "fudgy", "tinker"] as const;
+export const DEFAULT_SUBAGENT_NAMES = ["buck", "fudgy", "tinker", "rivet", "gizmo"] as const;
+
+/** Fixed-size name pool: one slot per sub-agent, up to the configured maximum. */
+export type SubagentNamePoolTuple = [string, string, string, string, string];
 
 /** A resolved tag always carries its `@` prefix for display and addressing. */
 export function formatAgentTag(name: string): string {
@@ -50,15 +53,15 @@ export function sanitizeAgentName(value: unknown): string | undefined {
 
 /**
  * Build the effective name pool: user settings first (sanitized, deduped),
- * then shipped defaults to fill up to three slots.
+ * then shipped defaults to fill up to five slots.
  */
-export function buildAgentNamePool(configured: unknown): [string, string, string] {
+export function buildAgentNamePool(configured: unknown): SubagentNamePoolTuple {
 	const pool: string[] = [];
 	const seen = new Set<string>();
 	const take = (name: string) => {
 		if (seen.has(name)) return;
 		seen.add(name);
-		if (pool.length < 3) pool.push(name);
+		if (pool.length < 5) pool.push(name);
 	};
 	if (Array.isArray(configured)) {
 		for (const entry of configured) {
@@ -67,13 +70,13 @@ export function buildAgentNamePool(configured: unknown): [string, string, string
 		}
 	}
 	for (const name of DEFAULT_SUBAGENT_NAMES) take(name);
-	while (pool.length < 3) pool.push(`worker-${pool.length + 1}`);
-	return [pool[0]!, pool[1]!, pool[2]!];
+	while (pool.length < 5) pool.push(`worker-${pool.length + 1}`);
+	return [pool[0]!, pool[1]!, pool[2]!, pool[3]!, pool[4]!];
 }
 
 /** Per-session pool: claims names for running sub-agents, frees them on settle. */
 export class SubagentNamePool {
-	private readonly pool: [string, string, string];
+	private readonly pool: SubagentNamePoolTuple;
 	private readonly claimed = new Map<string, string>();
 
 	constructor(configured: unknown) {
@@ -91,8 +94,8 @@ export class SubagentNamePool {
 			return wanted;
 		}
 		const free = this.pool.find((name) => !taken.has(name));
-		// The pool always has three slots for maxConcurrent=3; a custom request
-		// that collides falls back to the first free pool name, else a suffix.
+		// The pool always has five slots for up to maxConcurrent=5; a custom
+		// request that collides falls back to the first free pool name, else a suffix.
 		const name = free ?? `${this.pool[0]}-${this.claimed.size + 1}`;
 		this.claimed.set(id, name);
 		return name;

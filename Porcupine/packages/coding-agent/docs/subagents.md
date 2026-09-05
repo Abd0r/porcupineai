@@ -8,7 +8,7 @@ distinctive capabilities — and one of the best in the class.
 
 - The main agent (you see it in the TUI, always `@porcupine`) can spawn up to
   `subagent.maxConcurrent` sub-agents (default 3, user-configurable).
-- Every running sub-agent holds a **@tag**: `@buck`, `@fudgy`, `@tinker` by
+- Every running sub-agent holds a **@tag**: `@buck`, `@fudgy`, `@tinker`, `@rivet`, `@gizmo` by
   default, a `name` parameter per spawn, or your own `subagent.names` in
   settings. Tags address workers everywhere ids used to: `send_to_subagent`,
   `stop_subagent`, WoT `send_message`, the footer chip, and `/subagents`.
@@ -83,7 +83,7 @@ gets a one-line notice that the new agent came online.
     "maxSteps": 120,
     "contextWindow": 256000,
     "model": "some-cheaper-model",
-    "names": ["buck", "fudgy", "tinker"]
+    "names": ["buck", "fudgy", "tinker", "rivet", "gizmo"]
   }
 }
 ```

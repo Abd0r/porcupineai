@@ -10,8 +10,8 @@ import {
 } from "../src/core/subagent-names.ts";
 
 describe("subagent names", () => {
-	it("ships buck, fudgy, and tinker as defaults", () => {
-		expect([...DEFAULT_SUBAGENT_NAMES]).toEqual(["buck", "fudgy", "tinker"]);
+	it("ships buck, fudgy, tinker, rivet, and gizmo as defaults", () => {
+		expect([...DEFAULT_SUBAGENT_NAMES]).toEqual(["buck", "fudgy", "tinker", "rivet", "gizmo"]);
 		expect(formatAgentTag("buck")).toBe("@buck");
 	});
 
@@ -35,9 +35,15 @@ describe("subagent names", () => {
 	});
 
 	it("prefers configured names, dedupes, and backfills defaults", () => {
-		expect(buildAgentNamePool(["Scout", "scout", "@main", "no good!"])).toEqual(["scout", "buck", "fudgy"]);
-		expect(buildAgentNamePool(undefined)).toEqual(["buck", "fudgy", "tinker"]);
-		expect(buildAgentNamePool([])).toEqual(["buck", "fudgy", "tinker"]);
+		expect(buildAgentNamePool(["Scout", "scout", "@main", "no good!"])).toEqual([
+			"scout",
+			"buck",
+			"fudgy",
+			"tinker",
+			"rivet",
+		]);
+		expect(buildAgentNamePool(undefined)).toEqual(["buck", "fudgy", "tinker", "rivet", "gizmo"]);
+		expect(buildAgentNamePool([])).toEqual(["buck", "fudgy", "tinker", "rivet", "gizmo"]);
 	});
 });
 
