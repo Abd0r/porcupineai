@@ -3,9 +3,12 @@ import { formatTaskProgress } from "../src/modes/interactive/components/footer.t
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import {
 	animationLoaderOptions,
+	isToolDrivenAnimation,
 	normalizeAnimationId,
+	planEndBeat,
 	resolveToolActivity,
 	skillNameFromPath,
+	truncateActivityName,
 } from "../src/porcupine/animations.ts";
 import type { TaskGraphStepStatus, TaskGraphView } from "../src/porcupine/session-orchestrator.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
@@ -54,6 +57,82 @@ describe("resolveToolActivity", () => {
 
 	it("falls back for unknown tools", () => {
 		expect(resolveToolActivity("bash", { command: "ls" })).toBeUndefined();
+	});
+});
+
+describe("plan chips", () => {
+	it("maps plan actions to start-beat animations", () => {
+		expect(resolveToolActivity("plan", { action: "create" })).toEqual({ id: "writing-todos" });
+		expect(resolveToolActivity("plan", { action: "add-step" })).toEqual({ id: "updating-todos" });
+		expect(resolveToolActivity("plan", { action: "start" })).toEqual({ id: "starting-todo" });
+		expect(resolveToolActivity("plan", { action: "verify" })).toEqual({ id: "verifying-todo" });
+		expect(resolveToolActivity("plan", { action: "complete" })).toEqual({ id: "ticking-todo" });
+		expect(resolveToolActivity("plan", { action: "status" })).toEqual({ id: "reading-todos" });
+		expect(resolveToolActivity("plan", { action: "export" })).toEqual({ id: "reading-todos" });
+		expect(resolveToolActivity("plan", { action: "block" })).toEqual({ id: "updating-todos" });
+	});
+
+	it("names end-beat chips with the agent-written todo", () => {
+		expect(planEndBeat({ action: "complete", stepObjective: "Fix login redirect", transitioned: true })).toEqual({
+			id: "ticked-todo",
+			name: "Fix login redirect",
+		});
+		expect(planEndBeat({ action: "start", stepObjective: "Fix login redirect", transitioned: true })).toEqual({
+			id: "started-todo",
+			name: "Fix login redirect",
+		});
+		expect(planEndBeat({ action: "block", stepObjective: "Fix login redirect", transitioned: true })).toEqual({
+			id: "blocked-todo",
+			name: "Fix login redirect",
+		});
+		expect(planEndBeat({ action: "fail", stepObjective: "Fix login redirect", transitioned: true })).toEqual({
+			id: "failed-todo",
+			name: "Fix login redirect",
+		});
+		expect(
+			planEndBeat({ action: "verify", stepObjective: "Fix login redirect", transitioned: true }),
+		).toBeUndefined();
+		expect(planEndBeat({ action: "status", transitioned: true })).toBeUndefined();
+		expect(
+			planEndBeat({ action: "complete", stepObjective: "Fix login redirect", transitioned: false }),
+		).toBeUndefined();
+		expect(planEndBeat({ action: "complete", stepObjective: "Fix login redirect" })).toBeUndefined();
+		expect(planEndBeat(undefined)).toBeUndefined();
+	});
+
+	it("truncates long todo names for the chip", () => {
+		expect(truncateActivityName("Fix login redirect")).toBe("Fix login redirect");
+		expect(truncateActivityName(undefined)).toBeUndefined();
+		const long = `word ${"x".repeat(100)}`;
+		const truncated = truncateActivityName(long)!;
+		expect(truncated.length).toBeLessThanOrEqual(42);
+		expect(truncated.endsWith("…")).toBe(true);
+		expect(planEndBeat({ action: "complete", stepObjective: long, transitioned: true })!.name).toBe(truncated);
+	});
+
+	it("registers plan chips as tool-driven so runtime noise cannot wipe them", () => {
+		for (const id of [
+			"writing-todos",
+			"updating-todos",
+			"starting-todo",
+			"verifying-todo",
+			"ticking-todo",
+			"reading-todos",
+			"started-todo",
+			"ticked-todo",
+			"blocked-todo",
+			"failed-todo",
+		] as const) {
+			expect(normalizeAnimationId(id)).toBe(id);
+			expect(isToolDrivenAnimation(id)).toBe(true);
+		}
+		expect(isToolDrivenAnimation("working")).toBe(false);
+	});
+
+	it("renders named chips with the animation label", () => {
+		expect(animationLoaderOptions("ticked-todo", "Fix login redirect").frames[0]).toContain(
+			"✓ Ticked: Fix login redirect",
+		);
 	});
 });
 

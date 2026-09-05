@@ -59,6 +59,8 @@ export interface GoalJudgeOptions {
 	model: Model<any> | undefined;
 	goal: StandingGoal;
 	response: string;
+	/** Optional structured evidence (plan summary, verified steps) for the judge. */
+	evidence?: string;
 }
 
 const GOAL_USAGE = "Usage: /goal <text> | /goal [status|pause|resume|clear]";
@@ -169,11 +171,14 @@ export async function judgeGoalResponse(options: GoalJudgeOptions): Promise<Goal
 			reason: "The agent returned no final response.",
 		};
 	}
+	const evidenceBlock = options.evidence?.trim()
+		? `\n\nVerified evidence:\n${options.evidence.trim().slice(0, 2_000)}`
+		: "";
 	const raw = await classifyWithSessionModel({
 		modelRuntime: options.modelRuntime,
 		model: options.model,
 		system: GOAL_JUDGE_SYSTEM_PROMPT,
-		user: `Goal:\n${options.goal.text}\n\nAgent final response:\n${options.response.slice(0, 8_000)}`,
+		user: `Goal:\n${options.goal.text}\n\nAgent final response:\n${options.response.slice(0, 8_000)}${evidenceBlock}`,
 		maxTokens: 120,
 	});
 	return (
@@ -190,6 +195,34 @@ export function isGoalContinuation(text: string): boolean {
 
 export function isPlanPrompt(text: string): boolean {
 	return text.trimStart().startsWith(PLAN_PROMPT_PREFIX);
+}
+
+/**
+ * True when this turn is the queued /plan draft and its prepared graph must
+ * be preserved. Uses an explicit in-memory token, not prompt-text inference,
+ * so generated plan prompts cannot fall into the ordinary-turn reset path.
+ */
+export function shouldPreservePlanGraphForTurn(text: string, planTurnInFlight: boolean): boolean {
+	return planTurnInFlight && isPlanPrompt(text);
+}
+
+/** Remove queued goal continuations and plan drafts when leaving a session. */
+export function filterOutGoalPlanQueue(inputs: string[]): string[] {
+	return inputs.filter((input) => !isGoalContinuation(input) && !isPlanPrompt(input));
+}
+
+export type PlanSettleOutcome = "interrupted" | "no-metadata" | "empty" | "save";
+
+/** Pure decision for plan-turn settle, mirroring processSettledPlanTurn branches. */
+export function classifyPlanSettle(input: {
+	planExists: boolean;
+	hasMarkdown: boolean;
+	interrupted: boolean;
+}): PlanSettleOutcome {
+	if (input.interrupted) return "interrupted";
+	if (!input.planExists) return "no-metadata";
+	if (!input.hasMarkdown) return "empty";
+	return "save";
 }
 
 export function isGoalPlanState(value: unknown): value is GoalPlanState {

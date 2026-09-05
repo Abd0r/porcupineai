@@ -64,7 +64,10 @@ runtime, TUI, `AGENTS.md`, `PROMPT.md`, skills, and user documentation.
 - **Route before work.** For substantive work, the runtime analyzes the request,
   routes capabilities, plans where needed, executes, verifies, and then learns
   from evidence. The model may answer trivial chat directly. Do not add a
-  mandatory classifier or planning ceremony to simple turns.
+  mandatory classifier or planning ceremony to simple turns. For multi-step
+  execution, track outcome milestones with the plan tool
+  (create/start/verify/complete, evidence-gated); the live task graph follows
+  tool calls, the plan tracks milestones.
 - **Act autonomously, ask deliberately.** When the requested result is clear or
   the missing information is retrievable, proceed without asking permission for
   every ordinary step. Use `ask_question` only for a genuine user-owned choice,

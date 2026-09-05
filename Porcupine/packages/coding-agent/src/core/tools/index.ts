@@ -301,6 +301,7 @@ import {
 	createRemindMeToolDefinition,
 	type RemindMeToolOptions,
 } from "../../porcupine/remind-me-tool.ts";
+import { createPlanTool, createPlanToolDefinition, type PlanToolOptions } from "./plan.ts";
 import {
 	createSendToSubagentToolDefinition,
 	createStopSubagentToolDefinition,
@@ -346,6 +347,7 @@ export type ToolName =
 	| "capability_search"
 	| "memory"
 	| "session_search"
+	| "plan"
 	| "tasks"
 	| "projects"
 	| "literature"
@@ -392,6 +394,7 @@ export const allToolNames: Set<ToolName> = new Set([
 	"capability_search",
 	"memory",
 	"session_search",
+	"plan",
 	"tasks",
 	"projects",
 	"literature",
@@ -437,6 +440,7 @@ export interface ToolsOptions {
 	capability_search?: CapabilitySearchToolOptions;
 	memory?: MemoryToolOptions;
 	session_search?: SessionSearchToolOptions;
+	plan?: PlanToolOptions;
 	tasks?: TasksToolOptions;
 	remind?: RemindMeToolOptions;
 	projects?: ProjectsToolOptions;
@@ -498,6 +502,7 @@ export function createCodingToolDefinitions(cwd: string, options?: ToolsOptions)
 		createMemoryToolDefinition(options?.memory),
 		createProjectsToolDefinition(options?.projects),
 		createSessionSearchToolDefinition({ cwd, ...options?.session_search }),
+		createPlanToolDefinition(options?.plan),
 		createTasksToolDefinition(options?.tasks),
 		createRemindMeToolDefinition(options?.remind),
 		createLiteratureToolDefinition(options?.literature),
@@ -554,6 +559,7 @@ export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): R
 		memory: createMemoryToolDefinition(options?.memory),
 		projects: createProjectsToolDefinition(options?.projects),
 		session_search: createSessionSearchToolDefinition({ cwd, ...options?.session_search }),
+		plan: createPlanToolDefinition(options?.plan),
 		tasks: createTasksToolDefinition(options?.tasks),
 		remind_me: createRemindMeToolDefinition(options?.remind),
 		literature: createLiteratureToolDefinition(options?.literature),
@@ -609,6 +615,7 @@ export function createCodingTools(cwd: string, options?: ToolsOptions): Tool[] {
 		createMemoryTool(options?.memory),
 		createProjectsTool(options?.projects),
 		createSessionSearchTool({ cwd, ...options?.session_search }),
+		createPlanTool(options?.plan),
 		createTasksTool(options?.tasks),
 		createRemindMeTool(options?.remind),
 		createLiteratureTool(options?.literature),
@@ -665,6 +672,7 @@ export function createAllTools(cwd: string, options?: ToolsOptions): Record<Tool
 		memory: createMemoryTool(options?.memory),
 		projects: createProjectsTool(options?.projects),
 		session_search: createSessionSearchTool({ cwd, ...options?.session_search }),
+		plan: createPlanTool(options?.plan),
 		tasks: createTasksTool(options?.tasks),
 		remind_me: createRemindMeTool(options?.remind),
 		literature: createLiteratureTool(options?.literature),

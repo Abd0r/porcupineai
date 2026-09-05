@@ -111,6 +111,7 @@ import {
 	isToolDrivenAnimation,
 	normalizeAnimationId,
 	pickStatusAnimation,
+	planEndBeat,
 	resolveAnimationFromToolName,
 	resolveToolActivity,
 } from "../../porcupine/animations.ts";
@@ -121,6 +122,7 @@ import {
 	buildGoalContinuation,
 	buildPlanPrompt,
 	DEFAULT_GOAL_MAX_TURNS,
+	filterOutGoalPlanQueue,
 	formatGoalStatus,
 	formatPlanStatus,
 	GOAL_PLAN_SESSION_ENTRY,
@@ -131,6 +133,7 @@ import {
 	judgeGoalResponse,
 	parseGoalCommand,
 	parsePlanCommand,
+	shouldPreservePlanGraphForTurn,
 } from "../../porcupine/goal-plan-state.ts";
 import { formatGuideCommandOutput } from "../../porcupine/guide.ts";
 import { formatInteractionModeBadge } from "../../porcupine/interaction-mode.ts";
@@ -636,6 +639,8 @@ export class InteractiveMode {
 	private goalTurnInFlight = false;
 	/** True only while the just-finished turn is producing a /plan artifact. */
 	private planTurnInFlight = false;
+	/** Set when the current turn was interrupted or will retry; consumed at settle. */
+	private lastTurnInterrupted = false;
 	/** Session-local attended reminders (fires only while open + idle, via bridge fan-out). */
 	private reminderEngine: ReminderEngine | undefined;
 
@@ -2570,6 +2575,7 @@ export class InteractiveMode {
 		await this.bindCurrentSessionExtensions();
 
 		if (this.session !== session) {
+			this.syncGoalPlanStateAfterRebind();
 			// The bind replaced the session. Re-wire confirmations and subscribe
 			// to the NEW session's agent events — but only if a newer rebind has
 			// not already taken ownership (its renderBeforeBind subscribed to the
@@ -3752,12 +3758,14 @@ export class InteractiveMode {
 	 */
 	private handleInterruptKey(): void {
 		if (this.session.isStreaming) {
+			this.lastTurnInterrupted = true;
 			this.restoreQueuedMessagesToEditor({ abort: true });
 			// Ensure the editor can receive keys again after abort.
 			this.ui.setFocus(this.editor as Component);
 			return;
 		}
 		if (this.session.isBashRunning) {
+			this.lastTurnInterrupted = true;
 			this.session.abortBash();
 			this.ui.setFocus(this.editor as Component);
 			return;
@@ -4878,7 +4886,14 @@ export class InteractiveMode {
 		}
 
 		// Soft activity only — never force skill search or planning.
-		if (isTrivialChatTurn(trimmed)) {
+		// Queued /plan drafts carry an explicit token so they cannot fall into
+		// the ordinary-turn reset path via prompt-text inference.
+		if (shouldPreservePlanGraphForTurn(trimmed, this.planTurnInFlight)) {
+			this.setPorcupineActivity("thinking");
+			this.session.setPlanFenceActive(true);
+			this.orchestrator.markRunning();
+			this.applyTaskGraphDisplay();
+		} else if (isTrivialChatTurn(trimmed)) {
 			this.setPorcupineActivity("working");
 		} else if (userRequestedPlanning(trimmed)) {
 			this.refreshCapabilityTree();
@@ -4922,6 +4937,7 @@ export class InteractiveMode {
 
 		switch (event.type) {
 			case "agent_start":
+				this.lastTurnInterrupted = false;
 				this.pendingTools.clear();
 				this.learningToolEvidence = [];
 				this.refreshCapabilityTree();
@@ -5207,6 +5223,12 @@ export class InteractiveMode {
 						isError: event.isError,
 					});
 					this.orchestrator.markToolFinished(toolName, event.isError);
+					if (toolName === "plan" && !event.isError) {
+						const beat = planEndBeat(
+							(event.result?.details ?? {}) as { action?: unknown; stepObjective?: unknown },
+						);
+						if (beat) this.setPorcupineActivity(beat.id, { showInterruptHint: true, name: beat.name });
+					}
 					this.applyTaskGraphDisplay();
 				}
 
@@ -5225,7 +5247,8 @@ export class InteractiveMode {
 					this.streamingMessage = undefined;
 				}
 				this.pendingTools.clear();
-				this.orchestrator.markTurnComplete(true);
+				if (event.willRetry) this.lastTurnInterrupted = true;
+				this.orchestrator.markTurnComplete(!event.willRetry && !this.orchestrator.hasFailedSteps());
 				this.applyTaskGraphDisplay();
 
 				// Voice Mode: speak the terminal response (only when not retrying).
@@ -6456,6 +6479,25 @@ export class InteractiveMode {
 		}
 	}
 
+	/** Clear in-memory goal/plan intents when leaving a session/branch. */
+	private resetGoalPlanTransientState(): void {
+		this.session.setPlanFenceActive(false);
+		this.goalPlanState = {};
+		this.goalTurnInFlight = false;
+		this.planTurnInFlight = false;
+		this.lastTurnInterrupted = false;
+		this.pendingUserInputs = filterOutGoalPlanQueue(this.pendingUserInputs);
+	}
+
+	/** Re-sync goal/plan intents after the active session object changed. */
+	private syncGoalPlanStateAfterRebind(): void {
+		this.session.setPlanFenceActive(false);
+		this.goalTurnInFlight = false;
+		this.planTurnInFlight = false;
+		this.lastTurnInterrupted = false;
+		this.restoreGoalPlanState();
+	}
+
 	private persistGoalPlanState(): void {
 		this.sessionManager.appendCustomEntry(GOAL_PLAN_SESSION_ENTRY, this.goalPlanState);
 	}
@@ -6465,7 +6507,27 @@ export class InteractiveMode {
 		if (!this.goalTurnInFlight) return;
 		this.goalTurnInFlight = false;
 		const goal = this.goalPlanState.goal;
-		if (!goal || goal.status !== "active") return;
+		if (!goal || goal.status !== "active") {
+			this.lastTurnInterrupted = false;
+			return;
+		}
+		if (this.lastTurnInterrupted) {
+			this.lastTurnInterrupted = false;
+			const now = new Date().toISOString();
+			this.goalPlanState = {
+				...this.goalPlanState,
+				goal: {
+					...goal,
+					status: "paused",
+					updatedAt: now,
+					lastVerdict: "blocked",
+					lastReason: "Interrupted by user; goal paused.",
+				},
+			};
+			this.persistGoalPlanState();
+			this.showStatus("Standing goal paused (interrupted). Use /goal resume to continue.");
+			return;
+		}
 
 		const now = new Date().toISOString();
 		if (this.pendingUserInputs.some((input) => !isGoalContinuation(input))) {
@@ -6553,9 +6615,19 @@ export class InteractiveMode {
 	private processSettledPlanTurn(): void {
 		if (!this.planTurnInFlight) return;
 		this.planTurnInFlight = false;
+		this.session.setPlanFenceActive(false);
+		if (this.lastTurnInterrupted) {
+			this.lastTurnInterrupted = false;
+			this.showWarning("Plan turn interrupted — artifact not saved.");
+			return;
+		}
 		const plan = this.goalPlanState.plan;
+		if (!plan) {
+			this.showWarning("No saved plan metadata; no plan artifact was saved.");
+			return;
+		}
 		const markdown = this.session.getLastAssistantText();
-		if (!plan || !markdown) {
+		if (!markdown) {
 			this.showWarning("Plan response was empty; no plan artifact was saved.");
 			return;
 		}
@@ -9448,6 +9520,8 @@ export class InteractiveMode {
 			if (result.cancelled) {
 				return;
 			}
+			this.resetGoalPlanTransientState();
+			this.orchestrator.resetDynamicGraph();
 			this.chatContainer.addChild(new Spacer(1));
 			this.chatContainer.addChild(new Text(`${theme.fg("accent", "✓ New session started")}`, 1, 1));
 			this.ui.requestRender();

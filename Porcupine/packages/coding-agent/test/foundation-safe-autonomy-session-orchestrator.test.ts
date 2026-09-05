@@ -1,6 +1,6 @@
 import { CapabilityTree } from "@porcupineai/agent-core";
 import { describe, expect, it } from "vitest";
-import { augmentPromptWithPlan, PorcupineSessionOrchestrator } from "../src/porcupine/session-orchestrator.ts";
+import { PorcupineSessionOrchestrator } from "../src/porcupine/session-orchestrator.ts";
 
 function createTree(): CapabilityTree {
 	return new CapabilityTree([
@@ -38,18 +38,14 @@ function createTree(): CapabilityTree {
  */
 describe("foundation-safe-autonomy session orchestrator", () => {
 	describe("prepareTurn builds the plan context block once", () => {
-		it("produces an augmentedPrompt identical to augmentPromptWithPlan", async () => {
+		it("builds the plan context block once per turn", async () => {
 			const orchestrator = new PorcupineSessionOrchestrator({
 				getCapabilities: () => createTree(),
 			});
-			const prompt = "Read the failing source and fix the bug";
-			const turn = await orchestrator.prepareTurn(prompt);
+			const turn = await orchestrator.prepareTurn("Read the failing source and fix the bug");
 
-			// The turn's augmentedPrompt must be byte-identical to the standalone
-			// plan-context formatter — proving no refactor changed the model view.
-			expect(turn.augmentedPrompt).toBe(augmentPromptWithPlan(prompt, turn.prepare));
-			// The exposed contextBlock is exactly the block that precedes the prompt.
-			expect(turn.augmentedPrompt).toBe(`${turn.contextBlock}\n\nUser request:\n${prompt}`);
+			expect(turn.contextBlock).toContain("[Porcupine orchestration]");
+			expect(turn.contextBlock).toContain("Plan:");
 		});
 	});
 

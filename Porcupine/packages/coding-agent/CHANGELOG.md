@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Structured plan checklist (`plan` tool):** outcome milestones with dependencies, evidence-gated transitions (create/start/verify/complete), Markdown export, and orchestration-stack discovery. Registered in the full tool set and active by default.
+- **Plan status chips:** per-action animations (writing/starting/ticking/reading todos) with end-beat chips naming the agent-written todo; rejected calls stay silent via a `transitioned` gate.
+- **Plan record helpers:** validation, revision, readiness, bounded replan, sub-agent attach, goal/compaction summaries, and `file-exists:` verification predicates.
+
+### Fixed
+
+- **Plan-turn graph loss:** queued `/plan` drafts carry an explicit token so the prepared graph survives turn entry instead of falling into the ordinary-turn reset.
+- **Done-over-failure graphs:** turns with a failed step now report failed, and retrying turns never report done.
+- **Interrupt-aware settle:** aborted goal turns pause instead of judging stale output; interrupted plan turns save no artifact; `plan` metadata absence and empty responses warn distinctly.
+- **Session-boundary leaks:** goal/plan intents re-sync on rebind and reset on new sessions, clearing queued continuations.
+- **Inspection-only `/plan`:** draft turns run under a tool fence (edits, writes, delegation, mutating bash denied) in every approval mode.
+- **Dead contract removed:** the unused `augmentedPrompt` field, formatter, and exports are gone.
+
 ## [0.1.75] - 2026-09-05
 
 ### Added

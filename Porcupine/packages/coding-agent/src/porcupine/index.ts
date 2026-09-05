@@ -103,7 +103,6 @@ export {
 	buildCapabilityTreeFromSession,
 } from "./session-capabilities.ts";
 export {
-	augmentPromptWithPlan,
 	formatPlanContextBlock,
 	PorcupineSessionOrchestrator,
 	type PrepareTurnResult,

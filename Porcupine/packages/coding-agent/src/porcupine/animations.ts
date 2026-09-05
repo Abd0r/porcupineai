@@ -39,7 +39,17 @@ export type CoreAnimationId =
 	| "sent-message"
 	| "using-tool"
 	| "compacting"
-	| "error";
+	| "error"
+	| "writing-todos"
+	| "updating-todos"
+	| "starting-todo"
+	| "verifying-todo"
+	| "ticking-todo"
+	| "reading-todos"
+	| "started-todo"
+	| "ticked-todo"
+	| "blocked-todo"
+	| "failed-todo";
 
 /**
  * Rare easter-egg labels that sometimes replace Working / Thinking.
@@ -129,6 +139,16 @@ export const ANIMATIONS: readonly AnimationSpec[] = [
 	{ id: "using-tool", emoji: "🧰", label: "Using", intervalMs: 300 },
 	{ id: "compacting", emoji: "🗜️", label: "Compacting", intervalMs: 340 },
 	{ id: "error", emoji: "⚠️", label: "Failed", intervalMs: 340 },
+	{ id: "writing-todos", emoji: "📝", label: "Writing todos", intervalMs: 300 },
+	{ id: "updating-todos", emoji: "📝", label: "Updating todos", intervalMs: 300 },
+	{ id: "starting-todo", emoji: "▶", label: "Starting todo", intervalMs: 300 },
+	{ id: "verifying-todo", emoji: "🔍", label: "Verifying todo", intervalMs: 300 },
+	{ id: "ticking-todo", emoji: "✓", label: "Ticking todo", intervalMs: 300 },
+	{ id: "reading-todos", emoji: "📋", label: "Reading todos", intervalMs: 300 },
+	{ id: "started-todo", emoji: "▶", label: "Started", intervalMs: 300 },
+	{ id: "ticked-todo", emoji: "✓", label: "Ticked", intervalMs: 300 },
+	{ id: "blocked-todo", emoji: "■", label: "Blocked", intervalMs: 300 },
+	{ id: "failed-todo", emoji: "✗", label: "Failed", intervalMs: 300 },
 	// --- easter eggs (rare stand-ins for Working / Thinking) ---
 	{ id: "vibing", emoji: "🎧", label: "Vibing", intervalMs: 320, easterEggOf: "working" },
 	{ id: "caffeinated", emoji: "☕", label: "Caffeinated", intervalMs: 300, easterEggOf: "working" },
@@ -189,6 +209,16 @@ const TOOL_DRIVEN: ReadonlySet<AnimationId> = new Set([
 	"using-tool",
 	"compacting",
 	"error",
+	"writing-todos",
+	"updating-todos",
+	"starting-todo",
+	"verifying-todo",
+	"ticking-todo",
+	"reading-todos",
+	"started-todo",
+	"ticked-todo",
+	"blocked-todo",
+	"failed-todo",
 ]);
 
 export function isToolDrivenAnimation(id: AnimationId | string | undefined | null): boolean {
@@ -444,7 +474,66 @@ export function resolveToolActivity(toolName: string | undefined | null, args?: 
 	if ((name === "read" || name === "read_file") && typeof a.path === "string" && /\/SKILL\.md$/i.test(a.path)) {
 		return { id: "reading-skill", name: skillNameFromPath(a.path) };
 	}
+	if (name === "plan") {
+		switch (action) {
+			case "create":
+				return { id: "writing-todos" };
+			case "add-step":
+				return { id: "updating-todos" };
+			case "start":
+				return { id: "starting-todo" };
+			case "verify":
+				return { id: "verifying-todo" };
+			case "complete":
+				return { id: "ticking-todo" };
+			case "status":
+			case "export":
+				return { id: "reading-todos" };
+			default:
+				return { id: "updating-todos" };
+		}
+	}
 	return undefined;
+}
+
+/** Max todo-name characters shown in a status chip; full text stays in the tool result. */
+export const ACTIVITY_NAME_MAX_LENGTH = 42;
+
+/** Truncate a chip name with an ellipsis. Pure helper for plan end-beat chips. */
+export function truncateActivityName(name: string | undefined, max = ACTIVITY_NAME_MAX_LENGTH): string | undefined {
+	if (!name) return undefined;
+	const trimmed = name.trim().replace(/\s+/g, " ");
+	if (trimmed.length <= max) return trimmed;
+	return `${trimmed.slice(0, max - 1).trimEnd()}…`;
+}
+
+export interface PlanEndBeat {
+	id: AnimationId;
+	name?: string;
+}
+
+/**
+ * End-beat chip for a finished plan-tool call: names the agent-written todo.
+ * Returns undefined for actions with no meaningful end chip (verify stays on
+ * its running chip; unknown actions stay quiet).
+ */
+export function planEndBeat(
+	details: { action?: unknown; stepObjective?: unknown; transitioned?: unknown } | undefined,
+): PlanEndBeat | undefined {
+	if (!details || typeof details.action !== "string" || details.transitioned !== true) return undefined;
+	const name = truncateActivityName(typeof details.stepObjective === "string" ? details.stepObjective : undefined);
+	switch (details.action) {
+		case "start":
+			return { id: "started-todo", name };
+		case "complete":
+			return { id: "ticked-todo", name };
+		case "block":
+			return { id: "blocked-todo", name };
+		case "fail":
+			return { id: "failed-todo", name };
+		default:
+			return undefined;
+	}
 }
 
 export function resolveAnimationFromText(text: string | undefined | null): AnimationId | undefined {

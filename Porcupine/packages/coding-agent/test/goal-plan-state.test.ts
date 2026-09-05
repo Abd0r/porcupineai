@@ -123,6 +123,35 @@ describe("goal and plan command state", () => {
 		expect(verdict.reason).toContain("continuing safely");
 	});
 
+	it("passes structured evidence to the goal judge when provided", async () => {
+		const seen: string[] = [];
+		const verdict = await judgeGoalResponse({
+			modelRuntime: {
+				completeSimple: async (_model: unknown, req: { messages: Array<{ content: string }> }) => {
+					seen.push(req.messages.map((message) => message.content).join("\n"));
+					return {
+						role: "assistant",
+						content: [{ type: "text", text: '{"verdict":"done","reason":"All steps verified."}' }],
+					};
+				},
+			} as never,
+			model: {} as never,
+			goal: {
+				text: "Ship the feature safely",
+				status: "active",
+				turnsUsed: 0,
+				maxTurns: DEFAULT_GOAL_MAX_TURNS,
+				createdAt: "2026-08-03T00:00:00.000Z",
+				updatedAt: "2026-08-03T00:00:00.000Z",
+			},
+			response: "All done.",
+			evidence: 'Plan "Ship" rev 2: 2/2 done.',
+		});
+		expect(verdict.kind).toBe("done");
+		expect(seen.join("\n")).toContain("Verified evidence:");
+		expect(seen.join("\n")).toContain('Plan "Ship" rev 2: 2/2 done.');
+	});
+
 	it("registers both commands for help and autocomplete", () => {
 		const names = new Set(BUILTIN_SLASH_COMMANDS.map((command) => command.name));
 		expect(names.has("goal")).toBe(true);

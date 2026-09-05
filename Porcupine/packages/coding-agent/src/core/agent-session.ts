@@ -57,6 +57,7 @@ import {
 	classifyAdaptiveReasoning,
 } from "../porcupine/adaptive-reasoning.ts";
 import { guardBashCommand } from "../porcupine/auto-mode.ts";
+import { classifyPlanTurnTool } from "../porcupine/plan-fence.ts";
 import { createRepeatToolGuard } from "../porcupine/repeat-tool-guard.ts";
 import { persistSubagentSession } from "../porcupine/subagent-sessions.ts";
 import { createComposedToolDefinition, listToolPolicies } from "../porcupine/tool-policy.ts";
@@ -374,6 +375,8 @@ export class AgentSession {
 	// Reasoning & interaction mode state (session-scoped, not yet persisted to JSONL).
 	// /refresh snapshots and restores these so the session feels continuous after a full runtime rebuild.
 	private _interactionMode: "ask" | "normal" | "auto";
+	/** Inspection-only fence for built-in /plan draft turns. */
+	private _planFenceActive = false;
 
 	// Sub-agent runtime state (concurrent up to subagent.maxConcurrent).
 	private _activeSubagentRuns = 0;
@@ -983,6 +986,12 @@ export class AgentSession {
 	 */
 	private _installAgentToolHooks(): void {
 		this.agent.beforeToolCall = async ({ toolCall, args }) => {
+			if (this._planFenceActive) {
+				const verdict = classifyPlanTurnTool(toolCall.name, args);
+				if (!verdict.allow) {
+					return { block: true, reason: verdict.reason };
+				}
+			}
 			const runner = this._extensionRunner;
 			if (!runner.hasHandlers("tool_call")) {
 				return undefined;
@@ -2438,6 +2447,11 @@ export class AgentSession {
 	/** Set the interaction mode for this session. */
 	setInteractionMode(mode: "ask" | "normal" | "auto"): void {
 		this._interactionMode = mode;
+	}
+
+	/** Enable or disable the inspection-only plan-turn fence. */
+	setPlanFenceActive(active: boolean): void {
+		this._planFenceActive = active;
 	}
 
 	// =========================================================================
