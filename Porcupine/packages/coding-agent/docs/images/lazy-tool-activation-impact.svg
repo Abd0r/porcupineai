@@ -26,9 +26,9 @@
     <circle cx="600" cy="363" r="7"/><circle cx="600" cy="450" r="7"/><circle cx="675" cy="493" r="7"/><circle cx="600" cy="623" r="7"/><circle cx="525" cy="493" r="7"/><circle cx="450" cy="363" r="7"/>
   </g>
 
-  <polygon points="600,190 750,363 825,580 600,710 375,580 450,363" fill="#1463d7" fill-opacity="0.16" stroke="#1463d7" stroke-width="5"/>
+  <polygon points="600,190 750,363 825,580 600,710 375,580 375,320" fill="#1463d7" fill-opacity="0.16" stroke="#1463d7" stroke-width="5"/>
   <g fill="#1463d7" stroke="#ffffff" stroke-width="3">
-    <circle cx="600" cy="190" r="8"/><circle cx="750" cy="363" r="8"/><circle cx="825" cy="580" r="8"/><circle cx="600" cy="710" r="8"/><circle cx="375" cy="580" r="8"/><circle cx="450" cy="363" r="8"/>
+    <circle cx="600" cy="190" r="8"/><circle cx="750" cy="363" r="8"/><circle cx="825" cy="580" r="8"/><circle cx="600" cy="710" r="8"/><circle cx="375" cy="580" r="8"/><circle cx="375" cy="320" r="8"/>
   </g>
 
   <g fill="#172033" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="650">
@@ -45,7 +45,7 @@
     <text x="900" y="632">confirm / LLM gate</text>
     <text x="600" y="783" text-anchor="middle">disabled stays blocked</text>
     <text x="300" y="632" text-anchor="end">guidance, never throws</text>
-    <text x="300" y="296" text-anchor="end">unchanged: curated only</text>
+    <text x="300" y="296" text-anchor="end">fenced pool, budgeted</text>
   </g>
 
   <g transform="translate(454 834)" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16">
