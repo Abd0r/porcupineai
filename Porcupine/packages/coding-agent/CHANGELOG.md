@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.76] - 2026-09-05
+
 ### Added
 
 - **Structured plan checklist (`plan` tool):** outcome milestones with dependencies, evidence-gated transitions (create/start/verify/complete), Markdown export, and orchestration-stack discovery. Registered in the full tool set and active by default.

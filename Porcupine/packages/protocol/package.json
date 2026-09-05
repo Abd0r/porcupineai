@@ -1,6 +1,6 @@
 {
 	"name": "@porcupineai/protocol",
-	"version": "0.1.75",
+	"version": "0.1.76",
 	"description": "Transport-neutral CBOR protocol for remote Porcupine sessions",
 	"type": "module",
 	"main": "./dist/index.js",
