@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.1.78] - 2026-09-07
+
+### Fixed
+
+- **Sub-agent provider routing:** the parent session id is now forwarded to sub-agent runs, so worker model calls carry the `x-opencode-session` attribution header. Fixes Console Go rejecting worker calls with `MissingSessionID` (400), which had broken sub-agents on those providers entirely.
+
 ## [0.1.77] - 2026-09-05
 
 ### Added
