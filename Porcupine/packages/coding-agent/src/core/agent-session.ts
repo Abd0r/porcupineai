@@ -3501,6 +3501,7 @@ export class AgentSession {
 					write: { confirmMutation },
 					subagent: {
 						getToolRegistry: () => this._toolRegistry,
+						getSessionId: () => this.sessionId,
 						resolveModel: (spec) => this._resolveSubagentModel(spec),
 						getStreamFn: () => this.agent.streamFunction,
 						getApiKey: () => this.agent.getApiKey,

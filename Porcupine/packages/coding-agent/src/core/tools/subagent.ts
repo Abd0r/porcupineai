@@ -25,6 +25,8 @@ export interface SubagentToolOptions {
 	getApiKey?: () => ((provider: string) => Promise<string | undefined> | string | undefined) | undefined;
 	/** Live sub-agent settings from settings.json. */
 	getSettings: () => SubagentToolSettings;
+	/** Parent session id, forwarded so provider routing headers stay set on worker calls. */
+	getSessionId?: () => string | undefined;
 	/** Called for every progress event so the TUI can render the footer activity chip. */
 	onEvent?: (event: SubagentProgressEvent) => void;
 	/** True when the sub-agent capacity (maxConcurrent) is reached. */
@@ -303,6 +305,7 @@ export function createSubagentToolDefinition(options: SubagentToolOptions): Tool
 				model,
 				streamFn,
 				getApiKey,
+				sessionId: options.getSessionId?.(),
 				lazyTools,
 				tools: bus ? [...tools, ...buildMessagingTools(bus, id)] : tools,
 				systemPrompt,
