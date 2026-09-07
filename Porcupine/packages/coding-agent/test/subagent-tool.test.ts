@@ -303,3 +303,35 @@ describe("subagent tool — background mode", () => {
 		}
 	});
 });
+
+describe("subagent session attribution", () => {
+	it("forwards the parent session id so provider routing headers are set", async () => {
+		const { registerFauxProvider, fauxAssistantMessage, streamSimple } = await import("@porcupineai/ai/compat");
+		const faux = registerFauxProvider();
+		try {
+			faux.setResponses([fauxAssistantMessage("Report: done.")]);
+			const seen: Array<string | undefined> = [];
+			const recordingStreamFn = (
+				model: Parameters<typeof streamSimple>[0],
+				context: Parameters<typeof streamSimple>[1],
+				options?: { sessionId?: string },
+			) => {
+				seen.push(options?.sessionId);
+				return streamSimple(model, context, options as never);
+			};
+			const pool = new SubagentNamePool(["buck", "fudgy", "tinker"]);
+			const tool = makeTool({
+				resolveModel: () => faux.getModel(),
+				getStreamFn: () => recordingStreamFn as never,
+				claimName: (id, preferred) => pool.claim(id, preferred),
+				getSessionId: () => "sess-1",
+			});
+			await tool.execute("id-1", { task: "do the thing" }, undefined, undefined, undefined as never);
+			await new Promise((resolve) => setTimeout(resolve, 500));
+			expect(seen.length).toBeGreaterThan(0);
+			expect(seen).toContain("sess-1/subagent");
+		} finally {
+			faux.unregister();
+		}
+	});
+});
