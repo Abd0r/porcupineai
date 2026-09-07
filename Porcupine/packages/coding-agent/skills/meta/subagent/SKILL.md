@@ -15,6 +15,7 @@ Use this skill when a task is self-contained and large enough that doing it inli
 - **Delegate**: research, refactors, audits, drafts, debugging — anything where a focused worker with fresh context beats dragging the work through the main transcript.
 - **Keep the main context clean**: the sub-agent's tool calls and intermediate results never enter the main conversation; only its report does.
 - **Background, non-blocking**: `subagent` returns immediately with an id — the main agent keeps working while the sub-agent runs, and the report is injected **instantly** when it finishes (steered into the running turn if the parent is mid-task, or a fresh turn is started if idle). It never waits for the next user prompt. Up to `subagent.maxConcurrent` sub-agents run concurrently (default 3).
+- **Lazy tools**: workers start with the curated set but activate safe dormant tools on attempted call (same lazy loading as the main session, fenced to a worker-safe pool and counted against the step budget). Agent-level and sensitive tools stay unreachable no matter how they are addressed.
 
 ## When NOT to use
 
@@ -52,7 +53,7 @@ Give peers each other's @tags in the task/notes so they know whom to address.
 ## Configuration
 
 - `subagent.model` — cheap/small model (recommended `opencode-go/deepseek-v4-flash`); unset = the parent model.
-- `subagent.maxSteps` — default 30; raise (e.g. 120) for heavy audits.
+- `subagent.maxSteps` — default 120; lower for cheap scouting runs.
 - `subagent.contextWindow` — 128K–256K, default 256K.
 - `subagent.maxConcurrent` — default 3; raise or lower via `subagent.maxConcurrent` in `~/.porcupine/agent/settings.json` or by asking the agent.
 
