@@ -122,7 +122,17 @@ export function textsMatch(prompt: string, turnText: string): boolean {
 	const a = prompt.trim();
 	const b = turnText.trim();
 	if (a === b) return true;
+	if (a.length === 0) return false;
 	if (b.length > a.length && b.includes(`\n${a}\n`)) return true;
+	// Batched follow-up turns concatenate queued prompts line by line, so a
+	// pending prompt matches when it is a full line of the turn (first, last,
+	// or middle). Without this, bridge replies to merged turns are silently
+	// dropped while the typing indicator spins forever.
+	if (b.length > a.length) {
+		for (const line of b.split("\n")) {
+			if (line.trim() === a) return true;
+		}
+	}
 	return false;
 }
 
