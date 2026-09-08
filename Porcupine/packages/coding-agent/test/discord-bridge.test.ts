@@ -135,6 +135,29 @@ describe("DiscordBridge", () => {
 		expect(JSON.parse(send!.body!).content).toContain("Here are the docs.");
 	});
 
+	it("forwards the response when the turn batches several queued prompts (merged turn)", async () => {
+		const { bridge, calls, prompts } = makeBridge();
+		const anyBridge = bridge as unknown as { handleMessage(message: unknown): Promise<void> };
+
+		await anyBridge.handleMessage({
+			id: "m1",
+			channel_id: "channel-1",
+			author: { id: "user-1" },
+			content: "ping123",
+		});
+		expect(prompts).toHaveLength(1);
+
+		// The session batches queued follow-ups into one turn, so the last
+		// user text contains the Discord prompt as one line among others.
+		await (
+			bridge as unknown as { handleAgentEnd(messages: unknown[], willRetry: boolean): Promise<void> }
+		).handleAgentEnd(assistantMessage("Pong.", "ping123\nwhat is the status"), false);
+
+		const send = calls.find((call) => call.path.startsWith("/channels/channel-1/messages"));
+		expect(send).toBeDefined();
+		expect(JSON.parse(send!.body!).content).toContain("Pong.");
+	});
+
 	it("delivers MEDIA markers as native Discord attachments", async () => {
 		const { bridge, calls } = makeBridge();
 		const dir = mkdtempSync(join(tmpdir(), "porcupine-discord-media-"));
