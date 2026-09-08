@@ -158,6 +158,69 @@ describe("DiscordBridge", () => {
 		expect(JSON.parse(send!.body!).content).toContain("Pong.");
 	});
 
+	it("forwards the response when the run carries several queued prompts", async () => {
+		const { bridge, calls, prompts } = makeBridge();
+		const anyBridge = bridge as unknown as { handleMessage(message: unknown): Promise<void> };
+
+		await anyBridge.handleMessage({
+			id: "m1",
+			channel_id: "channel-1",
+			author: { id: "user-1" },
+			content: "ping123",
+		});
+		expect(prompts).toHaveLength(1);
+
+		// The session drains every queued follow-up inside ONE run, so the
+		// ended run holds several user messages and the Discord prompt is not
+		// the last one. The reply must still reach the Discord channel.
+		const run = [
+			{ role: "user" as const, content: [{ type: "text" as const, text: "ping123" }] },
+			{ role: "user" as const, content: [{ type: "text" as const, text: "what is the status" }] },
+			{
+				role: "assistant" as const,
+				content: [{ type: "text" as const, text: "Pong. All good." }],
+				stopReason: "end_turn",
+			},
+		];
+		await (
+			bridge as unknown as { handleAgentEnd(messages: unknown[], willRetry: boolean): Promise<void> }
+		).handleAgentEnd(run, false);
+
+		const send = calls.find((call) => call.path.startsWith("/channels/channel-1/messages"));
+		expect(send).toBeDefined();
+		expect(JSON.parse(send!.body!).content).toContain("Pong. All good.");
+	});
+
+	it("keeps the dialog binding when a later turn message does not match", async () => {
+		const { bridge } = makeBridge();
+		const anyBridge = bridge as unknown as {
+			handleMessage(message: unknown): Promise<void>;
+			handleTurnStart(message: unknown): void;
+			activeChannelId?: string;
+			activeUserId?: string;
+		};
+
+		await anyBridge.handleMessage({
+			id: "m1",
+			channel_id: "channel-1",
+			author: { id: "user-1" },
+			content: "ping123",
+		});
+		anyBridge.handleTurnStart({
+			role: "user",
+			content: [{ type: "text", text: "ping123" }],
+		});
+		expect(anyBridge.activeChannelId).toBe("channel-1");
+
+		// A later turn message from another surface must not unbind the channel.
+		anyBridge.handleTurnStart({
+			role: "user",
+			content: [{ type: "text", text: "what is the status" }],
+		});
+		expect(anyBridge.activeChannelId).toBe("channel-1");
+		expect(anyBridge.activeUserId).toBe("user-1");
+	});
+
 	it("delivers MEDIA markers as native Discord attachments", async () => {
 		const { bridge, calls } = makeBridge();
 		const dir = mkdtempSync(join(tmpdir(), "porcupine-discord-media-"));

@@ -36,6 +36,7 @@ import {
 	splitMessage,
 	summarizeToolCalls,
 	textsMatch,
+	userMessageTexts,
 } from "./telegram-bridge.ts";
 
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
@@ -401,32 +402,41 @@ export class DiscordBridge {
 	handleTurnStart(message: AgentMessage): void {
 		const text = lastUserMessageText([message]);
 		const entry = this.pendingDiscord.find((candidate) => text !== undefined && textsMatch(candidate.text, text));
-		this.activeChannelId = entry?.channelId;
-		this.activeUserId = entry?.userId;
+		// A run carries turn messages from every active surface; a message
+		// that matches nothing must not unbind another channel's turn.
+		if (entry === undefined) return;
+		this.activeChannelId = entry.channelId;
+		this.activeUserId = entry.userId;
 	}
 
-	/** Forward the terminal response to the channel that started the turn. */
+	/** Forward the terminal response to every channel whose prompt the run carried. */
 	async handleAgentEnd(messages: readonly AgentMessage[], willRetry: boolean): Promise<void> {
 		if (willRetry) return;
-		const lastUserText = lastUserMessageText(messages);
-		const index = this.pendingDiscord.findIndex(
-			(entry) => lastUserText !== undefined && textsMatch(entry.text, lastUserText),
-		);
-		if (index === -1) return;
-		const entry = this.pendingDiscord[index]!;
-		this.pendingDiscord.splice(index, 1);
+		// Queued follow-ups from several surfaces drain inside ONE run, so the
+		// run holds several user messages. Matching only the last one drops
+		// every bridge prompt that is not last while typing spins forever.
+		const turnTexts = userMessageTexts(messages);
+		const matched = this.pendingDiscord.filter((entry) => turnTexts.some((text) => textsMatch(entry.text, text)));
+		if (matched.length === 0) return;
+		this.pendingDiscord = this.pendingDiscord.filter((entry) => !matched.includes(entry));
 		this.stopTypingKeepalive();
 		try {
 			const raw = extractAssistantText(messages);
 			const { clean, paths } = extractMediaMarkers(raw);
 			const tools = summarizeToolCalls(messages);
 			const body = [clean, tools ? `\n${tools}` : ""].join("").trim();
-			if (body) await this.sendText(entry.channelId, body);
-			else if (paths.length === 0) await this.sendText(entry.channelId, "Done.");
+			const channels = [...new Set(matched.map((entry) => entry.channelId))];
+			if (body) {
+				for (const channelId of channels) await this.sendText(channelId, body);
+			} else if (paths.length === 0) {
+				for (const channelId of channels) await this.sendText(channelId, "Done.");
+			}
 			for (const path of paths) {
-				await this.sendDocument(entry.channelId, path).catch(() =>
-					this.sendText(entry.channelId, "⚠️ I couldn't send an attached file.").catch(() => {}),
-				);
+				for (const channelId of channels) {
+					await this.sendDocument(channelId, path).catch(() =>
+						this.sendText(channelId, "⚠️ I couldn't send an attached file.").catch(() => {}),
+					);
+				}
 			}
 		} catch (error) {
 			console.warn(
