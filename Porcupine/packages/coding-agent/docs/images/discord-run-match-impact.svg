@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">Discord run-level reply coverage before and through this PR</title>
+  <desc id="desc">A qualitative five-axis radar diagram comparing coverage before the PR with the coverage delivered by this PR. The axes are multi-prompt runs, typing termination, dialog binding, cross-bridge safety, and diagnostics.</desc>
+  <rect width="1200" height="900" fill="#ffffff"/>
+  <text x="600" y="55" text-anchor="middle" fill="#172033" font-family="ui-sans-serif, system-ui, sans-serif" font-size="28" font-weight="700">Discord Run-Level Replies</text>
+  <text x="600" y="85" text-anchor="middle" fill="#526072" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16">Qualitative implementation coverage, before vs through this PR</text>
+  <text x="600" y="112" text-anchor="middle" fill="#718096" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13">0 absent · 1 partial · 2 explicit · 3 deterministic — not a benchmark</text>
+
+  <g fill="none" stroke="#d7dee8" stroke-width="2">
+    <polygon points="600,363 682,423 651,520 549,520 518,423"/>
+    <polygon points="600,277 765,396 702,590 498,590 435,396"/>
+    <polygon points="600,190 847,370 753,660 447,660 353,370"/>
+    <line x1="600" y1="450" x2="600" y2="190"/>
+    <line x1="600" y1="450" x2="847" y2="370"/>
+    <line x1="600" y1="450" x2="753" y2="660"/>
+    <line x1="600" y1="450" x2="447" y2="660"/>
+    <line x1="600" y1="450" x2="353" y2="370"/>
+  </g>
+  <g fill="#718096" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13">
+    <text x="610" y="366">1</text><text x="610" y="280">2</text><text x="610" y="193">3</text>
+  </g>
+
+  <polygon points="600,363 682,423 651,520 498,590 518,423" fill="#f59e0b" fill-opacity="0.13" stroke="#f59e0b" stroke-width="4" stroke-dasharray="10 8"/>
+  <g fill="#ffffff" stroke="#f59e0b" stroke-width="4">
+    <circle cx="600" cy="363" r="7"/><circle cx="682" cy="423" r="7"/><circle cx="651" cy="520" r="7"/><circle cx="498" cy="590" r="7"/><circle cx="518" cy="423" r="7"/>
+  </g>
+
+  <polygon points="600,277 765,396 702,590 498,590 518,423" fill="#1463d7" fill-opacity="0.16" stroke="#1463d7" stroke-width="5"/>
+  <g fill="#1463d7" stroke="#ffffff" stroke-width="3">
+    <circle cx="600" cy="277" r="8"/><circle cx="765" cy="396" r="8"/><circle cx="702" cy="590" r="8"/><circle cx="498" cy="590" r="8"/><circle cx="518" cy="423" r="8"/>
+  </g>
+
+  <g fill="#172033" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="650">
+    <text x="600" y="154" text-anchor="middle">Multi-prompt runs</text>
+    <text x="905" y="362">Typing termination</text>
+    <text x="795" y="700">Dialog binding</text>
+    <text x="405" y="700" text-anchor="end">Cross-bridge safety</text>
+    <text x="295" y="362" text-anchor="end">Diagnostics</text>
+  </g>
+  <g fill="#667085" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">
+    <text x="600" y="177" text-anchor="middle">match any run message</text>
+    <text x="905" y="384">stops on matched run end</text>
+    <text x="795" y="722">no-match keeps binding</text>
+    <text x="405" y="722" text-anchor="end">allowlist + actor gates kept</text>
+    <text x="295" y="384" text-anchor="end">silent no-match deferred</text>
+  </g>
+
+  <g transform="translate(454 834)" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16">
+    <line x1="0" y1="0" x2="42" y2="0" stroke="#f59e0b" stroke-width="4" stroke-dasharray="10 8"/>
+    <text x="52" y="6" fill="#374151">Before</text>
+    <line x1="148" y1="0" x2="190" y2="0" stroke="#1463d7" stroke-width="5"/>
+    <text x="200" y="6" fill="#374151">Through this PR</text>
+  </g>
+</svg>

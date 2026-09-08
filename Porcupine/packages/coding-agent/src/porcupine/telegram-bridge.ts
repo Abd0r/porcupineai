@@ -136,6 +136,23 @@ export function textsMatch(prompt: string, turnText: string): boolean {
 	return false;
 }
 
+/** Text of EVERY user message in a run. Queued follow-ups from several
+ * surfaces drain inside ONE run, so matching only the last message drops
+ * every bridge prompt that is not last. */
+export function userMessageTexts(messages: readonly AgentMessage[]): string[] {
+	const texts: string[] = [];
+	for (const message of messages) {
+		if (message?.role !== "user") continue;
+		const text = (message.content as unknown as Array<{ type: string; text?: string }>)
+			.filter((block) => block?.type === "text" && typeof block.text === "string")
+			.map((block) => block.text)
+			.join("\n")
+			.trim();
+		if (text) texts.push(text);
+	}
+	return texts;
+}
+
 /** Text of the LAST user message in a session (the one that started the turn). */
 export function lastUserMessageText(messages: readonly AgentMessage[]): string | undefined {
 	for (let i = messages.length - 1; i >= 0; i--) {
