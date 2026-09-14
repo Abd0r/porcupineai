@@ -5,6 +5,9 @@
  *
  * Test with: npx tsx src/cli-new.ts [args...]
  */
+// MUST stay first: exits with an actionable message on an unsupported Node.js
+// before the module graph below import-evaluates `undici` (see cli/node-version.ts).
+import "./cli/node-version.ts";
 import { APP_NAME } from "./config.ts";
 import { configureHttpDispatcher } from "./core/http-dispatcher.ts";
 import { main } from "./main.ts";
