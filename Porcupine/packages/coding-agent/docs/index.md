@@ -7,7 +7,7 @@ Porcupine is a minimal terminal AI agent harness. It is designed to stay small a
 Install Porcupine with npm:
 
 ```bash
-npm install -g --ignore-scripts @porcupineai/coding-agent
+npm install -g --ignore-scripts @porcupineai/porcupineai
 ```
 
 `--ignore-scripts` disables dependency lifecycle scripts during install. Porcupine does not require install scripts for normal npm installs.
@@ -18,10 +18,10 @@ as described in the [repository README](https://github.com/Abd0r/porcupine).
 To uninstall porcupine itself, use npm for curl and npm installs:
 
 ```bash
-npm uninstall -g @porcupineai/coding-agent
+npm uninstall -g @porcupineai/porcupineai
 ```
 
-For pnpm, Yarn, or Bun installs, use the matching global remove command: `pnpm remove -g @porcupineai/coding-agent`, `yarn global remove @porcupineai/coding-agent`, or `bun uninstall -g @porcupineai/coding-agent`.
+For pnpm, Yarn, or Bun installs, use the matching global remove command: `pnpm remove -g @porcupineai/porcupineai`, `yarn global remove @porcupineai/porcupineai`, or `bun uninstall -g @porcupineai/porcupineai`.
 
 Then run it in a project directory:
 
