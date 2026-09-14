@@ -17,7 +17,7 @@ pkg update && pkg upgrade
 pkg install nodejs termux-api git
 
 # Install porcupine
-npm install -g --ignore-scripts @porcupineai/coding-agent
+npm install -g --ignore-scripts @porcupineai/porcupineai
 
 # Create config directory
 mkdir -p ~/.porcupine/agent

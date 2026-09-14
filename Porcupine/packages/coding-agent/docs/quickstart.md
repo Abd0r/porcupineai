@@ -7,7 +7,7 @@ This page gets you from install to a useful first porcupine session.
 Porcupine is distributed as an npm package:
 
 ```bash
-npm install -g --ignore-scripts @porcupineai/coding-agent
+npm install -g --ignore-scripts @porcupineai/porcupineai
 ```
 
 `--ignore-scripts` disables dependency lifecycle scripts during install. Porcupine does not require install scripts for normal npm installs.
@@ -18,16 +18,16 @@ Use the package manager that installed porcupine. The curl installer uses npm gl
 
 ```bash
 # curl installer or npm install -g
-npm uninstall -g @porcupineai/coding-agent
+npm uninstall -g @porcupineai/porcupineai
 
 # pnpm
-pnpm remove -g @porcupineai/coding-agent
+pnpm remove -g @porcupineai/porcupineai
 
 # Yarn
-yarn global remove @porcupineai/coding-agent
+yarn global remove @porcupineai/porcupineai
 
 # Bun
-bun uninstall -g @porcupineai/coding-agent
+bun uninstall -g @porcupineai/porcupineai
 ```
 
 Uninstalling porcupine leaves settings, credentials, sessions, and installed porcupine packages in `~/.porcupine/agent/`.
