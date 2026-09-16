@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Desktop pet** (`/pet`): an optional pixel creature that lives on your desktop and shows
+  live session status in a think box. Default species is the porcupine; the macaw is
+  selectable from its menu. Ships as `packages/pet` with a built-in `pet` extension that can
+  install, build and launch it (`/pet start`), and the tools `pet_status`, `pet_say`,
+  `pet_rest`, `pet_curl`, `pet_freeze`. Opt-in: nothing runs until `/pet start`. macOS only.
+
 ## [0.1.78] - 2026-09-07
 
 ### Fixed
