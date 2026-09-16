@@ -7,7 +7,7 @@ Porcupine is a minimal terminal AI agent harness. It is designed to stay small a
 Install Porcupine with npm:
 
 ```bash
-npm install -g --ignore-scripts @porcupineai/porcupineai
+npm install -g --ignore-scripts @porcupineai/coding-agent
 ```
 
 `--ignore-scripts` disables dependency lifecycle scripts during install. Porcupine does not require install scripts for normal npm installs.
@@ -18,10 +18,10 @@ as described in the [repository README](https://github.com/Abd0r/porcupine).
 To uninstall porcupine itself, use npm for curl and npm installs:
 
 ```bash
-npm uninstall -g @porcupineai/porcupineai
+npm uninstall -g @porcupineai/coding-agent
 ```
 
-For pnpm, Yarn, or Bun installs, use the matching global remove command: `pnpm remove -g @porcupineai/porcupineai`, `yarn global remove @porcupineai/porcupineai`, or `bun uninstall -g @porcupineai/porcupineai`.
+For pnpm, Yarn, or Bun installs, use the matching global remove command: `pnpm remove -g @porcupineai/coding-agent`, `yarn global remove @porcupineai/coding-agent`, or `bun uninstall -g @porcupineai/coding-agent`.
 
 Then run it in a project directory:
 
@@ -36,6 +36,7 @@ For the full first-run flow, see [Quickstart](quickstart.md).
 ## Start here
 
 - [Quickstart](quickstart.md) - install, authenticate, and run a first session.
+- [The desktop pet](pet.md) - an optional pixel creature that shows session status on your desktop
 - [Using Porcupine](usage.md) - interactive mode, slash commands, context files, and CLI reference.
 - [Stacks](stacks.md) - the capability tree: how every tool and skill is organized and discovered.
 - [Web Development](web-development.md) - frontend, backend, browser QA, accessibility, performance, and production workflows.

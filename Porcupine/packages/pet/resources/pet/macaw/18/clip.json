@@ -1,0 +1,29 @@
+{
+  "name": "sheet-18",
+  "sheet": "ChatGPT Image Sep 15, 2026, 12_41_30 PM (8).png",
+  "kind": "plank",
+  "frames": 8,
+  "width": 235,
+  "height": 393,
+  "anchorX": 0.5,
+  "anchorY": 0.82,
+  "birdHeightPx": 210,
+  "plankFrames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "canonical": "shape-v2",
+  "regDx": 13,
+  "regDy": 134,
+  "regPlankBot": 511,
+  "regPlankCx": 221,
+  "sizeMetric": "sqrt-area-v1",
+  "sqrtAreaPx": 208.0,
+  "bboxHeightPx": 364.0
+}
