@@ -60,3 +60,4 @@ benchmarks/
 # Benchmark scorecards + raw results are published (see benchmarks/)
 !benchmarks/
 !benchmarks/**
+Porcupine/packages/pet/build/
