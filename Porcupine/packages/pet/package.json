@@ -1,0 +1,20 @@
+{
+  "name": "@porcupineai/pet",
+  "version": "0.1.78",
+  "private": true,
+  "type": "module",
+  "description": "Porcupine Pet: a desktop pet that reports live agent session status",
+  "license": "MIT",
+  "files": [
+    "src",
+    "resources",
+    "scripts",
+    "build.sh",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "sh ./build.sh",
+    "check": "node ./scripts/check-art.mjs"
+  }
+}
