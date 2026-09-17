@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.79] - 2026-09-16
+
 ### Added
 
 - **Desktop pet** (`/pet`): an optional pixel creature that lives on your desktop and shows
@@ -9,6 +11,10 @@
   selectable from its menu. Ships as `packages/pet` with a built-in `pet` extension that can
   install, build and launch it (`/pet start`), and the tools `pet_status`, `pet_say`,
   `pet_rest`, `pet_curl`, `pet_freeze`. Opt-in: nothing runs until `/pet start`. macOS only.
+
+### Fixed
+
+- First run: correct the install commands and guard unsupported Node.js versions.
 
 ## [0.1.78] - 2026-09-07
 
