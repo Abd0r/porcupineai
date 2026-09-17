@@ -19,12 +19,12 @@
  * daemon, and quitting the pet leaves nothing running.
  */
 
-import type { ExtensionAPI } from "@porcupineai/coding-agent";
-import { Type } from "typebox";
 import { execFileSync, execSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import type { ExtensionAPI } from "@porcupineai/coding-agent";
+import { Type } from "typebox";
 
 const INSTALL_DIR = join(homedir(), ".porcupine", "agent", "pet");
 const APP = join(INSTALL_DIR, "Pet.app");
@@ -94,12 +94,19 @@ function build(): string {
 	mkdirSync(binDir, { recursive: true });
 	const tmp = process.env.TMPDIR ?? "/tmp";
 	try {
-		execFileSync("swiftc", [
-			"-O",
-			"-module-cache-path", join(homedir(), "wallpaper-lab", "mcache"),
-			"-o", join(binDir, "Pet"),
-			"main.swift", "thinkbox.swift",
-		], { cwd: INSTALL_DIR, env: { ...process.env, TMPDIR: tmp }, stdio: "pipe", timeout: 300_000 });
+		execFileSync(
+			"swiftc",
+			[
+				"-O",
+				"-module-cache-path",
+				join(homedir(), "wallpaper-lab", "mcache"),
+				"-o",
+				join(binDir, "Pet"),
+				"main.swift",
+				"thinkbox.swift",
+			],
+			{ cwd: INSTALL_DIR, env: { ...process.env, TMPDIR: tmp }, stdio: "pipe", timeout: 300_000 },
+		);
 	} catch (err) {
 		const e = err as { stderr?: Buffer; message?: string };
 		const detail = e.stderr ? e.stderr.toString().split("\n").slice(0, 4).join(" | ") : e.message;
@@ -108,7 +115,9 @@ function build(): string {
 	// a minimal bundle so macOS treats it as an app rather than a bare executable
 	const info = join(APP, "Contents", "Info.plist");
 	if (!existsSync(info)) {
-		writeFileSync(info, `<?xml version="1.0" encoding="UTF-8"?>
+		writeFileSync(
+			info,
+			`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>CFBundleName</key><string>Porcupine Pet</string>
@@ -117,7 +126,8 @@ function build(): string {
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSUIElement</key><false/>
 </dict></plist>
-`);
+`,
+		);
 	}
 	return `Built the pet in ${INSTALL_DIR}.`;
 }
@@ -171,7 +181,8 @@ export default function (porcupine: ExtensionAPI) {
 	porcupine.registerTool({
 		name: "pet_status",
 		label: "Pet status",
-		description: "Report whether the desktop pet is installed, running, which species, and what it knows about the screen.",
+		description:
+			"Report whether the desktop pet is installed, running, which species, and what it knows about the screen.",
 		parameters: Type.Object({}),
 		async execute() {
 			return { content: [{ type: "text", text: summary() }], details: {} };
@@ -181,49 +192,77 @@ export default function (porcupine: ExtensionAPI) {
 	porcupine.registerTool({
 		name: "pet_say",
 		label: "Pet say",
-		description: "Make the desktop pet speak: it opens its pixel think box showing live session status. No-op if the pet is not running.",
+		description:
+			"Make the desktop pet speak: it opens its pixel think box showing live session status. No-op if the pet is not running.",
 		parameters: Type.Object({}),
 		async execute() {
-			if (!running()) return { content: [{ type: "text", text: "The pet is not running. /pet start will build and launch it." }], details: { spoke: false } };
+			if (!running())
+				return {
+					content: [{ type: "text", text: "The pet is not running. /pet start will build and launch it." }],
+					details: { spoke: false },
+				};
 			const ok = signal("speak-request");
-			return { content: [{ type: "text", text: ok ? "The pet is speaking." : "Could not reach the pet." }], details: { spoke: ok } };
+			return {
+				content: [{ type: "text", text: ok ? "The pet is speaking." : "Could not reach the pet." }],
+				details: { spoke: ok },
+			};
 		},
 	});
 
 	porcupine.registerTool({
 		name: "pet_rest",
 		label: "Pet rest",
-		description: "Send the pet to rest: the porcupine walks to a corner, curls into a ball and eats; the macaw perches on a plank it materialises.",
+		description:
+			"Send the pet to rest: the porcupine walks to a corner, curls into a ball and eats; the macaw perches on a plank it materialises.",
 		parameters: Type.Object({}),
 		async execute() {
-			if (!running()) return { content: [{ type: "text", text: "The pet is not running." }], details: { rested: false } };
+			if (!running())
+				return { content: [{ type: "text", text: "The pet is not running." }], details: { rested: false } };
 			const ok = signal("rest-request");
-			return { content: [{ type: "text", text: ok ? "The pet is heading off to rest." : "Could not reach the pet." }], details: { rested: ok } };
+			return {
+				content: [{ type: "text", text: ok ? "The pet is heading off to rest." : "Could not reach the pet." }],
+				details: { rested: ok },
+			};
 		},
 	});
 
 	porcupine.registerTool({
 		name: "pet_curl",
 		label: "Pet curl",
-		description: "Startle the pet: the porcupine curls up, the macaw ruffles. Useful when something the agent did failed or was blocked.",
+		description:
+			"Startle the pet: the porcupine curls up, the macaw ruffles. Useful when something the agent did failed or was blocked.",
 		parameters: Type.Object({}),
 		async execute() {
-			if (!running()) return { content: [{ type: "text", text: "The pet is not running." }], details: { curled: false } };
+			if (!running())
+				return { content: [{ type: "text", text: "The pet is not running." }], details: { curled: false } };
 			const ok = signal("curl-request");
-			return { content: [{ type: "text", text: ok ? "The pet is startled." : "Could not reach the pet." }], details: { curled: ok } };
+			return {
+				content: [{ type: "text", text: ok ? "The pet is startled." : "Could not reach the pet." }],
+				details: { curled: ok },
+			};
 		},
 	});
 
 	porcupine.registerTool({
 		name: "pet_freeze",
 		label: "Pet freeze",
-		description: "Park the pet where it is, or let it roam again. Useful before screenshots or when it is in the way.",
-		parameters: Type.Object({ frozen: Type.Boolean({ description: "true parks the pet, false lets it move again" }) }),
+		description:
+			"Park the pet where it is, or let it roam again. Useful before screenshots or when it is in the way.",
+		parameters: Type.Object({
+			frozen: Type.Boolean({ description: "true parks the pet, false lets it move again" }),
+		}),
 		async execute(_id, params) {
-			if (!installed()) return { content: [{ type: "text", text: "The pet is not installed." }], details: { frozen: params.frozen } };
+			if (!installed())
+				return {
+					content: [{ type: "text", text: "The pet is not installed." }],
+					details: { frozen: params.frozen },
+				};
 			if (params.frozen) signal("motion-freeze");
 			else rmSync(join(INSTALL_DIR, "motion-freeze"), { force: true });
-			return { content: [{ type: "text", text: `The pet is now ${params.frozen ? "parked" : "roaming"}.` }], details: { frozen: params.frozen } };
+			return {
+				content: [{ type: "text", text: `The pet is now ${params.frozen ? "parked" : "roaming"}.` }],
+				details: { frozen: params.frozen },
+			};
 		},
 	});
 
@@ -256,15 +295,24 @@ export default function (porcupine: ExtensionAPI) {
 					return;
 				}
 				case "say":
-					if (!signal("speak-request")) { ctx.ui.notify("The pet is not running. /pet start will launch it.", "warning"); return; }
+					if (!signal("speak-request")) {
+						ctx.ui.notify("The pet is not running. /pet start will launch it.", "warning");
+						return;
+					}
 					ctx.ui.notify("The pet is speaking.", "info");
 					return;
 				case "rest":
-					if (!signal("rest-request")) { ctx.ui.notify("The pet is not running.", "warning"); return; }
+					if (!signal("rest-request")) {
+						ctx.ui.notify("The pet is not running.", "warning");
+						return;
+					}
 					ctx.ui.notify("The pet is going to rest.", "info");
 					return;
 				case "curl":
-					if (!signal("curl-request")) { ctx.ui.notify("The pet is not running.", "warning"); return; }
+					if (!signal("curl-request")) {
+						ctx.ui.notify("The pet is not running.", "warning");
+						return;
+					}
 					ctx.ui.notify("The pet is startled.", "info");
 					return;
 				case "freeze":
@@ -276,7 +324,10 @@ export default function (porcupine: ExtensionAPI) {
 					ctx.ui.notify("The pet is moving again.", "info");
 					return;
 				default:
-					ctx.ui.notify(`Unknown subcommand: ${sub}. Try status, start, install, spawn, quit, say, rest, curl, freeze, unfreeze.`, "warning");
+					ctx.ui.notify(
+						`Unknown subcommand: ${sub}. Try status, start, install, spawn, quit, say, rest, curl, freeze, unfreeze.`,
+						"warning",
+					);
 			}
 		},
 	});
