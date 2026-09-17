@@ -1,6 +1,6 @@
 {
   "name": "@porcupineai/pet",
-  "version": "0.1.78",
+  "version": "0.1.79",
   "private": true,
   "type": "module",
   "description": "Porcupine Pet: a desktop pet that reports live agent session status",
