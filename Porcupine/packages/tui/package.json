@@ -37,8 +37,8 @@
 	},
 	"types": "./dist/index.d.ts",
 	"dependencies": {
-		"get-east-asian-width": "1.6.0",
-		"marked": "18.0.5"
+		"get-east-asian-width": "1.7.0",
+		"marked": "18.0.13"
 	},
 	"devDependencies": {
 		"@xterm/headless": "5.5.0",
