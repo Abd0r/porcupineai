@@ -86,6 +86,29 @@ export const APPEARANCE_STYLES = `
 :root[data-theme="pixel"] .welcome h1::after { content: " ▮"; color: var(--accent); }
 :root[data-theme="pixel"] .message.user { border: var(--unit) solid var(--line); }
 :root[data-theme="pixel"] .chat-backdrop { image-rendering: pixelated; }
+/* Pixel: hard edges everywhere, stepped motion, blocky depth. */
+:root[data-theme="pixel"] *, :root[data-theme="pixel"] *::before, :root[data-theme="pixel"] *::after {
+  border-radius: 0 !important;
+  backdrop-filter: none !important;
+  transition-timing-function: steps(3, end) !important;
+  animation-timing-function: steps(6, end) !important;
+}
+:root[data-theme="pixel"] .goal-card,
+:root[data-theme="pixel"] .settings-dialog,
+:root[data-theme="pixel"] .composer-wrap { box-shadow: 4px 4px 0 var(--line-soft) !important; }
+:root[data-theme="pixel"] .scene-canvas,
+:root[data-theme="pixel"] .chat-backdrop,
+:root[data-theme="pixel"] canvas,
+:root[data-theme="pixel"] img { image-rendering: pixelated; }
+:root[data-theme="pixel"] .ring-fill { stroke-linecap: butt; }
+:root[data-theme="pixel"] .dot,
+:root[data-theme="pixel"] .goal-dot,
+:root[data-theme="pixel"] .activity .orb,
+:root[data-theme="pixel"] #send { border-radius: 0 !important; }
+:root[data-theme="pixel"] .goal-kicker,
+:root[data-theme="pixel"] .caption,
+:root[data-theme="pixel"] .activity-label { letter-spacing: .14em; text-transform: uppercase; }
+:root[data-theme="pixel"] .message.user { box-shadow: 4px 4px 0 var(--line-soft); }
 
 #send { width: var(--s7); height: var(--s7); padding: 0; display: grid; place-items: center; border-radius: 50%; }
 #send svg, .settings-trigger svg { width: var(--icon-size); height: var(--icon-size); }
