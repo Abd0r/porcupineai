@@ -195,6 +195,9 @@ function loadRenderer(): {
 			if (!element) throw new Error(`Unknown test element: ${id}`);
 			return element;
 		},
+		createElementNS(_namespace: string, tagName: string): FakeElement {
+			return new FakeElement(tagName, canvasContext);
+		},
 		createElement(tagName: string): FakeElement {
 			return new FakeElement(tagName, canvasContext);
 		},

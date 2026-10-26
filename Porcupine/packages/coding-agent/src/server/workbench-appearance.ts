@@ -129,6 +129,7 @@ export const APPEARANCE_STYLES = `
 .settings-section p { color: var(--muted); margin: 0 0 var(--s4); font-size: var(--small); }
 .settings-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--s4); }
 .settings-grid label { display: grid; gap: var(--s2); font-size: var(--small); color: var(--muted); }
+.settings-grid input[type="number"] { width: 100%; background: var(--surface); color: var(--text); border: var(--unit) solid var(--line); border-radius: var(--r1); padding: var(--s2); font: inherit; }
 .settings-grid select { width: 100%; background: var(--surface); color: var(--text); border: var(--unit) solid var(--line); border-radius: var(--r1); padding: var(--s2); }
 .settings-divider { height: var(--unit); background: var(--line-soft); margin: var(--s6) 0; }
 .file-picker { display: inline-block; padding: var(--s2) var(--s3); border: var(--unit) solid var(--line); border-radius: var(--r1); cursor: pointer; font-size: var(--small); }

@@ -314,6 +314,34 @@ try {
 	}
 	await page.waitForFunction(() => document.getElementById("subagent-list")?.children.length === 2);
 	await shot(page, "08b Sub-agent activity.png");
+	const rich = [
+		"## Method",
+		"",
+		"Capacity fade from the supplied log, computed with `eta = P / (I * A)`:",
+		"",
+		"```ts",
+		"const eta = power / (irradiance * area);",
+		'if (!Number.isFinite(eta)) throw new Error("invalid measurement");',
+		"```",
+		"",
+		"| Cycle | Capacity (mAh) |",
+		"| --- | --- |",
+		"| 0 | 3200 |",
+		"| 200 | 3066 |",
+		"",
+		"Inline math $\\eta = \\frac{P}{I \\cdot A}$ and a display equation:",
+		"",
+		"$$\\Delta C = C_0 - C_{200} = 134\\,\\text{mAh}$$",
+		"",
+		"> Uncertainty is quoted as supplied; nothing here is extrapolated.",
+	].join("\n");
+	emit({ type: "message_end", message: { role: "assistant", content: rich } });
+	await page.locator(".rich .code-block").first().waitFor();
+	await page
+		.locator(".rich")
+		.last()
+		.evaluate((element) => element.scrollIntoView({ block: "start" }));
+	await shot(page, "08c Rich text, code, table and LaTeX.png");
 	emit({
 		type: "permission_request",
 		permissionId: "perm-demo",
@@ -353,6 +381,8 @@ try {
 			await page.locator("#appearance-theme").waitFor();
 		}
 	}
+	await page.locator("#limits-title").evaluate((element) => element.scrollIntoView({ block: "start" }));
+	await shot(page, "11b Settings session limits.png");
 	await page.locator("#appearance-theme").selectOption("workbench");
 	await page.locator("#appearance-mode").selectOption("dark");
 	await page.getByRole("combobox", { name: "Context file", exact: true }).selectOption("global:USER.md");
