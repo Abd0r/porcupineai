@@ -109,10 +109,10 @@ export const SESSION_NAVIGATION_STYLES = `
 }
 @media(max-width:700px) { .model-label { display: none; } .session-controls { gap: var(--s1) var(--s2); } .compose-options > .hint { display: none; } }
 
-.goal-stack { display: grid; gap: var(--s2); min-width: 0; }
-.goal-stack .goal-card { position: static; width: auto; max-height: 40dvh; }
+.goal-stack { position: absolute; top: calc(var(--s9) + var(--s2)); right: var(--s4); z-index: 6; display: grid; gap: var(--s2); width: 292px; max-height: calc(100dvh - var(--s9) - var(--s5)); overflow: auto; }
+.goal-stack .goal-card { position: static; width: auto; max-height: none; }
 .subagent-card { position: static; }
-@media (max-width: 1080px) { .goal-stack { display: none; } }
+@media (max-width: 1080px) { .goal-stack { position: static; width: auto; max-height: none; margin: var(--s4) var(--s5) 0; } }
 `;
 export const SESSION_NAVIGATION_SCRIPT = `
 let modelScope='session',modelCache=null;

@@ -41,7 +41,6 @@ ${PROJECTS_STYLES}
 <aside class="sidebar" aria-label="Conversations">
 <div class="brand"><span>Porcupine</span><span class="edition">Local</span></div>
 <button class="new-session" id="new-session" type="button">＋ New conversation</button>
-<div class="goal-stack">${GOAL_CARD}${SUBAGENT_CARD}</div>
 ${STACKS_NAVIGATION}
 ${PROJECTS_NAVIGATION}
 <div><p class="caption">Recent sessions</p><nav class="sessions" id="sessions" aria-label="Recent sessions"></nav></div>
@@ -49,6 +48,7 @@ ${PROJECTS_NAVIGATION}
 </aside>
 <main class="main">
 <header class="topbar"><button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-expanded="true" title="Toggle sidebar (Ctrl/Cmd+B)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4v16"/></svg></button><strong id="session-title">Workbench</strong><div class="topbar-actions"><div class="status" aria-live="polite"><span id="status-text">Ready</span></div><button class="settings-trigger" id="settings-open" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></button></div></header>
+<div class="goal-stack">${GOAL_CARD}${SUBAGENT_CARD}</div>
 <section class="content" aria-label="Conversation">
 <div class="welcome" id="welcome"><h1>Where shall we begin?</h1><p>A question, an idea, or something to work through.</p></div>
 <div class="feed-stage"><div class="chat-backdrop" id="chat-backdrop" aria-hidden="true"></div><div class="feed" id="feed" aria-live="polite" aria-relevant="additions text"></div></div>
