@@ -43,7 +43,12 @@ const NONE: readonly string[] = [
  * Prompt block describing the active client. Deterministic so prompt caching
  * stays effective and the same surface always produces the same wording.
  */
-export function buildSurfaceContext(surface: ClientSurface): string {
+export interface SurfaceFacts {
+	maxSubagents?: number;
+	compactAtPercent?: number;
+}
+
+export function buildSurfaceContext(surface: ClientSurface, facts?: SurfaceFacts): string {
 	const body = surface === "web" ? WEB : surface === "none" ? NONE : TUI;
 	const lines = [
 		SURFACE_CONTEXT_HEADER,
@@ -52,6 +57,16 @@ export function buildSurfaceContext(surface: ClientSurface): string {
 		"",
 		"The user can switch clients at any time, even while you work. When that happens you receive a [Surface switch] notice stating which client is now active; re-read the capabilities above before answering.",
 		"",
+		...(facts && (facts.maxSubagents !== undefined || facts.compactAtPercent !== undefined)
+			? [
+					"Current limits (from settings, applied automatically):",
+					...(facts.compactAtPercent !== undefined
+						? [`- Compaction runs near ${facts.compactAtPercent}% of the context window.`]
+						: []),
+					...(facts.maxSubagents !== undefined ? [`- At most ${facts.maxSubagents} sub-agents run at once.`] : []),
+					"",
+				]
+			: []),
 		"Shared:",
 		...SHARED.map((line) => `- ${line}`),
 	];

@@ -1640,7 +1640,18 @@ export class AgentSession {
 
 		const loaderSystemPrompt = this._resourceLoader.getSystemPrompt();
 		const loaderAppendSystemPrompt = this._resourceLoader.getAppendSystemPrompt();
-		const appendParts = [...loaderAppendSystemPrompt, buildSurfaceContext(this._clientSurface)];
+		const window = this.model?.contextWindow ?? 0;
+		const reserve =
+			this.settingsManager.getCompactionSettings().reserveTokens ?? (window > 0 ? Math.round(window * 0.2) : 0);
+		const appendParts = [
+			...loaderAppendSystemPrompt,
+			buildSurfaceContext(this._clientSurface, {
+				maxSubagents: this.settingsManager.getSubagentSettings().maxConcurrent,
+				...(window > 0 && reserve > 0
+					? { compactAtPercent: Math.max(1, Math.min(99, Math.round(((window - reserve) / window) * 100))) }
+					: {}),
+			}),
+		];
 		const appendSystemPrompt = appendParts.join("\n\n");
 		const loadedSkills = this._resourceLoader.getSkills().skills;
 		const loadedContextFiles = this._resourceLoader.getAgentsFiles().agentsFiles;

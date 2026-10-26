@@ -26,6 +26,13 @@ describe("surface-aware context", () => {
 		expect(block).toContain("render nowhere");
 	});
 
+	it("states the current limits so the agent adapts to settings", () => {
+		const block = buildSurfaceContext("web", { maxSubagents: 2, compactAtPercent: 80 });
+		expect(block).toContain("Compaction runs near 80%");
+		expect(block).toContain("At most 2 sub-agents");
+		expect(buildSurfaceContext("web")).not.toContain("Current limits");
+	});
+
 	it("is deterministic so the prompt cache stays effective", () => {
 		expect(buildSurfaceContext("web")).toBe(buildSurfaceContext("web"));
 	});
