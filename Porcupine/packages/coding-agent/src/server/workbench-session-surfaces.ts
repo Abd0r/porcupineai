@@ -164,3 +164,12 @@ export function createSessionSurfaces(session: AgentSession) {
 	};
 }
 export type SessionSurfaces = ReturnType<typeof createSessionSurfaces>;
+
+export interface SurfaceControl {
+	setClientSurface?(surface: "tui" | "web" | "none"): void;
+}
+
+export interface GoalPlanSurfaces {
+	getGoalPlan(): unknown;
+	onGoalPlanChange(listener: (view: unknown) => void): () => void;
+}

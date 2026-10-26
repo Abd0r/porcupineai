@@ -16,6 +16,25 @@ export async function handleSessionSurfaceRequest(
 	method: string,
 	router: SurfaceRouter,
 ): Promise<boolean> {
+	const goalMatch = /^\/session\/([^/]+)\/goal-plan$/.exec(url.pathname);
+	if (goalMatch) {
+		const target = router.getSession(goalMatch[1]!);
+		if (!target) {
+			router.json(res, 404, { error: "No such session" });
+			return true;
+		}
+		if (!target.getGoalPlan) {
+			router.json(res, 200, { supported: false });
+			return true;
+		}
+		if (method !== "GET") {
+			res.setHeader("allow", "GET");
+			router.json(res, 405, { error: "Goals are set by the agent's goal tool, not by client commands" });
+			return true;
+		}
+		router.json(res, 200, { supported: true, ...(target.getGoalPlan() as object) });
+		return true;
+	}
 	const match = /^\/session\/([^/]+)\/(controls|catalog)(?:\/(skills|tools)\/([^/]+))?$/.exec(url.pathname);
 	if (!match) return false;
 	const session = router.getSession(match[1]!);

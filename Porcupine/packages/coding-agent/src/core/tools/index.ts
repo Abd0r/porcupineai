@@ -316,7 +316,11 @@ import {
 	createRemindMeToolDefinition,
 	type RemindMeToolOptions,
 } from "../../porcupine/remind-me-tool.ts";
+import { createGoalTool, createGoalToolDefinition, type GoalToolOptions } from "./goal.ts";
 import { createPlanTool, createPlanToolDefinition, type PlanToolOptions } from "./plan.ts";
+
+export { createGoalTool, createGoalToolDefinition, type GoalToolDetails, type GoalToolInput } from "./goal.ts";
+
 import {
 	createSendToSubagentToolDefinition,
 	createStopSubagentToolDefinition,
@@ -363,6 +367,7 @@ export type ToolName =
 	| "memory"
 	| "session_search"
 	| "plan"
+	| "goal"
 	| "tasks"
 	| "projects"
 	| "literature"
@@ -412,6 +417,7 @@ export const allToolNames: Set<ToolName> = new Set([
 	"memory",
 	"session_search",
 	"plan",
+	"goal",
 	"tasks",
 	"projects",
 	"literature",
@@ -460,6 +466,7 @@ export interface ToolsOptions {
 	memory?: MemoryToolOptions;
 	session_search?: SessionSearchToolOptions;
 	plan?: PlanToolOptions;
+	goal?: GoalToolOptions;
 	tasks?: TasksToolOptions;
 	remind?: RemindMeToolOptions;
 	projects?: ProjectsToolOptions;
@@ -522,6 +529,7 @@ export function createCodingToolDefinitions(cwd: string, options?: ToolsOptions)
 		createProjectsToolDefinition(options?.projects),
 		createSessionSearchToolDefinition({ cwd, ...options?.session_search }),
 		createPlanToolDefinition(options?.plan),
+		createGoalToolDefinition(options?.goal),
 		createTasksToolDefinition(options?.tasks),
 		createRemindMeToolDefinition(options?.remind),
 		createLiteratureToolDefinition(options?.literature),
@@ -583,6 +591,7 @@ export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): R
 		projects: createProjectsToolDefinition(options?.projects),
 		session_search: createSessionSearchToolDefinition({ cwd, ...options?.session_search }),
 		plan: createPlanToolDefinition(options?.plan),
+		goal: createGoalToolDefinition(options?.goal),
 		tasks: createTasksToolDefinition(options?.tasks),
 		remind_me: createRemindMeToolDefinition(options?.remind),
 		literature: createLiteratureToolDefinition(options?.literature),
@@ -641,6 +650,7 @@ export function createCodingTools(cwd: string, options?: ToolsOptions): Tool[] {
 		createProjectsTool(options?.projects),
 		createSessionSearchTool({ cwd, ...options?.session_search }),
 		createPlanTool(options?.plan),
+		createGoalTool(options?.goal),
 		createTasksTool(options?.tasks),
 		createRemindMeTool(options?.remind),
 		createLiteratureTool(options?.literature),
@@ -702,6 +712,7 @@ export function createAllTools(cwd: string, options?: ToolsOptions): Record<Tool
 		projects: createProjectsTool(options?.projects),
 		session_search: createSessionSearchTool({ cwd, ...options?.session_search }),
 		plan: createPlanTool(options?.plan),
+		goal: createGoalTool(options?.goal),
 		tasks: createTasksTool(options?.tasks),
 		remind_me: createRemindMeTool(options?.remind),
 		literature: createLiteratureTool(options?.literature),

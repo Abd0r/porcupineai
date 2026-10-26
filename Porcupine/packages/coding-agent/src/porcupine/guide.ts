@@ -57,7 +57,7 @@ const GUIDE_TOPICS: readonly GuideTopic[] = [
 		summary: "These commands solve different problems. Choose the smallest one that fits.",
 		steps: [
 			"Use /plan <objective> for an inspection-only implementation plan saved as Markdown.",
-			"Use /goal <objective> for a bounded, persistent session goal.",
+			"The agent declares its own goal with the goal tool and tracks each step to evidence; there is no /goal command.",
 			"Use /task for durable local work items. Use /cron only for an open, idle session, never as a daemon.",
 		],
 		docs: ["docs/usage.md", "docs/sessions.md"],

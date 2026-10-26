@@ -38,10 +38,10 @@ import type { ContextFileStore } from "./workbench-context-files.ts";
 import type { WorkbenchProjectStore } from "./workbench-projects.ts";
 import { handleProjectRequest } from "./workbench-projects-api.ts";
 import { handleSessionSurfaceRequest } from "./workbench-session-api.ts";
-import type { SessionSurfaces } from "./workbench-session-surfaces.ts";
+import type { GoalPlanSurfaces, SessionSurfaces, SurfaceControl } from "./workbench-session-surfaces.ts";
 
 /** Minimal session surface the HTTP API drives. */
-export interface ServeApiSession extends Partial<SessionSurfaces> {
+export interface ServeApiSession extends Partial<SessionSurfaces>, Partial<GoalPlanSurfaces>, Partial<SurfaceControl> {
 	readonly id: string;
 	sendUserMessage(text: string): Promise<void>;
 	abort(): Promise<void>;
@@ -140,6 +140,8 @@ interface SessionEndpoint {
 	eventListeners: Set<(event: unknown) => void>;
 	unsubscribeConfirm: () => void;
 	unsubscribeEvents: () => void;
+	unsubscribeGoalPlan: () => void;
+	webAttached: number;
 }
 
 export function createServeApi(options: ServeApiOptions): ServeApiHandle {
@@ -201,6 +203,8 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			eventListeners: new Set<(event: unknown) => void>(),
 			unsubscribeConfirm: () => {},
 			unsubscribeEvents: () => {},
+			unsubscribeGoalPlan: () => {},
+			webAttached: 0,
 		};
 
 		endpoint.unsubscribeConfirm = sessionToRegister.onConfirm((permission, respond) => {
@@ -230,6 +234,14 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				writeSse(client, `data: ${serialized}\n\n`, endpoint.sseClients);
 			}
 		});
+
+		endpoint.unsubscribeGoalPlan =
+			sessionToRegister.onGoalPlanChange?.((view) => {
+				const serialized = JSON.stringify({ type: "goal_plan", status: view });
+				for (const client of Array.from(endpoint.sseClients)) {
+					writeSse(client, `data: ${serialized}\n\n`, endpoint.sseClients);
+				}
+			}) ?? (() => {});
 
 		allSessions.set(sessionToRegister.id, endpoint);
 		return endpoint;
@@ -431,7 +443,11 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					entry.sseClients,
 				);
 				entry.sseClients.add(res);
-				const onClose = () => entry.sseClients.delete(res);
+				if (entry.webAttached++ === 0) entry.session.setClientSurface?.("web");
+				const onClose = () => {
+					entry.sseClients.delete(res);
+					if (entry.webAttached > 0 && --entry.webAttached === 0) entry.session.setClientSurface?.("none");
+				};
 				req.on("close", onClose);
 				res.on("close", onClose);
 				return;
@@ -633,6 +649,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			for (const entry of allSessions.values()) {
 				entry.unsubscribeConfirm();
 				entry.unsubscribeEvents();
+				entry.unsubscribeGoalPlan();
 			}
 			for (const entry of allSessions.values()) {
 				for (const client of entry.sseClients) client.end();

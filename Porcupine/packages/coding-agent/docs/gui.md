@@ -42,13 +42,15 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 | Projects | Canonical `Project/<name>/` workspaces from the [project-hygiene](../../skills/meta/project-hygiene/SKILL.md) layout. Browse supported documents, preview text, and create a new project with README.md plus STATUS.md. | Local files; nothing is deleted |
 | Project uploads | PNG, JPEG, WebP, GIF, PDF, ZIP and text formats up to 12 MiB, written to `Project/<name>/uploads/` with `-2`, `-3` suffixes instead of overwriting. Filenames cannot contain directories. | Local files |
 | Settings · context files | Inspect and edit the allowlisted Markdown documents only: global `AGENTS.md`, `CLAUDE.md`, `USER.md`, `MEMORY.md`, `PERSONALITY.md`, `PROMPT.md`, `SYSTEM.md`, `APPEND_SYSTEM.md`, `APPEND_PROMPT.md`, plus workspace `AGENTS.md` and `CLAUDE.md`. Edits use a revision hash and are rejected if the agent changed the file in between. Symlinks are refused. | `~/.porcupine/agent/` and the workspace |
+| Goal tracker | Top-left card showing the agent's tracked goal, its steps and their real status, plus the Plan-fence indicator. Goals are declared by the agent with the `goal` tool; there is no `/goal` command on either surface. | Session entry shared with the terminal |
 | Reasoning and Autonomy | Composer selectors read and write the session's real reasoning mode and Ask/Normal/Auto interaction mode. They are disabled while a turn is running. The available reasoning modes come from the active model. | Session |
 | Plan | A real fence: while on, mutating tools are blocked for subsequent turns. It is not a saved plan artifact. | Session |
 | Appearance | Five themes (Workbench, Pixel, Cyberpunk, Static monochrome, Tokyo Night), dark/light/system colour mode, and a local chat background with opacity. Images stay in this browser (IndexedDB) and are never sent to the model. | Browser only |
 
 ### Known limits
 
-- The `/goal` autonomous loop and `/plan` artifact writer still live in the terminal client. The browser exposes the plan fence but not goal turn budgeting or plan files; no button pretends otherwise.
+- Goals are agent-declared and tracked on both surfaces; there is no `/goal` command. The `/plan` artifact writer still lives in the terminal client, so the browser shows the fence without writing plan files.
+- The agent is told which surface is active and receives a `[Surface switch]` notice when a client attaches or detaches. Switching mid-turn informs the next turn, not the turn already running.
 - Conversations are not yet attached to Project folders. Project documents are browsable, but a chat is not grouped under its project.
 - Edits to `USER.md`, `MEMORY.md` and other context files take effect for future turns after reload; the UI states this instead of implying an active turn changed.
 - Background upload sets a decorative image only. It is not a scientific figure and is never referenced in prompts.

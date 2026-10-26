@@ -58,10 +58,12 @@ import {
 	classifyAdaptiveReasoning,
 } from "../porcupine/adaptive-reasoning.ts";
 import { guardBashCommand } from "../porcupine/auto-mode.ts";
+import { GOAL_SESSION_ENTRY, type GoalRecord, isGoalRecord } from "../porcupine/goal-record.ts";
 import { classifyLazyToolActivation, resolveLazyToolActivation } from "../porcupine/lazy-tool-activation.ts";
 import { classifyPlanTurnTool } from "../porcupine/plan-fence.ts";
 import { createRepeatToolGuard } from "../porcupine/repeat-tool-guard.ts";
 import { persistSubagentSession } from "../porcupine/subagent-sessions.ts";
+import { buildSurfaceContext, type ClientSurface } from "../porcupine/surface-context.ts";
 import { createComposedToolDefinition, listToolPolicies } from "../porcupine/tool-policy.ts";
 import { pruneToolResultContent } from "../porcupine/tool-result-pruner.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
@@ -177,6 +179,8 @@ export type AgentSessionEvent =
 			willRetry: boolean;
 	  }
 	| { type: "agent_settled" }
+	| { type: "goal_changed"; goal?: GoalRecord }
+	| { type: "surface_changed"; surface: ClientSurface }
 	| {
 			type: "queue_update";
 			steering: readonly string[];
@@ -231,6 +235,8 @@ export interface AgentSessionConfig {
 	sessionManager: SessionManager;
 	settingsManager: SettingsManager;
 	cwd: string;
+	/** Active client surface. Serve mode sets "web"; interactive defaults to "tui". */
+	clientSurface?: ClientSurface;
 	/** Models to cycle through with Ctrl+P (from --models flag) */
 	scopedModels?: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel }>;
 	/** Resource loader for extensions, skills, prompts, themes, context files, and system prompt */
@@ -379,6 +385,7 @@ export class AgentSession {
 	private _interactionMode: "ask" | "normal" | "auto";
 	/** Inspection-only fence for built-in /plan draft turns. */
 	private _planFenceActive = false;
+	private _clientSurface: ClientSurface;
 
 	// Sub-agent runtime state (concurrent up to subagent.maxConcurrent).
 	private _activeSubagentRuns = 0;
@@ -774,6 +781,7 @@ export class AgentSession {
 		this.sessionManager = config.sessionManager;
 		this.settingsManager = config.settingsManager;
 		this._interactionMode = this.settingsManager.getDefaultInteractionMode();
+		this._clientSurface = config.clientSurface ?? "tui";
 		this._scopedModels = config.scopedModels ?? [];
 		this._resourceLoader = config.resourceLoader;
 		this._customTools = config.customTools ?? [];
@@ -1632,8 +1640,8 @@ export class AgentSession {
 
 		const loaderSystemPrompt = this._resourceLoader.getSystemPrompt();
 		const loaderAppendSystemPrompt = this._resourceLoader.getAppendSystemPrompt();
-		const appendSystemPrompt =
-			loaderAppendSystemPrompt.length > 0 ? loaderAppendSystemPrompt.join("\n\n") : undefined;
+		const appendParts = [...loaderAppendSystemPrompt, buildSurfaceContext(this._clientSurface)];
+		const appendSystemPrompt = appendParts.join("\n\n");
 		const loadedSkills = this._resourceLoader.getSkills().skills;
 		const loadedContextFiles = this._resourceLoader.getAgentsFiles().agentsFiles;
 		// Auto Mode is derived from the canonical interaction mode: `/auto` and
@@ -2453,6 +2461,42 @@ export class AgentSession {
 	}
 
 	/** Enable or disable the inspection-only plan-turn fence. */
+	/** Which client is in front of the user. Drives the surface prompt block. */
+	get clientSurface(): ClientSurface {
+		return this._clientSurface;
+	}
+
+	/**
+	 * Switch surfaces (a client attached, detached or took over) and rebuild the
+	 * prompt. The agent is also told explicitly, because a turn already in flight
+	 * keeps the prompt it started with.
+	 */
+	setClientSurface(surface: ClientSurface): void {
+		if (surface === this._clientSurface) return;
+		const previous = this._clientSurface;
+		this._clientSurface = surface;
+		this._baseSystemPrompt = this._rebuildSystemPrompt(this.getActiveToolNames());
+		this.agent.state.systemPrompt = this._systemPromptOverride ?? this._baseSystemPrompt;
+		this._recordSystemPromptIfChanged("surface");
+		this._emit({ type: "surface_changed", surface });
+		void this.sendCustomMessage(
+			{
+				customType: "porcupine.surface-switch",
+				content: [
+					`[Surface switch] ${previous} -> ${surface}.`,
+					surface === "web"
+						? "The browser workbench is now active: diagrams, charts and 3D scenes render there."
+						: surface === "tui"
+							? "The terminal client is now active: text only, no visuals."
+							: "No client is attached: write output that survives being logged.",
+					"Do not claim capabilities of the previous surface.",
+				].join("\n"),
+				display: false,
+			},
+			{ deliverAs: "nextTurn" },
+		);
+	}
+
 	/** Whether the inspection-only plan fence is currently blocking mutating tools. */
 	get planFenceActive(): boolean {
 		return this._planFenceActive;
@@ -3500,6 +3544,11 @@ export class AgentSession {
 					]),
 				)
 			: createAllToolDefinitions(this._cwd, {
+					goal: {
+						load: () => this.getGoal(),
+						persist: (goal) => this.persistGoal(goal),
+						onChange: (goal) => this._emit({ type: "goal_changed", ...(goal ? { goal } : {}) }),
+					},
 					read: { autoResizeImages },
 					bash: { commandPrefix: shellCommandPrefix, shellPath, commandGuard, operations: bashOperations },
 					edit: { confirmMutation },
@@ -4312,6 +4361,26 @@ export class AgentSession {
 	}
 
 	// =========================================================================
+	// Goal tracking
+	// =========================================================================
+
+	/** The agent-declared goal for this session, restored from the session log. */
+	getGoal(): GoalRecord | undefined {
+		for (const entry of this.sessionManager.getBranch().slice().reverse()) {
+			if (entry.type !== "custom" || entry.customType !== GOAL_SESSION_ENTRY) continue;
+			return isGoalRecord(entry.data) ? entry.data : undefined;
+		}
+		return undefined;
+	}
+
+	private persistGoal(goal: GoalRecord | undefined): void {
+		if (goal) {
+			this.sessionManager.appendCustomEntry(GOAL_SESSION_ENTRY, goal);
+			return;
+		}
+		this.sessionManager.appendCustomEntry(GOAL_SESSION_ENTRY, null);
+	}
+
 	// Utilities
 	// =========================================================================
 

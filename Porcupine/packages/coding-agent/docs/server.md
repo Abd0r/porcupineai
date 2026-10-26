@@ -162,7 +162,7 @@ curl -sN $BASE/session/$SID/events -H "$AUTH"
 
 The interactive session ships session-local, attended reminders. They are
 honest about scope: a reminder (`/remind <duration> <text>`, the model-facing
-`remind_me` tool, or `/goal remind <duration>`) fires only while the
+`remind_me` tool) fires only while the
 interactive session is open and idle, and is delivered through the same
 chat-bridge notification fan-out as completed task runs. It is not a daemon
 and does not run on a closed terminal. Firing is gated on the exact idle
@@ -170,4 +170,3 @@ drain eligibility the task scheduler uses; while the session is busy or
 closed, a due reminder simply waits to be delivered on a later idle tick.
 
 Reminders persist as session custom entries, so they survive `/resume`.
-Goal nudges re-fire the standing goal's status back through the same path.

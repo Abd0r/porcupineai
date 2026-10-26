@@ -35,7 +35,49 @@ export const APPEARANCE_STYLES = `
 :root[data-theme="tokyo-night"][data-colour-mode="light"] { --bg: #e6e8f0; --sidebar: #dfe2ee; --surface: #d5dbea; --surface-hover: #c7cfe2; --canvas: #edf0f7; --text: #343b58; --muted: #4c577c; --quiet: #596587; --accent: #34548a; --plot-text: #343b58; --plot-label: #4c577c; --plot-grid: #cdd3e2; --plot-axis: #6d7b9d; }
 :root[data-theme="cyberpunk"][data-colour-mode="dark"] { --bg: #101018; --sidebar: #16141f; --surface: #242034; --surface-hover: #342b47; --canvas: #15131e; --text: #f0e9ff; --muted: #c6b4d9; --quiet: #a99ac2; --accent: #61e5de; --accent-ink: #101018; --plot-text: #f0e9ff; --plot-label: #c6b4d9; --plot-grid: #3b2d49; --plot-axis: #8b6da7; --r1: 0px; --r2: 2px; --r3: 4px; }
 :root[data-theme="cyberpunk"][data-colour-mode="light"] { --bg: #fcf6ff; --sidebar: #f0e7f6; --surface: #e7e0f2; --surface-hover: #ded0eb; --canvas: #fffaff; --text: #2e173f; --muted: #634b75; --quiet: #735c87; --accent: #007973; --plot-text: #2e173f; --plot-label: #634b75; --plot-grid: #e1d1eb; --plot-axis: #8b6da7; --r1: 0px; --r2: 2px; --r3: 4px; }
-:root[data-theme="pixel"] { --font: ui-monospace, "SF Mono", Consolas, monospace; --r1: 0px; --r2: 0px; --r3: 0px; }
+
+/* Pixel: a 2D retro level. Hard edges, chunky borders, block shadows, 8-bit palette. */
+:root[data-theme="pixel"] {
+  --font: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r1: 0px; --r2: 0px; --r3: 0px;
+  --unit: 2px;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+  --small: 12px; --body: 14px; --title: 16px; --hero: 24px;
+  --pixel-shadow: 4px 4px 0 var(--line-soft);
+}
+:root[data-theme="pixel"][data-colour-mode="dark"] {
+  --bg: #0f1020; --sidebar: #191b32; --surface: #222543; --surface-hover: #2d3157;
+  --canvas: #12142a; --line: #4a4f86; --line-soft: #2b2f52;
+  --text: #e8ecff; --muted: #aab2e0; --quiet: #8089bd;
+  --accent: #7bf1a8; --accent-ink: #0f1020; --danger: #ff8a8a;
+  --plot-text: #e8ecff; --plot-label: #b8c0ea; --plot-grid: #2b2f52; --plot-axis: #6d76a8;
+}
+:root[data-theme="pixel"][data-colour-mode="light"] {
+  --bg: #f4f1e8; --sidebar: #e6e1d2; --surface: #ffffff; --surface-hover: #efe9d9;
+  --canvas: #fbf8ef; --line: #2a2a2a; --line-soft: #b9b2a0;
+  --text: #1a1a1a; --muted: #4a4a4a; --quiet: #666154;
+  --accent: #1f7a4d; --accent-ink: #ffffff; --danger: #a32626;
+  --plot-text: #1a1a1a; --plot-label: #444; --plot-grid: #cdc6b4; --plot-axis: #6a6455;
+}
+:root[data-theme="pixel"] body {
+  background-image: repeating-linear-gradient(0deg, transparent 0 31px, var(--line-soft) 31px 32px), repeating-linear-gradient(90deg, transparent 0 31px, var(--line-soft) 31px 32px);
+  background-size: 32px 32px;
+}
+:root[data-theme="pixel"] .sidebar { border-right: var(--unit) solid var(--line); }
+:root[data-theme="pixel"] .new-session,
+:root[data-theme="pixel"] .composer-wrap,
+:root[data-theme="pixel"] .settings-dialog,
+:root[data-theme="pixel"] .file-picker,
+:root[data-theme="pixel"] .plan-toggle,
+:root[data-theme="pixel"] .send { box-shadow: var(--pixel-shadow); }
+:root[data-theme="pixel"] .new-session:active,
+:root[data-theme="pixel"] .send:active,
+:root[data-theme="pixel"] .plan-toggle:active { box-shadow: none; transform: translate(2px, 2px); }
+:root[data-theme="pixel"] .welcome h1 { letter-spacing: 0; text-transform: uppercase; }
+:root[data-theme="pixel"] .welcome h1::after { content: " ▮"; color: var(--accent); }
+:root[data-theme="pixel"] .message.user { border: var(--unit) solid var(--line); }
+:root[data-theme="pixel"] .chat-backdrop { image-rendering: pixelated; }
+
 #send { width: var(--s7); height: var(--s7); padding: 0; display: grid; place-items: center; border-radius: 50%; }
 #send svg, .settings-trigger svg { width: var(--icon-size); height: var(--icon-size); }
 .topbar-actions { display: flex; align-items: center; gap: var(--s4); }

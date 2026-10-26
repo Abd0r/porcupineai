@@ -1,4 +1,12 @@
 /** Live runtime navigation and composer controls. No installers or tool execution actions. */
+export const GOAL_CARD = `
+<section class="goal-card" id="goal-card" aria-label="Tracked goal">
+  <header class="goal-head"><span class="goal-kicker">Goal</span><span class="goal-state" id="goal-state"></span></header>
+  <p class="goal-objective" id="goal-objective"></p>
+  <ol class="goal-steps" id="goal-steps"></ol>
+  <p class="goal-empty" id="goal-empty">No goal tracked. The agent declares one when a task needs steps.</p>
+  <p class="goal-fence" id="goal-fence" hidden>Plan fence on: mutating tools are blocked.</p>
+</section>`;
 export const STACKS_NAVIGATION = `
 <details class="nav-tree" id="stacks-tree" hidden><summary>Stacks</summary>
   <details class="nav-branch" id="skills-folder"><summary>Skills <span id="skills-count" class="nav-count"></span></summary><input class="nav-search" id="skills-search" type="search" maxlength="256" aria-label="Search skills" placeholder="Find a skill"><nav id="skills-items" aria-label="Installed skills"></nav><button class="nav-more" id="skills-more" type="button" hidden>Load more skills</button></details>
@@ -9,6 +17,24 @@ export const STACKS_DIALOG = `
 export const SESSION_COMPOSER_CONTROLS = `<div class="session-controls" id="session-controls" hidden><button class="plan-toggle" id="plan-toggle" type="button" aria-pressed="false" title="Plan mode actively blocks mutating tools for subsequent turns. It does not save a plan artifact in the browser.">Plan</button><label>Reasoning <select id="reasoning-mode" aria-label="Reasoning mode"></select></label><label>Autonomy <select id="autonomy-mode" aria-label="Autonomy mode"><option value="ask">Ask</option><option value="normal">Normal</option><option value="auto">Auto</option></select></label><span class="model-label" id="session-model"></span></div>`;
 export const SESSION_NAVIGATION_STYLES = `
 .sidebar { overflow-y: auto; scrollbar-width: thin; }
+.goal-card { border: var(--unit) solid var(--line-soft); border-radius: var(--r2); padding: var(--s3); display: grid; gap: var(--s2); background: var(--surface); }
+.goal-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
+.goal-kicker { font-size: var(--small); letter-spacing: .08em; text-transform: uppercase; color: var(--quiet); }
+.goal-state { font-size: var(--small); color: var(--muted); }
+.goal-state[data-state="active"] { color: var(--accent); }
+.goal-state[data-state="done"] { color: var(--text); }
+.goal-state[data-state="blocked"] { color: var(--danger); }
+.goal-objective { margin: 0; font-size: var(--small); color: var(--text); overflow-wrap: anywhere; }
+.goal-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
+.goal-step { display: grid; grid-template-columns: auto minmax(0,1fr); gap: var(--s2); font-size: var(--small); color: var(--muted); align-items: baseline; }
+.goal-step .glyph { width: 1.1em; text-align: center; color: var(--quiet); }
+.goal-step[data-status="active"] { color: var(--text); }
+.goal-step[data-status="active"] .glyph { color: var(--accent); }
+.goal-step[data-status="done"] .glyph { color: var(--accent); }
+.goal-step[data-status="done"] .goal-text { color: var(--quiet); text-decoration: line-through; }
+.goal-step[data-status="blocked"] .glyph { color: var(--danger); }
+.goal-empty { margin: 0; font-size: var(--small); color: var(--quiet); }
+.goal-fence { margin: 0; font-size: var(--small); color: var(--accent); }
 .nav-tree, .nav-branch { color: var(--muted); font-size: var(--small); }
 .nav-tree > summary { color: var(--text); font-size: var(--body); padding: var(--s1) var(--s2); cursor: pointer; }
 .nav-branch { margin: var(--s2) 0 0 var(--s4); }
@@ -33,7 +59,14 @@ export const SESSION_NAVIGATION_STYLES = `
 @media(max-width:700px) { .model-label { display: none; } .session-controls { gap: var(--s1) var(--s2); } .compose-options > .hint { display: none; } }
 `;
 export const SESSION_NAVIGATION_SCRIPT = `
-let sessionSurface=null,surfaceEpoch=0,stackInspection=0;
+let sessionSurface=null,surfaceEpoch=0,stackInspection=0,trackerEpoch=0;
+const goalUi={card:$('goal-card'),state:$('goal-state'),objective:$('goal-objective'),steps:$('goal-steps'),empty:$('goal-empty'),fence:$('goal-fence')};
+const goalGlyph={done:'\u2713',active:'\u25B8',blocked:'!',pending:'\u25CB'};
+function renderTracker(view){const goal=view&&view.goal;goalUi.card.hidden=false;goalUi.fence.hidden=!view||!view.planFence;goalUi.steps.replaceChildren();
+  if(!goal){goalUi.state.textContent='';goalUi.state.removeAttribute('data-state');goalUi.objective.textContent='';goalUi.empty.hidden=false;return}
+  goalUi.empty.hidden=true;goalUi.state.textContent=goal.status;goalUi.state.dataset.state=goal.status;goalUi.objective.textContent=goal.objective;
+  for(const step of goal.steps){const item=document.createElement('li');item.className='goal-step';item.dataset.status=step.status;const glyph=document.createElement('span');glyph.className='glyph';glyph.textContent=goalGlyph[step.status]||'\u25CB';glyph.setAttribute('aria-label',step.status);const text=document.createElement('span');text.className='goal-text';text.textContent=step.objective;if(step.note)text.title=step.note;item.append(glyph,text);goalUi.steps.append(item)}}
+async function refreshTracker(id=sessionId){const epoch=++trackerEpoch;if(!id){renderTracker(null);return}try{const view=await json('/session/'+encodeURIComponent(id)+'/goal-plan');if(epoch===trackerEpoch&&id===sessionId)renderTracker(view.supported===false?null:view)}catch{if(epoch===trackerEpoch&&id===sessionId)renderTracker(null)}}
 const surfaceUi={plan:$('plan-toggle'),root:$('session-controls'),reasoning:$('reasoning-mode'),autonomy:$('autonomy-mode'),model:$('session-model'),stacks:$('stacks-tree'),dialog:$('stack-dialog')};
 const catalogFolders={skills:{folder:$('skills-folder'),count:$('skills-count'),search:$('skills-search'),items:$('skills-items'),more:$('skills-more'),offset:0,epoch:0,timer:null},tools:{folder:$('tools-folder'),count:$('tools-count'),search:$('tools-search'),items:$('tools-items'),more:$('tools-more'),offset:0,epoch:0,timer:null}};
 function updateControlDisabled(){const disabled=streaming||!sessionSurface||!sessionSurface.writable||sessionSurface.busy;surfaceUi.reasoning.disabled=disabled;surfaceUi.autonomy.disabled=disabled;if(surfaceUi.plan)surfaceUi.plan.disabled=disabled}

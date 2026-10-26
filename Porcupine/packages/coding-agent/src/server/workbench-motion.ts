@@ -9,6 +9,16 @@ button, select, summary { transition: color var(--motion-fast) var(--motion-ease
 .settings-heading { position: sticky; top: 0; z-index: 2; background: var(--bg); }
 @starting-style { .settings-dialog[open] { opacity: 0; transform: translateY(var(--motion-distance)); } }
 @keyframes workbench-enter { from { opacity: 0; transform: translateY(var(--motion-distance)); } to { opacity: 1; transform: translateY(0); } }
+.message, .visualization-card, .permission { animation-delay: var(--enter-delay, 0ms); }
+@keyframes workbench-breathe { 0%, 100% { opacity: .45; transform: scale(.85); } 50% { opacity: 1; transform: scale(1.15); } }
+.dot.busy { animation: workbench-breathe 1.4s ease-in-out infinite; }
+.message.assistant .label { color: var(--quiet); letter-spacing: .02em; }
+.feed { scroll-behavior: smooth; }
+.settings-section h3 + p, .settings-note { text-wrap: pretty; }
+@media (hover: hover) {
+  .message.user:hover, .visualization-card:hover, .permission:hover { }
+}
+::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

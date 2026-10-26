@@ -50,8 +50,23 @@ export function isLoopbackHost(host: string | undefined): boolean {
 }
 
 export function adaptSessionToServeApi(session: AgentSession): ServeApiSession {
+	const goalPlanListeners = new Set<(view: unknown) => void>();
+	const tracker = () => ({
+		goal: session.getGoal(),
+		planFence: session.planFenceActive,
+		busy: session.isStreaming,
+	});
+	session.subscribe((event) => {
+		if (event.type !== "goal_changed") return;
+		for (const listener of goalPlanListeners) listener(tracker());
+	});
 	return {
 		...createSessionSurfaces(session),
+		getGoalPlan: () => tracker(),
+		onGoalPlanChange: (listener) => {
+			goalPlanListeners.add(listener);
+			return () => goalPlanListeners.delete(listener);
+		},
 		id: session.sessionId,
 		sendUserMessage: async (text) => {
 			await session.sendUserMessage(text);
@@ -86,6 +101,8 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 		);
 		return 1;
 	}
+
+	runtime.session.setClientSurface("none");
 
 	const handle = await startServeApi({
 		session: adaptSessionToServeApi(runtime.session),
