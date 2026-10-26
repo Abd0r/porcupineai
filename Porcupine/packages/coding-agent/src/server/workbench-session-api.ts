@@ -64,21 +64,48 @@ export async function handleSessionSurfaceRequest(
 		} catch {
 			throw new WorkbenchError(400, "Expected JSON with provider, id and optional scope");
 		}
-		if (!input || typeof input !== "object" || Array.isArray(input)) throw new WorkbenchError(400, "Expected an object");
+		if (!input || typeof input !== "object" || Array.isArray(input))
+			throw new WorkbenchError(400, "Expected an object");
 		const record = input as { provider?: unknown; id?: unknown; scope?: unknown };
 		for (const key of Object.keys(input)) {
-			if (key !== "provider" && key !== "id" && key !== "scope") throw new WorkbenchError(400, "Unexpected model field");
+			if (key !== "provider" && key !== "id" && key !== "scope")
+				throw new WorkbenchError(400, "Unexpected model field");
 		}
-		if (typeof record.provider !== "string" || typeof record.id !== "string") throw new WorkbenchError(400, "provider and id must be strings");
-		if (record.provider.length > 80 || record.id.length > 160) throw new WorkbenchError(400, "Model identifier is too long");
-		if (record.scope !== undefined && record.scope !== "session" && record.scope !== "default") throw new WorkbenchError(400, "scope must be session or default");
+		if (typeof record.provider !== "string" || typeof record.id !== "string")
+			throw new WorkbenchError(400, "provider and id must be strings");
+		if (record.provider.length > 80 || record.id.length > 160)
+			throw new WorkbenchError(400, "Model identifier is too long");
+		if (
+			record.scope !== undefined &&
+			record.scope !== "session" &&
+			record.scope !== "default" &&
+			record.scope !== "subagent"
+		)
+			throw new WorkbenchError(400, "scope must be session, default or subagent");
+		if (record.scope === "subagent") {
+			if (!target.setSubagentModel) throw new WorkbenchError(501, "This session cannot change sub-agent models");
+			router.json(res, 200, {
+				supported: true,
+				scope: "subagent",
+				...target.setSubagentModel(record.provider, record.id),
+			});
+			return true;
+		}
 		if (record.scope === "default") {
 			if (!target.setDefaultModel) throw new WorkbenchError(501, "This session cannot change defaults");
-			router.json(res, 200, { supported: true, scope: "default", ...target.setDefaultModel(record.provider, record.id) });
+			router.json(res, 200, {
+				supported: true,
+				scope: "default",
+				...target.setDefaultModel(record.provider, record.id),
+			});
 			return true;
 		}
 		if (!target.setSessionModel) throw new WorkbenchError(501, "This session cannot switch models");
-		router.json(res, 200, { supported: true, scope: "session", ...(await target.setSessionModel(record.provider, record.id)) });
+		router.json(res, 200, {
+			supported: true,
+			scope: "session",
+			...(await target.setSessionModel(record.provider, record.id)),
+		});
 		return true;
 	}
 	const contextMatch = /^\/session\/([^/]+)\/context$/.exec(url.pathname);

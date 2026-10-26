@@ -27,6 +27,14 @@ export const CONTEXT_RING = `<button class="context-ring" id="context-ring" type
 export const SESSION_COMPOSER_CONTROLS = `<div class="session-controls" id="session-controls" hidden><label>Reasoning <select id="reasoning-mode" aria-label="Reasoning mode"></select></label><label>Autonomy <select id="autonomy-mode" aria-label="Autonomy mode"><option value="ask">Ask</option><option value="normal">Normal</option><option value="auto">Auto</option></select></label><button class="model-label" id="session-model" type="button" title="Change model for this conversation"></button>${CONTEXT_RING}</div>`;
 export const SESSION_NAVIGATION_STYLES = `
 .sidebar { overflow-y: auto; scrollbar-width: thin; }
+.sidebar-toggle { display: grid; place-items: center; width: var(--s7); height: var(--s7); padding: 0; border: 0; border-radius: var(--r1); background: transparent; color: var(--quiet); }
+.sidebar-toggle:hover { color: var(--text); background: var(--surface); }
+.topbar { gap: var(--s3); justify-content: flex-start; }
+.topbar strong { flex: 1; }
+.shell[data-sidebar="collapsed"] { grid-template-columns: 0 minmax(0,1fr); }
+.shell[data-sidebar="collapsed"] .sidebar { padding-inline: 0; border: 0; opacity: 0; pointer-events: none; }
+.shell[data-sidebar] { transition: grid-template-columns var(--motion-normal) var(--motion-ease); }
+.sidebar { transition: opacity var(--motion-fast) var(--motion-ease), padding var(--motion-normal) var(--motion-ease); }
 .context-ring { position: relative; display: grid; place-items: center; width: var(--s7); height: var(--s7); padding: 0; border: 0; background: transparent; border-radius: 50%; }
 .context-ring svg { transform: rotate(-90deg); }
 .ring-track { fill: none; stroke: color-mix(in srgb, var(--line) 85%, transparent); stroke-width: 4; }
@@ -100,18 +108,24 @@ export const SESSION_NAVIGATION_STYLES = `
   .goal-card { position: static; width: auto; max-height: none; margin: var(--s4) var(--s5) 0; }
 }
 @media(max-width:700px) { .model-label { display: none; } .session-controls { gap: var(--s1) var(--s2); } .compose-options > .hint { display: none; } }
+
+.goal-stack { display: grid; gap: var(--s2); min-width: 0; }
+.goal-stack .goal-card { position: static; width: auto; max-height: 40dvh; }
+.subagent-card { position: static; }
+@media (max-width: 1080px) { .goal-stack { display: none; } }
 `;
 export const SESSION_NAVIGATION_SCRIPT = `
 let modelScope='session',modelCache=null;
 const modelUi={dialog:$('model-dialog'),search:$('model-search'),list:$('model-list'),status:$('model-status'),scope:$('model-scope-note')};
 function modelContext(value){if(!value)return '';return value>=1000000?Math.round(value/1000000)+'M context':Math.round(value/1000)+'K context'}
 function renderModelList(){const query=(modelUi.search.value||'').toLowerCase();const current=modelCache&&modelCache.current;modelUi.list.replaceChildren();const models=((modelCache&&modelCache.models)||[]).filter(model=>!query||(model.name+' '+model.provider+' '+model.id).toLowerCase().includes(query));if(!models.length){const empty=document.createElement('p');empty.className='caption';empty.textContent='No matching model.';modelUi.list.append(empty);return}for(const model of models){const row=document.createElement('button');row.type='button';row.className='model-row';row.setAttribute('role','option');const selected=current&&current.provider===model.provider&&current.id===model.id;row.setAttribute('aria-selected',String(Boolean(selected)));const name=document.createElement('span');name.className='model-name';name.textContent=model.name;const meta=document.createElement('span');meta.className='model-meta';meta.textContent=model.provider+' · '+modelContext(model.contextWindow)+(model.reasoning?' · reasoning':'');row.append(name,meta);row.addEventListener('click',()=>void chooseModel(model));modelUi.list.append(row)}}
-async function openModelPicker(scope){if(!sessionId){setError('Open a conversation first.');return}modelScope=scope;modelUi.scope.textContent=scope==='default'?'Sets the default model for new conversations.':'Applies to this conversation only.';modelUi.status.textContent='Loading models…';modelUi.search.value='';modelUi.dialog.showModal();try{const result=await json('/session/'+encodeURIComponent(sessionId)+'/models');if(result.supported===false){modelUi.status.textContent='This session does not expose model selection.';return}modelCache=result;modelUi.status.textContent=result.models.length+' models available';renderModelList()}catch(error){modelUi.status.textContent=error.message}}
-async function chooseModel(model){modelUi.status.textContent='Switching…';try{const result=await json('/session/'+encodeURIComponent(sessionId)+'/models',{method:'POST',body:JSON.stringify({provider:model.provider,id:model.id,scope:modelScope})});if(modelScope==='session'){modelCache=result;modelUi.status.textContent='Now using '+model.name;void refreshSessionSurfaces(sessionId);void refreshContext(sessionId)}else{modelUi.status.textContent='Default set to '+model.name}modelUi.dialog.close()}catch(error){modelUi.status.textContent=error.message}}
+async function openModelPicker(scope){if(!sessionId){setError('Open a conversation first.');return}modelScope=scope;modelUi.scope.textContent=scope==='default'?'Sets the default model for new conversations.':scope==='subagent'?'Sets the model sub-agents run on. They fall back to the conversation model when unset.':'Applies to this conversation only.';modelUi.status.textContent='Loading models…';modelUi.search.value='';modelUi.dialog.showModal();try{const result=await json('/session/'+encodeURIComponent(sessionId)+'/models');if(result.supported===false){modelUi.status.textContent='This session does not expose model selection.';return}modelCache=result;modelUi.status.textContent=result.models.length+' models available'+(result.subagentModel?' · sub-agents: '+result.subagentModel:'');const current=$('subagent-model-current');if(current)current.textContent=result.subagentModel?'Sub-agents currently run on '+result.subagentModel:'Sub-agents inherit the conversation model.';renderModelList()}catch(error){modelUi.status.textContent=error.message}}
+async function chooseModel(model){modelUi.status.textContent='Switching…';try{const result=await json('/session/'+encodeURIComponent(sessionId)+'/models',{method:'POST',body:JSON.stringify({provider:model.provider,id:model.id,scope:modelScope})});if(modelScope==='session'){modelCache=result;modelUi.status.textContent='Now using '+model.name;void refreshSessionSurfaces(sessionId);void refreshContext(sessionId)}else if(modelScope==='subagent'){modelUi.status.textContent='Sub-agents now use '+model.name;const current=$('subagent-model-current');if(current)current.textContent='Sub-agents currently run on '+model.provider+'/'+model.id}else{modelUi.status.textContent='Default set to '+model.name}modelUi.dialog.close()}catch(error){modelUi.status.textContent=error.message}}
 modelUi.search.addEventListener('input',renderModelList);
-const modelOpen=$('session-model'),modelDefaultOpen=$('model-default-open');
+const modelOpen=$('session-model'),modelDefaultOpen=$('model-default-open'),modelSubagentOpen=$('model-subagent-open');
 modelOpen.addEventListener('click',()=>void openModelPicker('session'));
 if(modelDefaultOpen)modelDefaultOpen.addEventListener('click',()=>void openModelPicker('default'));
+if(modelSubagentOpen)modelSubagentOpen.addEventListener('click',()=>void openModelPicker('subagent'));
 let sessionSurface=null,surfaceEpoch=0,stackInspection=0,trackerEpoch=0;
 const goalUi={card:$('goal-card'),toggle:$('goal-toggle'),state:$('goal-state'),objective:$('goal-objective'),steps:$('goal-steps'),empty:$('goal-empty')};
 const goalGlyph={done:'\u2713',active:'\u25B8',blocked:'!',pending:'\u25CB'};

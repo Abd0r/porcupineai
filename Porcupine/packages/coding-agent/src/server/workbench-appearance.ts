@@ -9,7 +9,7 @@ export const APPEARANCE_DIALOG = `
       <label>Colour mode<select id="appearance-mode"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></label>
     </div>
     <div class="settings-divider"></div>
-    <h3>Default model</h3><p>Used for new conversations. Any conversation can still pick its own model from the composer.</p><p><button id="model-default-open" class="quiet-button" type="button">Choose default model</button></p>
+    <h3>Models</h3><p>Default model for new conversations, and the model sub-agents run on. Any conversation can still pick its own model from the composer.</p><p><button id="model-default-open" class="quiet-button" type="button">Choose default model</button> <button id="model-subagent-open" class="quiet-button" type="button">Choose sub-agent model</button></p><p class="settings-note" id="subagent-model-current"></p>
     <div class="settings-divider"></div>
     <h3>Chat background</h3><p>Upload a PNG, JPEG, or WebP. It stays in this browser, never in the model prompt. Up to 6 MiB and 16 million pixels.</p>
     <label class="file-picker">Choose image<input id="appearance-image" type="file" accept="image/png,image/jpeg,image/webp"></label>

@@ -137,6 +137,9 @@ function loadRenderer(): {
 		"model-status",
 		"model-scope-note",
 		"model-default-open",
+		"sidebar-toggle",
+		"model-subagent-open",
+		"subagent-model-current",
 		"context-ring",
 		"ring-fill",
 		"context-tip",
@@ -195,6 +198,9 @@ function loadRenderer(): {
 	const document = {
 		documentElement: new FakeElement("html", canvasContext),
 		addEventListener(): void {},
+		querySelector(): FakeElement {
+			return new FakeElement("div", canvasContext);
+		},
 		getElementById(id: string): FakeElement {
 			const element = elements.get(id);
 			if (!element) throw new Error(`Unknown test element: ${id}`);

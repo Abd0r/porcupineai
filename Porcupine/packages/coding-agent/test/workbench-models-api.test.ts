@@ -94,3 +94,35 @@ describe("workbench model selection", () => {
 		expect((await fetch(`${base}/session/models-session/models`)).status).toBe(401);
 	});
 });
+
+describe("workbench sub-agent model", () => {
+	it("writes the sub-agent model separately from the session and default", async () => {
+		const seen: string[] = [];
+		const handle = await startServeApi({
+			port: 0,
+			token: "sub-token",
+			session: {
+				id: "sub-session",
+				async sendUserMessage() {},
+				async abort() {},
+				isStreaming: () => false,
+				onEvent: () => () => {},
+				onConfirm: () => () => {},
+				getModels: async () => ({ current: null, subagentModel: null, models: [] }),
+				setSubagentModel: (provider: string, id: string) => {
+					seen.push(`${provider}/${id}`);
+					return { provider, id };
+				},
+			},
+		});
+		handles.push(handle);
+		const response = await fetch(`http://127.0.0.1:${handle.port()}/session/sub-session/models`, {
+			method: "POST",
+			headers: { authorization: "Bearer sub-token", "content-type": "application/json" },
+			body: JSON.stringify({ provider: "opencode-go", id: "deepseek-v4-flash", scope: "subagent" }),
+		});
+		expect(response.status).toBe(200);
+		expect((await response.json()).scope).toBe("subagent");
+		expect(seen).toEqual(["opencode-go/deepseek-v4-flash"]);
+	});
+});

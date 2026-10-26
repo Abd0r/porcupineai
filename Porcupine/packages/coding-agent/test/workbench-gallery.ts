@@ -469,6 +469,10 @@ try {
 	await page.getByRole("button", { name: "＋ New project", exact: true }).click();
 	await shot(page, "28 New project.png");
 	await page.getByRole("button", { name: "Close new project" }).click();
+	await page.locator("#sidebar-toggle").click();
+	await shot(page, "37 Sidebar collapsed.png");
+	await page.locator("#sidebar-toggle").click();
+	await page.waitForTimeout(250);
 	await page.locator("#session-model").click();
 	await page.locator("#model-list .model-row").first().waitFor();
 	await shot(page, "35 Model picker.png");

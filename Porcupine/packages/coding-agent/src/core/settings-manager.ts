@@ -863,6 +863,20 @@ export class SettingsManager {
 		this.save();
 	}
 
+	/** Sub-agent model spec (`provider/model`). Undefined restores the parent model. */
+	setSubagentModel(spec: string | undefined): void {
+		if (!this.globalSettings.subagent) this.globalSettings.subagent = {};
+		if (spec === undefined) delete this.globalSettings.subagent.model;
+		else {
+			const value = spec.trim();
+			if (!value || value.length > 200 || value.includes(" "))
+				throw new Error("Sub-agent model must be provider/model.");
+			this.globalSettings.subagent.model = value;
+		}
+		this.markModified("subagent", "model");
+		this.save();
+	}
+
 	setCompactionEnabled(enabled: boolean): void {
 		if (!this.globalSettings.compaction) {
 			this.globalSettings.compaction = {};

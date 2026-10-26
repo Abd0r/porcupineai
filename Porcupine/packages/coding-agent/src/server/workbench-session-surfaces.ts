@@ -119,10 +119,15 @@ export function createSessionSurfaces(session: AgentSession) {
 					reasoning: Boolean(model.reasoning),
 				}))
 				.sort((a, b) => `${a.provider}/${a.name}`.localeCompare(`${b.provider}/${b.name}`));
-			return { current, models };
+			return {
+				current,
+				subagentModel: session.settingsManager.getSubagentSettings().model ?? null,
+				models,
+			};
 		},
 		async setSessionModel(provider: string, id: string) {
-			if (session.isStreaming) throw new WorkbenchError(409, "Wait for the current turn to settle before switching models");
+			if (session.isStreaming)
+				throw new WorkbenchError(409, "Wait for the current turn to settle before switching models");
 			const model = session.modelRuntime.getModel(provider, id);
 			if (!model) throw new WorkbenchError(404, "Unknown model");
 			await session.setModel(model);
@@ -131,6 +136,10 @@ export function createSessionSurfaces(session: AgentSession) {
 		},
 		setDefaultModel(provider: string, id: string) {
 			session.settingsManager.setDefaultModelAndProvider(provider, id);
+			return { provider, id };
+		},
+		setSubagentModel(provider: string, id: string) {
+			session.settingsManager.setSubagentModel(`${provider}/${id}`);
 			return { provider, id };
 		},
 		persistSurfaceState() {
@@ -256,9 +265,17 @@ export interface ModelChoice {
 	reasoning: boolean;
 }
 export interface ModelsSurfaces {
-	getModels?(): Promise<{ current: { provider: string; id: string } | null; models: ModelChoice[] }>;
-	setSessionModel?(provider: string, id: string): Promise<{ current: { provider: string; id: string } | null; models: ModelChoice[] }>;
+	getModels?(): Promise<{
+		current: { provider: string; id: string } | null;
+		subagentModel: string | null;
+		models: ModelChoice[];
+	}>;
+	setSessionModel?(
+		provider: string,
+		id: string,
+	): Promise<{ current: { provider: string; id: string } | null; models: ModelChoice[] }>;
 	setDefaultModel?(provider: string, id: string): { provider: string; id: string };
+	setSubagentModel?(provider: string, id: string): { provider: string; id: string };
 }
 export interface ContextSurfaces {
 	getContext?(): ContextStats;

@@ -41,14 +41,14 @@ ${PROJECTS_STYLES}
 <aside class="sidebar" aria-label="Conversations">
 <div class="brand"><span>Porcupine</span><span class="edition">Local</span></div>
 <button class="new-session" id="new-session" type="button">＋ New conversation</button>
+<div class="goal-stack">${GOAL_CARD}${SUBAGENT_CARD}</div>
 ${STACKS_NAVIGATION}
 ${PROJECTS_NAVIGATION}
 <div><p class="caption">Recent sessions</p><nav class="sessions" id="sessions" aria-label="Recent sessions"></nav></div>
 <div class="side-foot">Local session · Your machine</div>
 </aside>
 <main class="main">
-<header class="topbar"><strong id="session-title">Workbench</strong><div class="topbar-actions"><div class="status" aria-live="polite"><span id="status-text">Ready</span></div><button class="settings-trigger" id="settings-open" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></button></div></header>
-<div class="goal-stack">${GOAL_CARD}${SUBAGENT_CARD}</div>
+<header class="topbar"><button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-expanded="true" title="Toggle sidebar (Ctrl/Cmd+B)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4v16"/></svg></button><strong id="session-title">Workbench</strong><div class="topbar-actions"><div class="status" aria-live="polite"><span id="status-text">Ready</span></div><button class="settings-trigger" id="settings-open" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></button></div></header>
 <section class="content" aria-label="Conversation">
 <div class="welcome" id="welcome"><h1>Where shall we begin?</h1><p>A question, an idea, or something to work through.</p></div>
 <div class="feed-stage"><div class="chat-backdrop" id="chat-backdrop" aria-hidden="true"></div><div class="feed" id="feed" aria-live="polite" aria-relevant="additions text"></div></div>
@@ -69,6 +69,11 @@ ${PROJECT_DIALOG}
 (()=>{
 const $=id=>document.getElementById(id);const ui={auth:$('auth'),authForm:$('auth-form'),token:$('token'),authError:$('auth-error'),sessions:$('sessions'),newSession:$('new-session'),feed:$('feed'),welcome:$('welcome'),form:$('prompt-form'),prompt:$('prompt'),send:$('send'),stop:$('stop'),error:$('error'),status:$('status-text'),title:$('session-title')};
 let token='',sessionId='',streamController=null,streaming=false,streamingAssistant=null;
+const shell=document.querySelector('.shell'),sidebarToggle=$('sidebar-toggle'),sidebarKey='porcupine.workbench.sidebar-collapsed';
+function applySidebar(collapsed,save=false){if(!shell||!sidebarToggle)return;shell.dataset.sidebar=collapsed?'collapsed':'open';sidebarToggle.setAttribute('aria-expanded',String(!collapsed));if(save)try{window.localStorage.setItem(sidebarKey,collapsed?'1':'0')}catch{}}
+try{applySidebar(window.localStorage.getItem(sidebarKey)==='1')}catch{}
+if(sidebarToggle)sidebarToggle.addEventListener('click',()=>applySidebar(shell.dataset.sidebar!=='collapsed',true));
+window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='b'){event.preventDefault();if(shell)applySidebar(shell.dataset.sidebar!=='collapsed',true)}});
 function setError(message,auth=false){const el=auth?ui.authError:ui.error;el.textContent=message;el.hidden=!message}
 function api(path,options={}){const headers=new Headers(options.headers||{});if(token)headers.set('authorization','Bearer '+token);if(options.body)headers.set('content-type','application/json');return fetch(path,{...options,headers})}
 async function json(path,options){const response=await api(path,options);let body={};try{body=await response.json()}catch{}if(!response.ok)throw new Error(body.error||'Request failed ('+response.status+')');return body}
