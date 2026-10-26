@@ -2453,6 +2453,11 @@ export class AgentSession {
 	}
 
 	/** Enable or disable the inspection-only plan-turn fence. */
+	/** Whether the inspection-only plan fence is currently blocking mutating tools. */
+	get planFenceActive(): boolean {
+		return this._planFenceActive;
+	}
+
 	setPlanFenceActive(active: boolean): void {
 		this._planFenceActive = active;
 	}

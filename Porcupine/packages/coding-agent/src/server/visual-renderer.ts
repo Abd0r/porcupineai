@@ -1,5 +1,11 @@
 /** Browser-only declarative 2D/chart renderer. Embedded in the same-origin workbench script. */
 export const VISUAL_RENDERER_SCRIPT = `
+const visualObservers=new Map();
+function clearVisuals(){for(const item of visualObservers.values())if(item.observer)item.observer.disconnect();visualObservers.clear()}
+function observeVisual(canvas,draw){const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>{if(visualObservers.has(canvas))draw()}):null;visualObservers.set(canvas,{draw,observer});if(observer)observer.observe(canvas)}
+function redrawVisuals(){for(const item of visualObservers.values())item.draw()}
+window.addEventListener('porcupine-theme-change',redrawVisuals);
+window.addEventListener('resize',redrawVisuals);
 function plotColors(canvas){const style=window.getComputedStyle(canvas);return{text:style.getPropertyValue('--plot-text').trim(),label:style.getPropertyValue('--plot-label').trim(),grid:style.getPropertyValue('--plot-grid').trim(),axis:style.getPropertyValue('--plot-axis').trim()}}
 function validText(value,max){return typeof value==='string'&&value.trim().length>0&&value.length<=max}
 function bounded(value,min,max){return typeof value==='number'&&Number.isFinite(value)&&value>=min&&value<=max}
@@ -40,9 +46,10 @@ function renderVisual(visual){
   card.append(details);
   const ask=visualElement('button','Ask about this visual');ask.type='button';ask.className='stop';ask.addEventListener('click',()=>{ui.prompt.value='Explain "'+visual.title+'" step by step, including its labels and assumptions.';ui.prompt.focus()});card.append(ask);
   ui.feed.append(card);ui.feed.scrollTop=ui.feed.scrollHeight;
-  const ctx=canvas.getContext('2d');if(!ctx)return;const colors=plotColors(canvas);
+  const ctx=canvas.getContext('2d');if(!ctx)return;let colors=plotColors(canvas);
   function line(x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
   function draw(){
+    colors=plotColors(canvas);
     const rect=canvas.getBoundingClientRect(),w=Math.max(1,rect.width),h=Math.max(1,rect.height),ratio=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,w,h);ctx.font='12px system-ui';ctx.textAlign='center';ctx.lineWidth=2;
     if(visual.kind==='diagram'){
       let extent=4;for(const o of visual.objects){if(o.from)extent=Math.max(extent,...o.from.map(Math.abs),...o.to.map(Math.abs));else extent=Math.max(extent,...o.position.map((n,i)=>Math.abs(n)+(o.radius||((o.size&&o.size[i]/2)||0))))}
@@ -79,6 +86,6 @@ function renderVisual(visual){
     // The table retains full precision and labels when the canvas is dense.
     let legendX=left;for(const s of visual.series){ctx.fillStyle=s.color;ctx.textAlign='left';ctx.fillText(s.name,legendX,h-27,plotW/visual.series.length-4);legendX+=plotW/visual.series.length}
   }
-  if(typeof ResizeObserver!=='undefined')new ResizeObserver(draw).observe(canvas);else window.addEventListener('resize',draw);draw();
+  observeVisual(canvas,draw);draw();
 }
 `;

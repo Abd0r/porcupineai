@@ -22,6 +22,9 @@ import { VERSION } from "../config.ts";
 import type { AgentSession } from "../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../core/agent-session-runtime.ts";
 import { type ServeApiSession, startServeApi } from "../server/http-api.ts";
+import { ContextFileStore } from "../server/workbench-context-files.ts";
+import { WorkbenchProjectStore } from "../server/workbench-projects.ts";
+import { createSessionSurfaces } from "../server/workbench-session-surfaces.ts";
 
 export interface ServeModeOptions {
 	port?: number;
@@ -48,6 +51,7 @@ export function isLoopbackHost(host: string | undefined): boolean {
 
 export function adaptSessionToServeApi(session: AgentSession): ServeApiSession {
 	return {
+		...createSessionSurfaces(session),
 		id: session.sessionId,
 		sendUserMessage: async (text) => {
 			await session.sendUserMessage(text);
@@ -89,6 +93,8 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 		host: options.host,
 		token: options.token,
 		version: VERSION,
+		contextFiles: new ContextFileStore(runtime.cwd, runtime.services.agentDir),
+		projects: new WorkbenchProjectStore(runtime.cwd),
 	});
 
 	process.stderr.write(`Porcupine serve listening on http://${options.host ?? "127.0.0.1"}:${handle.port()}\n`);

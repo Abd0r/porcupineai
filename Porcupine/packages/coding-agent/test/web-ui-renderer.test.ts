@@ -38,6 +38,7 @@ class FakeElement {
 	readonly attributes = new Map<string, string>();
 	readonly listeners = new Set<string>();
 	readonly classList = { toggle: (_name: string, _force?: boolean) => {} };
+	readonly style = { setProperty: (_name: string, _value: string) => {} };
 	className = "";
 	textContent = "";
 	hidden = false;
@@ -104,10 +105,54 @@ function loadRenderer(): {
 		"status-text",
 		"status-dot",
 		"session-title",
+		"session-controls",
+		"plan-toggle",
+		"reasoning-mode",
+		"autonomy-mode",
+		"session-model",
+		"stacks-tree",
+		"stack-dialog",
+		"skills-folder",
+		"skills-count",
+		"skills-search",
+		"skills-items",
+		"skills-more",
+		"tools-folder",
+		"tools-count",
+		"tools-search",
+		"tools-items",
+		"tools-more",
+		"projects-tree",
+		"projects-count",
+		"project-list",
+		"project-new",
+		"project-dialog",
+		"project-title",
+		"project-summary",
+		"project-files",
+		"project-preview",
+		"project-upload",
+		"project-upload-status",
+		"new-project-dialog",
+		"new-project-name",
+		"new-project-title-input",
+		"new-project-error",
+		"new-project-create",
+		"settings-dialog",
+		"settings-open",
+		"appearance-theme",
+		"appearance-mode",
+		"appearance-image",
+		"appearance-remove",
+		"appearance-opacity",
+		"appearance-opacity-value",
+		"appearance-error",
+		"chat-backdrop",
 	]) {
 		elements.set(id, new FakeElement("div", canvasContext));
 	}
 	const document = {
+		documentElement: new FakeElement("html", canvasContext),
 		getElementById(id: string): FakeElement {
 			const element = elements.get(id);
 			if (!element) throw new Error(`Unknown test element: ${id}`);
@@ -123,9 +168,14 @@ function loadRenderer(): {
 			devicePixelRatio: 1,
 			addEventListener() {},
 			getComputedStyle: () => ({ getPropertyValue: () => "#a0a0a0" }),
+			localStorage: { getItem: () => null, setItem() {} },
+			matchMedia: () => ({ matches: true, addEventListener() {} }),
+			dispatchEvent() {},
 		},
+		Event: class {},
 		ResizeObserver: class {
 			observe(): void {}
+			disconnect(): void {}
 		},
 	};
 	const script = PORCUPINE_WEB_UI.match(/<script>\n([\s\S]*?)\n<\/script>/)?.[1];

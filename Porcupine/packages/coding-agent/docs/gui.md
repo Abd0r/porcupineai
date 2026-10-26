@@ -34,6 +34,25 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 - Backend validation and independent browser validation reject unsupported types, extra properties, and out-of-bounds data. The model supplies data, not executable code, HTML, meshes, URLs, or external assets. Formula labels are plain text, not executed expressions or typeset LaTeX.
 - This is a first visual communication layer, not a general plotting package or scientific solver. Heatmaps, surface plots, animation, and user-authored drawing are not implemented.
 
+## Workspace surfaces
+
+| Surface | Behaviour | Persistence |
+| --- | --- | --- |
+| Stacks | Sidebar tree above Projects. `Skills` and `Tools` load the live runtime registries with search and pagination; selecting an entry shows its instructions or JSON parameter schema. Read-only: no execution, installation or credential access. | Read from the running session |
+| Projects | Canonical `Project/<name>/` workspaces from the [project-hygiene](../../skills/meta/project-hygiene/SKILL.md) layout. Browse supported documents, preview text, and create a new project with README.md plus STATUS.md. | Local files; nothing is deleted |
+| Project uploads | PNG, JPEG, WebP, GIF, PDF, ZIP and text formats up to 12 MiB, written to `Project/<name>/uploads/` with `-2`, `-3` suffixes instead of overwriting. Filenames cannot contain directories. | Local files |
+| Settings · context files | Inspect and edit the allowlisted Markdown documents only: global `AGENTS.md`, `CLAUDE.md`, `USER.md`, `MEMORY.md`, `PERSONALITY.md`, `PROMPT.md`, `SYSTEM.md`, `APPEND_SYSTEM.md`, `APPEND_PROMPT.md`, plus workspace `AGENTS.md` and `CLAUDE.md`. Edits use a revision hash and are rejected if the agent changed the file in between. Symlinks are refused. | `~/.porcupine/agent/` and the workspace |
+| Reasoning and Autonomy | Composer selectors read and write the session's real reasoning mode and Ask/Normal/Auto interaction mode. They are disabled while a turn is running. The available reasoning modes come from the active model. | Session |
+| Plan | A real fence: while on, mutating tools are blocked for subsequent turns. It is not a saved plan artifact. | Session |
+| Appearance | Five themes (Workbench, Pixel, Cyberpunk, Static monochrome, Tokyo Night), dark/light/system colour mode, and a local chat background with opacity. Images stay in this browser (IndexedDB) and are never sent to the model. | Browser only |
+
+### Known limits
+
+- The `/goal` autonomous loop and `/plan` artifact writer still live in the terminal client. The browser exposes the plan fence but not goal turn budgeting or plan files; no button pretends otherwise.
+- Conversations are not yet attached to Project folders. Project documents are browsable, but a chat is not grouped under its project.
+- Edits to `USER.md`, `MEMORY.md` and other context files take effect for future turns after reload; the UI states this instead of implying an active turn changed.
+- Background upload sets a decorative image only. It is not a scientific figure and is never referenced in prompts.
+
 ## Browser verification
 
 From the inner repository root, run `node_modules/.bin/tsx packages/coding-agent/test/workbench-browser-smoke.ts` with Playwright Chromium installed. This uses an ephemeral loopback server and synthetic fixtures, checks authenticated SSE delivery, five visual cards, full data tables, follow-up prompt preparation, and no page overflow at 1280, 700, and 390 pixels. It also fails on browser console/page errors or failed HTTP requests. Set `WORKBENCH_QA_SCREENSHOTS` to an existing directory to capture screenshots. It does not invoke a model or use real session credentials.

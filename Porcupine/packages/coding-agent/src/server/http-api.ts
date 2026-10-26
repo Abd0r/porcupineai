@@ -34,9 +34,14 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { stripAnsi } from "../utils/ansi.ts";
 import { PORCUPINE_WEB_UI } from "./web-ui.ts";
+import type { ContextFileStore } from "./workbench-context-files.ts";
+import type { WorkbenchProjectStore } from "./workbench-projects.ts";
+import { handleProjectRequest } from "./workbench-projects-api.ts";
+import { handleSessionSurfaceRequest } from "./workbench-session-api.ts";
+import type { SessionSurfaces } from "./workbench-session-surfaces.ts";
 
 /** Minimal session surface the HTTP API drives. */
-export interface ServeApiSession {
+export interface ServeApiSession extends Partial<SessionSurfaces> {
 	readonly id: string;
 	sendUserMessage(text: string): Promise<void>;
 	abort(): Promise<void>;
@@ -67,6 +72,10 @@ export interface ServeApiOptions {
 	/** Optional bearer token. When set, every request must carry it. */
 	token?: string;
 	version?: string;
+	/** Explicitly configured, allowlisted context documents for local Settings. */
+	contextFiles?: ContextFileStore;
+	/** Local Project/<name>/ workspaces for the browser sidebar. */
+	projects?: WorkbenchProjectStore;
 }
 
 export interface ServeApiHandle {
@@ -88,6 +97,7 @@ function json(res: ServerResponse, status: number, body: unknown): void {
 	res.writeHead(status, {
 		"content-type": "application/json; charset=utf-8",
 		"content-length": Buffer.byteLength(payload),
+		"cache-control": "no-store",
 	});
 	res.end(payload);
 }
@@ -301,7 +311,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					"content-length": Buffer.byteLength(PORCUPINE_WEB_UI),
 					"cache-control": "no-store",
 					"content-security-policy":
-						"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+						"default-src 'none'; img-src blob: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
 					"x-content-type-options": "nosniff",
 					"x-frame-options": "DENY",
 					"referrer-policy": "no-referrer",
@@ -314,6 +324,86 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				json(res, 401, { error: "unauthorized" });
 				return;
 			}
+
+			if (method === "GET" && path === "/workbench") {
+				json(res, 200, { contextFiles: Boolean(options.contextFiles) });
+				return;
+			}
+			if (path === "/workbench/context" || path.startsWith("/workbench/context/")) {
+				if (!options.contextFiles) {
+					json(res, 501, { error: "Context editing is not configured by this server" });
+					return;
+				}
+				if (path === "/workbench/context" && method === "GET") {
+					json(res, 200, { files: options.contextFiles.list() });
+					return;
+				}
+				const match = /^\/workbench\/context\/([^/]+)$/.exec(path);
+				if (!match) {
+					json(res, 404, { error: "Unknown context document" });
+					return;
+				}
+				let id: string;
+				try {
+					id = decodeURIComponent(match[1]!);
+				} catch {
+					json(res, 400, { error: "Malformed context id" });
+					return;
+				}
+				if (method === "GET") {
+					json(res, 200, options.contextFiles.read(id));
+					return;
+				}
+				if (method === "PUT") {
+					let input: unknown;
+					try {
+						input = JSON.parse(await readBody(req));
+					} catch (error) {
+						if (error instanceof Error && "statusCode" in error) throw error;
+						json(res, 400, { error: "Expected JSON with content and revision" });
+						return;
+					}
+					if (
+						!input ||
+						typeof input !== "object" ||
+						Array.isArray(input) ||
+						!("content" in input) ||
+						!("revision" in input) ||
+						typeof input.content !== "string" ||
+						typeof input.revision !== "string" ||
+						Object.keys(input).some((key) => key !== "content" && key !== "revision")
+					) {
+						json(res, 400, { error: "Expected only content and revision strings" });
+						return;
+					}
+					json(res, 200, options.contextFiles.write(id, input.content, input.revision));
+					return;
+				}
+				res.setHeader("allow", path === "/workbench/context" ? "GET" : "GET, PUT");
+				json(res, 405, { error: "Method not allowed" });
+				return;
+			}
+
+			if (
+				options.projects &&
+				(await handleProjectRequest(req, res, url, method, { readBody, json, projects: options.projects }))
+			)
+				return;
+
+			if (
+				await handleSessionSurfaceRequest(req, res, url, method, {
+					readBody,
+					json,
+					getSession: (id) => resolveEntry(id, querySessionId)?.session,
+					publishControls: (id, controls) => {
+						const entry = allSessions.get(id);
+						if (!entry) return;
+						const data = `data: ${JSON.stringify({ type: "session_controls", controls })}\n\n`;
+						for (const client of Array.from(entry.sseClients)) writeSse(client, data, entry.sseClients);
+					},
+				})
+			)
+				return;
 
 			// Global session-lifecycle stream. Must hijack the response.
 			if (method === "GET" && path === "/events") {

@@ -1,0 +1,86 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { startServeApi } from "../src/server/http-api.ts";
+import { WorkbenchProjectStore } from "../src/server/workbench-projects.ts";
+
+const cleanups: Array<() => void | Promise<void>> = [];
+afterEach(async () => {
+	for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+});
+async function fixture() {
+	const cwd = mkdtempSync(join(tmpdir(), "project-api-"));
+	cleanups.push(() => rmSync(cwd, { recursive: true, force: true }));
+	const handle = await startServeApi({
+		port: 0,
+		token: "project-token",
+		projects: new WorkbenchProjectStore(cwd),
+		session: {
+			id: "s",
+			async sendUserMessage() {},
+			async abort() {},
+			isStreaming: () => false,
+			onEvent: () => () => {},
+			onConfirm: () => () => {},
+		},
+	});
+	cleanups.push(() => handle.close());
+	return { cwd, base: `http://127.0.0.1:${handle.port()}`, headers: { authorization: "Bearer project-token" } };
+}
+describe("project workspace API", () => {
+	it("creates, uploads and reads a project document through authenticated HTTP", async () => {
+		const { cwd, base, headers } = await fixture();
+		const created = await fetch(`${base}/workbench/projects`, {
+			method: "POST",
+			headers: { ...headers, "content-type": "application/json" },
+			body: JSON.stringify({ name: "Battery Aging", title: "Battery Aging" }),
+		});
+		expect(created.status).toBe(201);
+		const uploaded = await fetch(`${base}/workbench/projects/battery-aging/files?name=notes.md`, {
+			method: "POST",
+			headers,
+			body: "# Notes\nMeasured capacity fade.\n",
+		});
+		expect(uploaded.status).toBe(201);
+		const document = await fetch(`${base}/workbench/projects/battery-aging/files/uploads/notes.md`, { headers });
+		expect((await document.json()).content).toContain("capacity fade");
+		expect(readFileSync(join(cwd, "Project", "battery-aging", "uploads", "notes.md"), "utf8")).toContain(
+			"capacity fade",
+		);
+	});
+	it("rejects unauthenticated and cross-origin project writes", async () => {
+		const { base, headers } = await fixture();
+		expect((await fetch(`${base}/workbench/projects`)).status).toBe(401);
+		const cross = await fetch(`${base}/workbench/projects`, {
+			method: "POST",
+			headers: { ...headers, origin: "https://attacker.example", "content-type": "application/json" },
+			body: JSON.stringify({ name: "bad" }),
+		});
+		expect(cross.status).toBe(403);
+	});
+	it("rejects traversal, unknown properties and disallowed document types", async () => {
+		const { base, headers } = await fixture();
+		const json = { ...headers, "content-type": "application/json" };
+		await fetch(`${base}/workbench/projects`, {
+			method: "POST",
+			headers: json,
+			body: JSON.stringify({ name: "safe" }),
+		});
+		expect(
+			(
+				await fetch(`${base}/workbench/projects`, {
+					method: "POST",
+					headers: json,
+					body: JSON.stringify({ name: "x", script: "run()" }),
+				})
+			).status,
+		).toBe(400);
+		expect(
+			(await fetch(`${base}/workbench/projects/safe/files?name=payload.exe`, { method: "POST", headers, body: "x" }))
+				.status,
+		).toBe(415);
+		expect((await fetch(`${base}/workbench/projects/safe/files/..%2F..%2FREADME.md`, { headers })).status).toBe(403);
+		expect((await fetch(`${base}/workbench/projects/safe/files`, { method: "DELETE", headers })).status).toBe(405);
+	});
+});
