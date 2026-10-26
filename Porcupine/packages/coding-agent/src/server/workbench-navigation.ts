@@ -4,8 +4,11 @@ export const GOAL_CARD = `
   <header class="goal-head"><span class="goal-kicker">Goal</span><span class="goal-state" id="goal-state"></span></header>
   <p class="goal-objective" id="goal-objective"></p>
   <ol class="goal-steps" id="goal-steps"></ol>
-  <p class="goal-empty" id="goal-empty">No goal tracked. The agent declares one when a task needs steps.</p>
-  <p class="goal-fence" id="goal-fence" hidden>Plan fence on: mutating tools are blocked.</p>
+  <p class="goal-empty" id="goal-empty">No goal tracked yet.</p>
+  <div class="goal-plan-row">
+    <button class="plan-toggle" id="plan-toggle" type="button" aria-pressed="false" title="Plan mode blocks mutating tools for later turns. It does not save a plan artifact in the browser.">Plan mode</button>
+    <span class="goal-fence" id="goal-fence" hidden>Fence on</span>
+  </div>
 </section>`;
 export const STACKS_NAVIGATION = `
 <details class="nav-tree" id="stacks-tree" hidden><summary>Stacks</summary>
@@ -14,10 +17,11 @@ export const STACKS_NAVIGATION = `
 </details>`;
 export const STACKS_DIALOG = `
 <dialog class="settings-dialog stack-dialog" id="stack-dialog" aria-labelledby="stack-title"><header class="settings-heading"><h2 id="stack-title">Stack</h2><form method="dialog"><button class="quiet-button" aria-label="Close stack details">×</button></form></header><section class="settings-section"><p id="stack-description"></p><p id="stack-availability"></p><pre id="stack-content" tabindex="0"></pre></section></dialog>`;
-export const SESSION_COMPOSER_CONTROLS = `<div class="session-controls" id="session-controls" hidden><button class="plan-toggle" id="plan-toggle" type="button" aria-pressed="false" title="Plan mode actively blocks mutating tools for subsequent turns. It does not save a plan artifact in the browser.">Plan</button><label>Reasoning <select id="reasoning-mode" aria-label="Reasoning mode"></select></label><label>Autonomy <select id="autonomy-mode" aria-label="Autonomy mode"><option value="ask">Ask</option><option value="normal">Normal</option><option value="auto">Auto</option></select></label><span class="model-label" id="session-model"></span></div>`;
+export const SESSION_COMPOSER_CONTROLS = `<div class="session-controls" id="session-controls" hidden><label>Reasoning <select id="reasoning-mode" aria-label="Reasoning mode"></select></label><label>Autonomy <select id="autonomy-mode" aria-label="Autonomy mode"><option value="ask">Ask</option><option value="normal">Normal</option><option value="auto">Auto</option></select></label><span class="model-label" id="session-model"></span></div>`;
 export const SESSION_NAVIGATION_STYLES = `
 .sidebar { overflow-y: auto; scrollbar-width: thin; }
-.goal-card { border: var(--unit) solid var(--line-soft); border-radius: var(--r2); padding: var(--s3); display: grid; gap: var(--s2); background: var(--surface); }
+.goal-card { position: absolute; top: var(--s4); right: var(--s5); z-index: 4; width: 268px; max-height: 46dvh; overflow: auto; border: var(--unit) solid var(--line-soft); border-radius: var(--r2); padding: var(--s3); display: grid; gap: var(--s2); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgb(0 0 0 / 18%); }
+.goal-card[hidden] { display: none; }
 .goal-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
 .goal-kicker { font-size: var(--small); letter-spacing: .08em; text-transform: uppercase; color: var(--quiet); }
 .goal-state { font-size: var(--small); color: var(--muted); }
@@ -34,7 +38,8 @@ export const SESSION_NAVIGATION_STYLES = `
 .goal-step[data-status="done"] .goal-text { color: var(--quiet); text-decoration: line-through; }
 .goal-step[data-status="blocked"] .glyph { color: var(--danger); }
 .goal-empty { margin: 0; font-size: var(--small); color: var(--quiet); }
-.goal-fence { margin: 0; font-size: var(--small); color: var(--accent); }
+.goal-plan-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); border-top: var(--unit) solid var(--line-soft); padding-top: var(--s2); }
+.goal-fence { font-size: var(--small); color: var(--accent); }
 .nav-tree, .nav-branch { color: var(--muted); font-size: var(--small); }
 .nav-tree > summary { color: var(--text); font-size: var(--body); padding: var(--s1) var(--s2); cursor: pointer; }
 .nav-branch { margin: var(--s2) 0 0 var(--s4); }
@@ -56,6 +61,10 @@ export const SESSION_NAVIGATION_STYLES = `
 .plan-toggle:disabled { opacity: .55; cursor: not-allowed; }
 .model-label { color: var(--quiet); max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .compose-options { min-width: 0; display: grid; gap: var(--s1); }
+.content { position: relative; }
+@media (max-width: 1080px) {
+  .goal-card { position: static; width: auto; max-height: none; margin: 0 0 var(--s4); }
+}
 @media(max-width:700px) { .model-label { display: none; } .session-controls { gap: var(--s1) var(--s2); } .compose-options > .hint { display: none; } }
 `;
 export const SESSION_NAVIGATION_SCRIPT = `
