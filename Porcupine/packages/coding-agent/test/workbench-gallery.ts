@@ -308,7 +308,7 @@ try {
 	await shot(page, "09 Permission approval.png");
 	await page.locator(".permission").evaluate((element) => element.remove());
 	emit({ type: "agent_start" });
-	await page.waitForFunction(() => document.getElementById("status-text")?.textContent === "Working");
+	await page.waitForFunction(() => document.getElementById("activity-label")?.textContent === "Working");
 	await shot(page, "10 Working state.png");
 	emit({ type: "agent_end" });
 
