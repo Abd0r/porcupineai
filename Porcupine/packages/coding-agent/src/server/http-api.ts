@@ -33,6 +33,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { stripAnsi } from "../utils/ansi.ts";
+import { PORCUPINE_WEB_UI } from "./web-ui.ts";
 
 /** Minimal session surface the HTTP API drives. */
 export interface ServeApiSession {
@@ -282,10 +283,6 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 
 	const server = createServer(async (req, res) => {
 		try {
-			if (!requireAuth(req)) {
-				json(res, 401, { error: "unauthorized" });
-				return;
-			}
 			const origin = req.headers.origin;
 			if (origin !== undefined && !isOriginAllowed(req, origin)) {
 				json(res, 403, { error: "cross-origin request denied" });
@@ -295,6 +292,28 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			const path = url.pathname;
 			const method = (req.method ?? "GET").toUpperCase();
 			const querySessionId = url.searchParams.get("session");
+
+			// The static workbench shell contains no session data. API requests made
+			// by the page remain behind the same bearer-token check as every client.
+			if (method === "GET" && path === "/") {
+				res.writeHead(200, {
+					"content-type": "text/html; charset=utf-8",
+					"content-length": Buffer.byteLength(PORCUPINE_WEB_UI),
+					"cache-control": "no-store",
+					"content-security-policy":
+						"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+					"x-content-type-options": "nosniff",
+					"x-frame-options": "DENY",
+					"referrer-policy": "no-referrer",
+				});
+				res.end(PORCUPINE_WEB_UI);
+				return;
+			}
+
+			if (!requireAuth(req)) {
+				json(res, 401, { error: "unauthorized" });
+				return;
+			}
 
 			// Global session-lifecycle stream. Must hijack the response.
 			if (method === "GET" && path === "/events") {
