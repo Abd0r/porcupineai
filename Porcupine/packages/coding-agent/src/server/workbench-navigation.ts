@@ -43,7 +43,10 @@ export const SESSION_NAVIGATION_STYLES = `
 .activity[data-mode="tool"] .orb { display: none; }
 .activity[data-mode="tool"] .terminal-mini { display: block; color: var(--accent); }
 .activity[data-mode="tool"] { color: var(--muted); }
-.subagent-card { top: calc(var(--s9) + var(--s2) + 210px); }
+.goal-stack { position: absolute; top: calc(var(--s9) + var(--s2)); right: var(--s4); z-index: 6; display: grid; gap: var(--s2); width: 292px; max-height: calc(100dvh - var(--s9) - var(--s5)); }
+.goal-stack .goal-card { position: static; width: auto; right: auto; top: auto; max-height: none; }
+.subagent-card { position: static; }
+@media (max-width: 1080px) { .goal-stack { position: static; width: auto; margin: var(--s4) var(--s5) 0; } }
 .subagent-card .goal-step .goal-text { text-decoration: none; }
 .context-ring { position: relative; display: grid; place-items: center; width: var(--s7); height: var(--s7); padding: 0; border: 0; background: transparent; border-radius: 50%; }
 .context-ring svg { transform: rotate(-90deg); }
@@ -54,7 +57,6 @@ export const SESSION_NAVIGATION_STYLES = `
 .context-tip { position: absolute; top: calc(100% + var(--s2)); right: 0; z-index: 9; display: none; width: max-content; max-width: 260px; padding: var(--s2) var(--s3); border: var(--unit) solid var(--line); border-radius: var(--r1); background: var(--surface); color: var(--text); font-size: var(--small); line-height: 1.5; box-shadow: 0 12px 30px rgb(0 0 0 / 35%); }
 .context-ring:hover .context-tip, .context-ring:focus-visible .context-tip { display: block; }
 .goal-card {
-  position: absolute; top: calc(var(--s9) + var(--s2)); right: var(--s4); z-index: 6;
   width: 292px; max-height: 52dvh; overflow: auto; padding: var(--s3); display: grid; gap: var(--s2);
   border-radius: var(--r1);
   border: var(--unit) solid color-mix(in srgb, var(--line) 80%, transparent);
@@ -133,6 +135,7 @@ function formatTokens(value){if(!Number.isFinite(value))return '—';if(value>=1
 const RING_CIRCUMFERENCE=2*Math.PI*15;
 let lastContext=null;
 const activityUi={root:$('activity'),label:$('activity-label')};
+activityUi.root.addEventListener('click',()=>{if(!subagentUi.card)return;subagentUi.card.hidden=!subagentUi.card.hidden});
 const activityWords={thinking:'Thinking',reasoning:'Reasoning',coding:'Writing code',tools:'Using tools',planning:'Planning',research:'Researching',reading:'Reading',writing:'Writing',testing:'Testing',dreaming:'Consolidating',idle:'Ready'};
 function setActivity(mode,label){if(!activityUi.root)return;activityUi.root.dataset.mode=mode==='working'?'working':mode==='tool'?'tool':'idle';activityUi.label.textContent=label||activityWords[mode]||'Ready'}
 const subagentUi={card:$('subagent-card'),toggle:$('subagent-toggle'),state:$('subagent-state'),list:$('subagent-list'),empty:$('subagent-empty')};

@@ -47,8 +47,7 @@ ${PROJECTS_NAVIGATION}
 </aside>
 <main class="main">
 <header class="topbar"><strong id="session-title">Workbench</strong><div class="topbar-actions"><div class="status">${AGENT_ACTIVITY}</div><button class="settings-trigger" id="settings-open" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></button></div></header>
-${GOAL_CARD}
-${SUBAGENT_CARD}
+<div class="goal-stack">${GOAL_CARD}${SUBAGENT_CARD}</div>
 <section class="content" aria-label="Conversation">
 <div class="welcome" id="welcome"><h1>Where shall we begin?</h1><p>A question, an idea, or something to work through.</p></div>
 <div class="feed-stage"><div class="chat-backdrop" id="chat-backdrop" aria-hidden="true"></div><div class="feed" id="feed" aria-live="polite" aria-relevant="additions text"></div></div>
