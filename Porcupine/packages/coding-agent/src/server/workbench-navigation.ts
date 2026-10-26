@@ -1,13 +1,15 @@
 /** Live runtime navigation and composer controls. No installers or tool execution actions. */
 export const GOAL_CARD = `
 <section class="goal-card" id="goal-card" aria-label="Tracked goal">
-  <header class="goal-head"><span class="goal-kicker">Goal</span><span class="goal-state" id="goal-state"></span></header>
+  <header class="goal-head"><button class="goal-toggle" id="goal-toggle" type="button" aria-expanded="true" aria-controls="goal-body"><span class="goal-kicker">Goal</span><span class="goal-state" id="goal-state"></span><span class="goal-chevron" aria-hidden="true">▾</span></button></header>
+  <div class="goal-body" id="goal-body">
   <p class="goal-objective" id="goal-objective"></p>
   <ol class="goal-steps" id="goal-steps"></ol>
   <p class="goal-empty" id="goal-empty">No goal tracked yet.</p>
   <div class="goal-plan-row">
     <button class="plan-toggle" id="plan-toggle" type="button" aria-pressed="false" title="Plan mode blocks mutating tools for later turns. It does not save a plan artifact in the browser.">Plan mode</button>
     <span class="goal-fence" id="goal-fence" hidden>Fence on</span>
+  </div>
   </div>
 </section>`;
 export const STACKS_NAVIGATION = `
@@ -20,9 +22,16 @@ export const STACKS_DIALOG = `
 export const SESSION_COMPOSER_CONTROLS = `<div class="session-controls" id="session-controls" hidden><label>Reasoning <select id="reasoning-mode" aria-label="Reasoning mode"></select></label><label>Autonomy <select id="autonomy-mode" aria-label="Autonomy mode"><option value="ask">Ask</option><option value="normal">Normal</option><option value="auto">Auto</option></select></label><span class="model-label" id="session-model"></span></div>`;
 export const SESSION_NAVIGATION_STYLES = `
 .sidebar { overflow-y: auto; scrollbar-width: thin; }
-.goal-card { position: absolute; top: var(--s4); right: var(--s5); z-index: 4; width: 268px; max-height: 46dvh; overflow: auto; border: var(--unit) solid var(--line-soft); border-radius: var(--r2); padding: var(--s3); display: grid; gap: var(--s2); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgb(0 0 0 / 18%); }
+.goal-card { position: absolute; top: calc(var(--s9) + var(--s3)); right: var(--s5); z-index: 4; width: 268px; max-height: 46dvh; overflow: auto; border: var(--unit) solid var(--line-soft); border-radius: var(--r2); padding: var(--s3); display: grid; gap: var(--s2); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgb(0 0 0 / 18%); }
 .goal-card[hidden] { display: none; }
-.goal-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
+.goal-head { display: flex; }
+.goal-toggle { display: flex; align-items: baseline; gap: var(--s2); width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
+.goal-toggle .goal-kicker { flex: none; }
+.goal-toggle .goal-state { margin-left: auto; }
+.goal-chevron { color: var(--quiet); font-size: var(--small); transition: transform var(--motion-fast) var(--motion-ease); }
+.goal-card.collapsed .goal-chevron { transform: rotate(-90deg); }
+.goal-body { display: grid; gap: var(--s2); }
+.goal-card.collapsed .goal-body { display: none; }
 .goal-kicker { font-size: var(--small); letter-spacing: .08em; text-transform: uppercase; color: var(--quiet); }
 .goal-state { font-size: var(--small); color: var(--muted); }
 .goal-state[data-state="active"] { color: var(--accent); }
@@ -61,20 +70,27 @@ export const SESSION_NAVIGATION_STYLES = `
 .plan-toggle:disabled { opacity: .55; cursor: not-allowed; }
 .model-label { color: var(--quiet); max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .compose-options { min-width: 0; display: grid; gap: var(--s1); }
-.content { position: relative; }
+.main { position: relative; }
+@media (min-width: 1081px) {
+  .content { padding-right: calc(268px + var(--s5) * 2); }
+}
 @media (max-width: 1080px) {
-  .goal-card { position: static; width: auto; max-height: none; margin: 0 0 var(--s4); }
+  .goal-card { position: static; width: auto; max-height: none; margin: var(--s4) var(--s5) 0; }
 }
 @media(max-width:700px) { .model-label { display: none; } .session-controls { gap: var(--s1) var(--s2); } .compose-options > .hint { display: none; } }
 `;
 export const SESSION_NAVIGATION_SCRIPT = `
 let sessionSurface=null,surfaceEpoch=0,stackInspection=0,trackerEpoch=0;
-const goalUi={card:$('goal-card'),state:$('goal-state'),objective:$('goal-objective'),steps:$('goal-steps'),empty:$('goal-empty'),fence:$('goal-fence')};
+const goalUi={card:$('goal-card'),toggle:$('goal-toggle'),state:$('goal-state'),objective:$('goal-objective'),steps:$('goal-steps'),empty:$('goal-empty'),fence:$('goal-fence')};
 const goalGlyph={done:'\u2713',active:'\u25B8',blocked:'!',pending:'\u25CB'};
 function renderTracker(view){const goal=view&&view.goal;goalUi.card.hidden=false;goalUi.fence.hidden=!view||!view.planFence;goalUi.steps.replaceChildren();
   if(!goal){goalUi.state.textContent='';goalUi.state.removeAttribute('data-state');goalUi.objective.textContent='';goalUi.empty.hidden=false;return}
   goalUi.empty.hidden=true;goalUi.state.textContent=goal.status;goalUi.state.dataset.state=goal.status;goalUi.objective.textContent=goal.objective;
   for(const step of goal.steps){const item=document.createElement('li');item.className='goal-step';item.dataset.status=step.status;const glyph=document.createElement('span');glyph.className='glyph';glyph.textContent=goalGlyph[step.status]||'\u25CB';glyph.setAttribute('aria-label',step.status);const text=document.createElement('span');text.className='goal-text';text.textContent=step.objective;if(step.note)text.title=step.note;item.append(glyph,text);goalUi.steps.append(item)}}
+const goalCollapseKey='porcupine.workbench.goal-collapsed';
+function applyGoalCollapse(collapsed,save=false){goalUi.card.classList.toggle('collapsed',collapsed);goalUi.toggle.setAttribute('aria-expanded',String(!collapsed));if(save)try{window.localStorage.setItem(goalCollapseKey,collapsed?'1':'0')}catch{}}
+try{applyGoalCollapse(window.localStorage.getItem(goalCollapseKey)==='1')}catch{}
+goalUi.toggle.addEventListener('click',()=>{const collapsed=!goalUi.card.classList.contains('collapsed');applyGoalCollapse(collapsed,true)});
 async function refreshTracker(id=sessionId){const epoch=++trackerEpoch;if(!id){renderTracker(null);return}try{const view=await json('/session/'+encodeURIComponent(id)+'/goal-plan');if(epoch===trackerEpoch&&id===sessionId)renderTracker(view.supported===false?null:view)}catch{if(epoch===trackerEpoch&&id===sessionId)renderTracker(null)}}
 const surfaceUi={plan:$('plan-toggle'),root:$('session-controls'),reasoning:$('reasoning-mode'),autonomy:$('autonomy-mode'),model:$('session-model'),stacks:$('stacks-tree'),dialog:$('stack-dialog')};
 const catalogFolders={skills:{folder:$('skills-folder'),count:$('skills-count'),search:$('skills-search'),items:$('skills-items'),more:$('skills-more'),offset:0,epoch:0,timer:null},tools:{folder:$('tools-folder'),count:$('tools-count'),search:$('tools-search'),items:$('tools-items'),more:$('tools-more'),offset:0,epoch:0,timer:null}};

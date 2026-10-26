@@ -106,6 +106,8 @@ function loadRenderer(): {
 		"status-dot",
 		"session-title",
 		"goal-card",
+		"goal-toggle",
+		"goal-body",
 		"goal-state",
 		"goal-objective",
 		"goal-steps",

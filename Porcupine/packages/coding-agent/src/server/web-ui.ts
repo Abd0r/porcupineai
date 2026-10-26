@@ -42,8 +42,8 @@ ${PROJECTS_NAVIGATION}
 </aside>
 <main class="main">
 <header class="topbar"><strong id="session-title">Workbench</strong><div class="topbar-actions"><div class="status" aria-live="polite"><span class="dot" id="status-dot"></span><span id="status-text">Ready</span></div><button class="settings-trigger" id="settings-open" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></button></div></header>
-<section class="content" aria-label="Conversation">
 ${GOAL_CARD}
+<section class="content" aria-label="Conversation">
 <div class="welcome" id="welcome"><h1>Where shall we begin?</h1><p>A question, an idea, or something to work through.</p></div>
 <div class="feed-stage"><div class="chat-backdrop" id="chat-backdrop" aria-hidden="true"></div><div class="feed" id="feed" aria-live="polite" aria-relevant="additions text"></div></div>
 <form class="composer-wrap" id="prompt-form"><textarea class="composer" id="prompt" rows="2" aria-label="Message Porcupine" placeholder="Message Porcupine…"></textarea><div class="compose-row"><div class="compose-options">${SESSION_COMPOSER_CONTROLS}<span class="hint">Enter to send · Shift + Enter for a new line</span></div><div class="actions"><button class="stop" id="stop" type="button" hidden>Stop</button><button class="send" id="send" type="submit" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 5-5"/></svg></button></div></div></form>

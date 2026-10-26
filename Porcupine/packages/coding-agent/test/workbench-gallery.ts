@@ -115,6 +115,23 @@ const surfaces: SessionSurfaces = {
 			.sort((a, b) => a.name.localeCompare(b.name));
 		return { skillsCount: 4, toolsCount: 4, entries: all.slice(offset, offset + limit), total: all.length, offset };
 	},
+	getGoalPlan: () => ({
+		supported: true,
+		goal: {
+			objective: "Explain force, motion and displacement with visuals",
+			status: "active",
+			steps: [
+				{ id: "free-body-1", objective: "Draw the free-body diagram", status: "done", note: "shown above" },
+				{ id: "spatial-2", objective: "Show the spatial relationship in 3D", status: "done" },
+				{ id: "data-3", objective: "Chart displacement with uncertainty", status: "active" },
+				{ id: "summarise-4", objective: "Summarise the assumptions", status: "pending" },
+			],
+			createdAt: "2026-10-27T00:00:00.000Z",
+			updatedAt: "2026-10-27T00:00:00.000Z",
+		},
+		planFence: false,
+		busy: false,
+	}),
 	inspectCatalog: (kind, name) => ({
 		entry: { name, kind, description: "Verified local capability.", scope: "user", availability: "available" },
 		content:
@@ -166,9 +183,13 @@ try {
 	await page.locator("#auth-form").evaluate((form) => (form as HTMLFormElement).requestSubmit());
 	await page.waitForFunction(() => document.getElementById("auth")?.hidden === true);
 	await page.locator("#session-controls").waitFor();
+	await page.locator("#goal-card").waitFor();
 	await streamReady;
 	await page.waitForTimeout(150);
-	await shot(page, "02 Workbench empty.png");
+	await shot(page, "02 Workbench with tracked goal.png");
+	await page.locator("#goal-toggle").click();
+	await shot(page, "02b Tracker collapsed.png");
+	await page.locator("#goal-toggle").click();
 
 	const scene = {
 		title: "Spatial relationship",
