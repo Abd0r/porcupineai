@@ -25,10 +25,12 @@ const api = await startServeApi({
 		onConfirm: () => () => {},
 	},
 });
-const browser = await chromium.launch({ headless: true }).catch(async (error) => {
-	await api.close();
-	throw error;
-});
+const browser = await chromium
+	.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH })
+	.catch(async (error) => {
+		await api.close();
+		throw error;
+	});
 try {
 	const context = await browser.newContext();
 	const page = await context.newPage();
@@ -120,6 +122,7 @@ try {
 	assert.equal(await page.locator("#chat-backdrop").evaluate((element) => element.style.backgroundImage), "");
 	await page.locator("#appearance-theme").selectOption("workbench");
 	await page.locator("#appearance-mode").selectOption("dark");
+	await page.getByRole("tab", { name: "Context", exact: true }).click();
 	await page.getByRole("combobox", { name: "Context file", exact: true }).selectOption("global:USER.md");
 	const editor = page.getByRole("textbox", { name: "Context file contents", exact: true });
 	await page.waitForFunction(() =>

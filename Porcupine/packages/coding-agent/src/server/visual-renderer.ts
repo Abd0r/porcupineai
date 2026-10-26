@@ -44,8 +44,8 @@ function renderVisual(visual){
     const body=visualElement('tbody');for(const s of visual.series)for(const p of s.points){const tr=visualElement('tr');for(const value of [s.name,p.x,p.y,p.error===undefined?'Not supplied':p.error,p.label||''])tr.append(visualElement('td',value));body.append(tr)}table.append(body);details.append(table);
   }
   card.append(details);
-  const ask=visualElement('button','Ask about this visual');ask.type='button';ask.className='stop';ask.addEventListener('click',()=>{ui.prompt.value='Explain "'+visual.title+'" step by step, including its labels and assumptions.';ui.prompt.focus()});card.append(ask);
-  ui.feed.append(card);ui.feed.scrollTop=ui.feed.scrollHeight;
+  const ask=visualElement('button','Ask about this visual');ask.type='button';ask.className='stop';ask.addEventListener('click',()=>{ui.prompt.value='Explain "'+visual.title+'" step by step, including its labels and assumptions.';resizeComposer();ui.prompt.focus()});card.append(ask);
+  ui.feed.append(card);scrollFeed();
   const ctx=canvas.getContext('2d');if(!ctx)return;let colors=plotColors(canvas);
   function line(x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
   function draw(){

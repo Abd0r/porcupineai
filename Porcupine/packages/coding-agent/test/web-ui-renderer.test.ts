@@ -34,6 +34,7 @@ class FakeCanvasContext {
 }
 
 class FakeElement {
+	readonly dataset: Record<string, string> = {};
 	readonly children: FakeElement[] = [];
 	readonly attributes = new Map<string, string>();
 	readonly listeners = new Set<string>();
@@ -63,10 +64,17 @@ class FakeElement {
 	scrollTop = 0;
 	scrollHeight = 0;
 	role = "";
-	constructor(
-		readonly tagName: string,
-		private readonly canvasContext: FakeCanvasContext,
-	) {}
+	value = "";
+	clientHeight = 640;
+	querySelectorAll(): FakeElement[] {
+		return [];
+	}
+	readonly tagName: string;
+	private readonly canvasContext: FakeCanvasContext;
+	constructor(tagName: string, canvasContext: FakeCanvasContext) {
+		this.tagName = tagName;
+		this.canvasContext = canvasContext;
+	}
 	get lastChild(): FakeElement | undefined {
 		return this.children[this.children.length - 1];
 	}
@@ -86,6 +94,12 @@ class FakeElement {
 	setAttribute(name: string, value: string): void {
 		this.attributes.set(name, value);
 	}
+	getAttribute(name: string): string | null {
+		return this.attributes.get(name) ?? null;
+	}
+	removeAttribute(name: string): void {
+		this.attributes.delete(name);
+	}
 	getBoundingClientRect(): { width: number; height: number } {
 		return { width: 640, height: 320 };
 	}
@@ -95,12 +109,14 @@ class FakeElement {
 	setPointerCapture(): void {}
 }
 
-function loadRenderer(): {
+function loadRenderer(mockFetch?: typeof fetch): {
 	render(scene: unknown): void;
 	event(event: unknown): void;
 	feed: FakeElement;
 	canvasContext: FakeCanvasContext;
 	rich(node: FakeElement, text: string): FakeElement;
+	connect(id: string): Promise<void>;
+	text(value: unknown): string;
 } {
 	const canvasContext = new FakeCanvasContext();
 	const elements = new Map<string, FakeElement>();
@@ -192,6 +208,14 @@ function loadRenderer(): {
 		"appearance-opacity-value",
 		"appearance-error",
 		"chat-backdrop",
+		"sidebar",
+		"sidebar-dismiss",
+		"jump-latest",
+		"reconnect",
+		"session-search",
+		"agent-inspector",
+		"inspector-toggle",
+		"history-notice",
 	]) {
 		elements.set(id, new FakeElement("div", canvasContext));
 	}
@@ -200,6 +224,9 @@ function loadRenderer(): {
 		addEventListener(): void {},
 		querySelector(): FakeElement {
 			return new FakeElement("div", canvasContext);
+		},
+		querySelectorAll(): FakeElement[] {
+			return [];
 		},
 		getElementById(id: string): FakeElement {
 			const element = elements.get(id);
@@ -219,6 +246,16 @@ function loadRenderer(): {
 		},
 	};
 	const sandbox = {
+		fetch: mockFetch ?? (async () => Response.json({ supported: false, sessions: [] })),
+		Headers,
+		AbortController,
+		TextDecoder,
+		innerHeight: 960,
+		requestAnimationFrame: (callback: () => void) => {
+			callback();
+			return 0;
+		},
+		cancelAnimationFrame: () => {},
 		setInterval: () => 0,
 		clearInterval: () => {},
 		setTimeout: () => 0,
@@ -241,7 +278,7 @@ function loadRenderer(): {
 	if (!script) throw new Error("Workbench script is missing");
 	const instrumented = script.replace(
 		/\}\)\(\);\s*$/,
-		"globalThis.__renderVisualization=renderVisual;globalThis.__renderEvent=renderEvent;globalThis.__renderRichText=renderRichText;})();",
+		"globalThis.__connect=connectEvents;globalThis.__text=textOf;globalThis.__renderVisualization=renderVisual;globalThis.__renderEvent=renderEvent;globalThis.__renderRichText=renderRichText;})();",
 	);
 	if (instrumented === script) throw new Error("Could not expose the renderer to its test harness");
 	runInNewContext(instrumented, sandbox);
@@ -249,12 +286,67 @@ function loadRenderer(): {
 	const feed = elements.get("feed");
 	if (!feed) throw new Error("Test feed element is missing");
 	const event = runInNewContext("globalThis.__renderEvent", sandbox) as (event: unknown) => void;
-	const rich = runInNewContext("globalThis.__renderRichText", sandbox) as (
-		node: FakeElement,
-		text: string,
-	) => FakeElement;
-	return { render, event, rich, feed, canvasContext };
+	const rich = (node: FakeElement, text: string): FakeElement => {
+		Object.assign(sandbox, { __node: node, __source: text });
+		return runInNewContext("globalThis.__renderRichText(__node,__source)", sandbox, { timeout: 500 }) as FakeElement;
+	};
+	const connect = runInNewContext("globalThis.__connect", sandbox) as (id: string) => Promise<void>;
+	const text = runInNewContext("globalThis.__text", sandbox) as (value: unknown) => string;
+	return { render, event, rich, feed, canvasContext, connect, text };
 }
+
+describe("workbench transport regressions", () => {
+	it("keeps tools, goals, sub-agents and the answer in the conversation event order", () => {
+		const { event, feed } = loadRenderer();
+		event({ type: "message_end", message: { role: "user", content: "Fix this" } });
+		event({ type: "tool_execution_start", toolCallId: "read-1", toolName: "read", args: { path: "AGENTS.md" } });
+		event({
+			type: "goal_plan",
+			status: {
+				goal: { objective: "Fix this", status: "active", steps: [{ objective: "Verify", status: "active" }] },
+			},
+		});
+		event({
+			type: "subagents",
+			runs: [{ id: "worker", name: "buck", task: "Verify the fix", status: "running", steps: 1 }],
+		});
+		event({ type: "message_end", message: { role: "assistant", content: "Verified." } });
+		expect(feed.children.filter((node) => node.className !== "thinking").map((node) => node.className)).toEqual([
+			"message user",
+			"tool-activity",
+			"goal-activity",
+			"subagent-activity",
+			"message assistant",
+		]);
+	});
+	it("renders real SSE frames split across network chunks", async () => {
+		const wire = `data: ${JSON.stringify({ type: "message_end", message: { role: "user", content: "Real event" } })}\n\n`;
+		const encoder = new TextEncoder();
+		const { connect, feed } = loadRenderer(async (path) => {
+			if (!String(path).endsWith("/events")) return Response.json({ supported: false });
+			return new Response(
+				new ReadableStream({
+					start(controller) {
+						controller.enqueue(encoder.encode(wire.slice(0, 19)));
+						controller.enqueue(encoder.encode(wire.slice(19)));
+						controller.close();
+					},
+				}),
+			);
+		});
+		await connect("test");
+		expect(descendants(feed).some((node) => node.textContent === "Real event")).toBe(true);
+	});
+	it("joins content blocks with actual newlines", () => {
+		const { text } = loadRenderer();
+		expect(
+			text([
+				{ type: "text", text: "First" },
+				{ type: "text", text: "Second" },
+			]),
+		).toBe("First\nSecond");
+	});
+});
 
 const scene = {
 	version: 1,
@@ -404,6 +496,14 @@ describe("browser 3D scene renderer", () => {
 });
 
 describe("rich message rendering", () => {
+	it.each(["| A plain line, not a table", "``` typescript with a title"])(
+		"does not stall on incomplete Markdown: %s",
+		(source) => {
+			const { rich } = loadRenderer();
+			const node = rich(new FakeElement("div", new FakeCanvasContext()), source);
+			expect(descendants(node).some((child) => child.textContent === source)).toBe(true);
+		},
+	);
 	it("renders fenced code with a language label and copy control", () => {
 		const { rich } = loadRenderer();
 		const node = rich(new FakeElement("div", new FakeCanvasContext()), "Intro\n\n```ts\nconst x = 1 < 2;\n```");
@@ -482,6 +582,19 @@ describe("rich message rendering", () => {
 });
 
 describe("inline thinking state", () => {
+	it("does not create empty assistant bubbles for reasoning and tool-only messages", () => {
+		const { event, feed } = loadRenderer();
+		const message = {
+			role: "assistant",
+			content: [
+				{ type: "thinking", thinking: "Inspect the file" },
+				{ type: "toolCall", id: "read-1", name: "read", arguments: { path: "README.md" } },
+			],
+		};
+		event({ type: "message_update", message });
+		event({ type: "message_end", message });
+		expect(feed.children.filter((node) => node.className === "message assistant")).toHaveLength(0);
+	});
 	it("starts a live row, names real tool activity, and settles with the chain of thought", () => {
 		const { event, feed } = loadRenderer();
 		event({ type: "agent_start" });

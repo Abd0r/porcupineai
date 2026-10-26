@@ -29,10 +29,12 @@ const api = await startServeApi({
 		},
 	},
 });
-const browser = await chromium.launch({ headless: true }).catch(async (error) => {
-	await api.close();
-	throw error;
-});
+const browser = await chromium
+	.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH })
+	.catch(async (error) => {
+		await api.close();
+		throw error;
+	});
 try {
 	const page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
 	const errors: string[] = [];
@@ -153,7 +155,7 @@ try {
 			height: innerHeight,
 			composerBottom: document.getElementById("prompt-form")?.getBoundingClientRect().bottom,
 			headerTop: document.querySelector(".topbar")?.getBoundingClientRect().top,
-			canvases: [...document.querySelectorAll("canvas")].map((c) => ({ width: c.width, height: c.height })),
+			canvases: Array.from(document.querySelectorAll("canvas")).map((c) => ({ width: c.width, height: c.height })),
 		}));
 		assert.ok(metrics.scroll <= width, JSON.stringify(metrics));
 		assert.ok(

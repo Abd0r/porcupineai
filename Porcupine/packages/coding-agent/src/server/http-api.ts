@@ -44,6 +44,7 @@ import type {
 	SessionSurfaces,
 	SurfaceControl,
 } from "./workbench-session-surfaces.ts";
+import type { WorkbenchReplayEvent } from "./workbench-transcript.ts";
 
 /** Minimal session surface the HTTP API drives. */
 export interface ServeApiSession
@@ -55,6 +56,10 @@ export interface ServeApiSession
 	sendUserMessage(text: string): Promise<void>;
 	abort(): Promise<void>;
 	isStreaming(): boolean;
+	/** Text transcript only. Never include provider signatures, tool arguments, or credentials. */
+	getTranscript?(): Array<{ role: "user" | "assistant"; content: string }>;
+	getTimeline?(): WorkbenchReplayEvent[];
+	getSubagents?(): Array<{ id: string; name: string; task: string; status: string; steps: number; lastTool?: string }>;
 	/** Subscribe to session events (agent messages, tool calls, ...). Returns an unsubscribe. */
 	onEvent(listener: (event: unknown) => void): () => void;
 	/**
@@ -145,6 +150,10 @@ interface SessionEndpoint {
 	session: ServeApiSession;
 	sseClients: Set<ServerResponse>;
 	permissionResponders: Map<string, (allow: boolean) => void>;
+	permissionRequests: Map<
+		string,
+		{ type: "permission_request"; permissionId: string; title: string; message: string }
+	>;
 	/** Internal bounce listeners re-emitting every session event to `emit`. */
 	eventListeners: Set<(event: unknown) => void>;
 	unsubscribeConfirm: () => void;
@@ -209,6 +218,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			session: sessionToRegister,
 			sseClients: new Set<ServerResponse>(),
 			permissionResponders: new Map<string, (allow: boolean) => void>(),
+			permissionRequests: new Map(),
 			eventListeners: new Set<(event: unknown) => void>(),
 			unsubscribeConfirm: () => {},
 			unsubscribeEvents: () => {},
@@ -219,20 +229,25 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 		endpoint.unsubscribeConfirm = sessionToRegister.onConfirm((permission, respond) => {
 			const responder: (allow: boolean) => void = (allow) => {
 				endpoint.permissionResponders.delete(permission.id);
+				endpoint.permissionRequests.delete(permission.id);
+				const settled = `data: ${JSON.stringify({ type: "permission_resolved", permissionId: permission.id, allow })}\n\n`;
+				for (const client of endpoint.sseClients) writeSse(client, settled, endpoint.sseClients);
 				respond(allow);
 			};
 			endpoint.permissionResponders.set(permission.id, responder);
-			const serialized = JSON.stringify({
-				type: "permission_request",
+			const request = {
+				type: "permission_request" as const,
 				permissionId: permission.id,
 				title: stripAnsi(permission.title),
 				message: stripAnsi(permission.message),
-			});
+			};
+			endpoint.permissionRequests.set(permission.id, request);
+			const serialized = JSON.stringify(request);
 			for (const client of Array.from(endpoint.sseClients)) {
 				writeSse(client, `data: ${serialized}\n\n`, endpoint.sseClients);
 			}
 			setTimeout(() => {
-				if (endpoint.permissionResponders.delete(permission.id)) respond(false);
+				if (endpoint.permissionResponders.has(permission.id)) responder(false);
 			}, PERMISSION_TIMEOUT_MS).unref();
 		});
 
@@ -347,7 +362,11 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			}
 
 			if (method === "GET" && path === "/workbench") {
-				json(res, 200, { contextFiles: Boolean(options.contextFiles) });
+				json(res, 200, {
+					contextFiles: Boolean(options.contextFiles),
+					projects: Boolean(options.projects),
+					canCreateSessions: Boolean(createSession),
+				});
 				return;
 			}
 			if (path === "/workbench/context" || path.startsWith("/workbench/context/")) {
@@ -448,12 +467,15 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				res.writeHead(200, sseHeaders());
 				writeSse(
 					res,
-					`data: ${JSON.stringify({ type: "server_connected", sessionId: entry.session.id })}\n\n`,
+					`data: ${JSON.stringify({ type: "server_connected", sessionId: entry.session.id, streaming: entry.session.isStreaming(), timeline: entry.session.getTimeline?.(), messages: entry.session.getTimeline ? undefined : entry.session.getTranscript?.(), subagents: entry.session.getSubagents?.(), permissions: [...entry.permissionRequests.values()] })}\n\n`,
 					entry.sseClients,
 				);
 				entry.sseClients.add(res);
 				if (entry.webAttached++ === 0) entry.session.setClientSurface?.("web");
+				let closed = false;
 				const onClose = () => {
+					if (closed) return;
+					closed = true;
 					entry.sseClients.delete(res);
 					if (entry.webAttached > 0 && --entry.webAttached === 0) entry.session.setClientSurface?.("none");
 				};

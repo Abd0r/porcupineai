@@ -10,7 +10,7 @@ porcupine --serve --port 4096 --token <secret>
 
 Open the local address in your browser and enter the token in the connection form. The page keeps it in memory for that tab only. For an explicitly tokenless loopback server, set `PORCUPINE_SERVE_ALLOW_TOKENLESS=1` as documented in [server.md](./server.md).
 
-The workbench supports session selection and creation, live message events, prompt submission, abort, explicit permission decisions, and model-requested visual explanations. Visuals sit alongside the conversation, especially for teaching, conceptual explanations, and scientific communication.
+The workbench supports session selection and creation, live message events, prompt submission, abort, explicit permission decisions, and model-requested visual explanations. Tool calls, results, goal changes, sub-agent activity, approvals, answers and visuals share one chronological conversation flow.
 
 The interface uses an open conversation column, neutral surfaces, compact controls, and a shared adaptive width for text, figures, and the composer. Its semantic tokens and layout patterns are adapted from the MIT-licensed DeepSeek Harness UI, not its branding or plugin runtime. See [source notes and license](./gui-third-party-notices.md).
 
@@ -42,26 +42,33 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 | Projects | Canonical `Project/<name>/` workspaces from the [project-hygiene](../../skills/meta/project-hygiene/SKILL.md) layout. Browse supported documents, preview text, and create a new project with README.md plus STATUS.md. | Local files; nothing is deleted |
 | Project uploads | PNG, JPEG, WebP, GIF, PDF, ZIP and text formats up to 12 MiB, written to `Project/<name>/uploads/` with `-2`, `-3` suffixes instead of overwriting. Filenames cannot contain directories. | Local files |
 | Settings · context files | Inspect and edit the allowlisted Markdown documents only: global `AGENTS.md`, `CLAUDE.md`, `USER.md`, `MEMORY.md`, `PERSONALITY.md`, `PROMPT.md`, `SYSTEM.md`, `APPEND_SYSTEM.md`, `APPEND_PROMPT.md`, plus workspace `AGENTS.md` and `CLAUDE.md`. Edits use a revision hash and are rejected if the agent changed the file in between. Symlinks are refused. | `~/.porcupine/agent/` and the workspace |
-| Thinking disclosure | Inline in the transcript, where the reasoning actually happened: a compact `Thinking…` row while the turn is live, then `Thought for N seconds`. Ten abstract SVG marks cycle at 1.2s while live and stop on settle. Expanding shows the model's own chain of thought in grey, above the answer. The marks are ornament and never claim a specific activity; tool rows report tools separately. | Session events |
-| Sub-agent card | Directly below the Goal card, same collapsible header. Lists each sub-agent as it reports, with a running or finished state and its latest line. Empty state says so plainly. | Session sub-agent messages |
-| Context ring | Top right of the panel: a circular meter of the live context window. Hover or focus shows used / window, percent, the compaction threshold and the sub-agent concurrency limit. | Live session |
+| Thinking disclosure | Inline in the transcript, where the reasoning actually happened: a compact `Thinking…` row while the turn is live, then `Thought for N seconds`. A single SVG indicator animates only while live. Expanding shows model-supplied reasoning. Tool rows report the actual operation, arguments and supplied output separately. | Session events |
+| Tool activity | Inline expandable rows at the execution point, with real arguments, streaming output, and running/done/failed state. | Session events; tool calls and results replay on reconnect |
+| Context ring | Composer meter of the live context window. Hover or focus shows used / window, percent, the compaction threshold and the sub-agent concurrency limit. | Live session |
 | Session limits | Settings → Session limits writes the real global settings: compaction threshold as a percentage of the active model's window, and `subagent.maxConcurrent` (1-8). | `settings.json` |
 | Sub-agent activity | Sub-agent messages and reports render as compact activity lines in the conversation, never as fake progress bars. | Session events |
-| Goal tracker | Top-left card showing the agent's tracked goal, its steps and their real status, plus the Plan-fence indicator. Goals are declared by the agent with the `goal` tool; there is no `/goal` command on either surface. | Session entry shared with the terminal |
+| Goal tracker | Inline goal updates at their event position, with collapsible steps and real statuses. Goals are declared by the agent with the `goal` tool; there is no `/goal` command on either surface. | Session entry shared with the terminal |
 | Reasoning and Autonomy | Composer selectors read and write the session's real reasoning mode and Ask/Normal/Auto interaction mode. They are disabled while a turn is running. The available reasoning modes come from the active model. | Session |
-| Plan | A real fence: while on, mutating tools are blocked for subsequent turns. It is not a saved plan artifact. | Session |
 | Appearance | Five themes (Workbench, Pixel, Cyberpunk, Static monochrome, Tokyo Night), dark/light/system colour mode, and a local chat background with opacity. Images stay in this browser (IndexedDB) and are never sent to the model. | Browser only |
 
 ### Known limits
 
-- Goals are agent-declared and tracked on both surfaces; there is no `/goal` command. The `/plan` artifact writer still lives in the terminal client, so the browser shows the fence without writing plan files.
+- Goals are agent-declared and tracked on both surfaces; there is no `/goal` command. The `/plan` artifact writer remains in the terminal client; this browser does not expose a Plan control.
 - The agent is told which surface is active and receives a `[Surface switch]` notice when a client attaches or detaches. Switching mid-turn informs the next turn, not the turn already running.
 - Conversations are not yet attached to Project folders. Project documents are browsable, but a chat is not grouped under its project.
 - Edits to `USER.md`, `MEMORY.md` and other context files take effect for future turns after reload; the UI states this instead of implying an active turn changed.
 - Background upload sets a decorative image only. It is not a scientific figure and is never referenced in prompts.
 
+## Interaction and recovery
+
+Settings is divided into Appearance, Models, Limits and Context tabs. The composer grows with the draft, preserves it on a failed send, and rejects duplicate submission while busy. Enter respects IME composition. Each conversation retains its draft for this tab. Token and draft text are not persisted to browser storage.
+
+The active agent session replays its messages, tool calls/results, visuals and sub-agent reports on connection. Pending approvals are restored and settled decisions remain inline. Goals and live sub-agent progress append at their event positions; the browser never invents a phase from prose. Older goal/progress snapshots are not a separate durable event log. Replayed content does not replay entrance animations. Scrolling upward suspends automatic following until **Latest message** is selected. A disconnected stream disables sending and exposes **Reconnect**.
+
 ## Browser verification
 
-From the inner repository root, run `node_modules/.bin/tsx packages/coding-agent/test/workbench-browser-smoke.ts` with Playwright Chromium installed. This uses an ephemeral loopback server and synthetic fixtures, checks authenticated SSE delivery, five visual cards, full data tables, follow-up prompt preparation, and no page overflow at 1280, 700, and 390 pixels. It also fails on browser console/page errors or failed HTTP requests. Set `WORKBENCH_QA_SCREENSHOTS` to an existing directory to capture screenshots. It does not invoke a model or use real session credentials.
+From the inner repository root, run `node --import tsx packages/coding-agent/test/workbench-browser-smoke.ts` with Playwright Chromium installed. This uses an ephemeral loopback server and synthetic fixtures, checks authenticated SSE delivery, five visual cards, full data tables, follow-up prompt preparation, and no page overflow at 1280, 700, and 390 pixels. It also fails on browser console/page errors or failed HTTP requests. Set `WORKBENCH_QA_SCREENSHOTS` to an existing directory to capture screenshots. It does not invoke a model or use real session credentials.
 
-The view shows activity from the time a session is opened; the current HTTP API does not provide prior transcript history. The server serves the static page without exposing session data. All session API calls still require the configured bearer token, and the existing same-origin check applies. Keep the server bound to loopback for browser use. Do not send the bearer token over an untrusted network or expose the plain-HTTP server to the public internet.
+Custom API sessions without replay support show an explicit live-only notice. The server serves the static page without exposing session data. All session API calls still require the configured bearer token, and the existing same-origin check applies. Keep the server bound to loopback for browser use. Do not send the bearer token over an untrusted network or expose the plain-HTTP server to the public internet.
+
+Run `node --import tsx packages/coding-agent/test/workbench-interaction-smoke.ts` for draft recovery, busy-state handling, chronological inline activity, session switching, transcript restoration, pending approval recovery, settings tabs and responsive navigation. `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select an installed Chromium binary. These tests use synthetic local fixtures.

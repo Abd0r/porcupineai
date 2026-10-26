@@ -3,7 +3,6 @@ import { createRemindMeTool } from "../src/porcupine/remind-me-tool.ts";
 import {
 	formatDuration,
 	parseDuration,
-	parseGoalRemindCommand,
 	parseRemindCommand,
 	ReminderEngine,
 	type ReminderNotification,
@@ -36,11 +35,9 @@ describe("reminder parsing", () => {
 		expect(parseRemindCommand("/remind soon do it")).toEqual({ kind: "invalid", message: expect.any(String) });
 	});
 
-	it("parses /goal remind <duration>", () => {
-		expect(parseGoalRemindCommand("/goal remind 10m")).toEqual({ kind: "set", durationMs: 600_000 });
-		expect(parseGoalRemindCommand("/goal remind")).toBeNull();
-		expect(parseGoalRemindCommand("/goal remind nope")).toEqual({ kind: "invalid", message: expect.any(String) });
-		expect(parseGoalRemindCommand("/goal status")).toBeNull();
+	it("does not interpret retired goal commands as reminders", () => {
+		expect(parseRemindCommand("/goal remind 10m")).toBeNull();
+		expect(parseRemindCommand("/goal status")).toBeNull();
 	});
 
 	it("formats durations for display", () => {

@@ -21,6 +21,7 @@ async function fixture() {
 			onConfirm: () => () => {},
 			getModels: async () => ({
 				current,
+				subagentModel: null,
 				models: [
 					{
 						provider: "opencode-go",
@@ -40,7 +41,7 @@ async function fixture() {
 			}),
 			setSessionModel: async (provider: string, id: string) => {
 				current = { provider, id };
-				return { current, models: [] };
+				return { current, subagentModel: null, models: [] };
 			},
 			setDefaultModel: (provider: string, id: string) => {
 				defaults.push(`${provider}/${id}`);

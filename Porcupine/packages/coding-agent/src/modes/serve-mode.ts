@@ -25,6 +25,7 @@ import { type ServeApiSession, startServeApi } from "../server/http-api.ts";
 import { ContextFileStore } from "../server/workbench-context-files.ts";
 import { WorkbenchProjectStore } from "../server/workbench-projects.ts";
 import { createSessionSurfaces } from "../server/workbench-session-surfaces.ts";
+import { serializeWorkbenchTimeline } from "../server/workbench-transcript.ts";
 
 export interface ServeModeOptions {
 	port?: number;
@@ -52,6 +53,17 @@ export function isLoopbackHost(host: string | undefined): boolean {
 export function adaptSessionToServeApi(session: AgentSession): ServeApiSession {
 	const goalPlanListeners = new Set<(view: unknown) => void>();
 	const tracker = () => ({ goal: session.getGoal(), busy: session.isStreaming });
+	const subagentSnapshot = () =>
+		session.subagentState.runs.map(({ id, name, task, status, steps, lastTool, lastToolArgs, phase }) => ({
+			id,
+			name,
+			task,
+			status,
+			steps,
+			lastTool,
+			lastToolArgs,
+			phase,
+		}));
 	session.subscribe((event) => {
 		if (event.type !== "goal_changed") return;
 		for (const listener of goalPlanListeners) listener(tracker());
@@ -71,7 +83,16 @@ export function adaptSessionToServeApi(session: AgentSession): ServeApiSession {
 			await session.abort();
 		},
 		isStreaming: () => session.isStreaming,
-		onEvent: (listener) => session.subscribe((event) => listener(event)),
+		getTimeline: () => serializeWorkbenchTimeline(session.messages),
+		getSubagents: subagentSnapshot,
+		onEvent: (listener) => {
+			const events = session.subscribe((event) => listener(event));
+			const subagents = session.onSubagentEvent(() => listener({ type: "subagents", runs: subagentSnapshot() }));
+			return () => {
+				events();
+				subagents();
+			};
+		},
 		onConfirm: (handler) => {
 			session.setConfirmCallback(async (title, message) => {
 				return new Promise<boolean>((resolve) => {

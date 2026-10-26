@@ -7,19 +7,19 @@ import { chromium } from "playwright";
 import { startServeApi } from "../src/server/http-api.ts";
 import { ContextFileStore } from "../src/server/workbench-context-files.ts";
 import { WorkbenchProjectStore } from "../src/server/workbench-projects.ts";
-import type { SessionSurfaces } from "../src/server/workbench-session-surfaces.ts";
+import type { SessionControls, SessionSurfaces } from "../src/server/workbench-session-surfaces.ts";
 
 const root = mkdtempSync(join(tmpdir(), "workbench-workspace-"));
 const agentDir = join(root, "agent");
 mkdirSync(agentDir);
-const controls = {
+const controls: SessionControls = {
 	interactionMode: "normal" as const,
 	reasoningMode: "medium" as const,
 	availableReasoningModes: ["off", "low", "medium", "high", "adaptive"] as const,
 	busy: false,
 	model: { id: "faux-1", name: "Faux Model", provider: "faux" },
 };
-const surfaces: SessionSurfaces = {
+const surfaces: Pick<SessionSurfaces, "getControls" | "configure" | "getCatalog" | "inspectCatalog"> = {
 	getControls: () => ({ ...controls, availableReasoningModes: [...controls.availableReasoningModes] }),
 	configure: (patch) => {
 		if (patch.interactionMode) controls.interactionMode = patch.interactionMode;
@@ -85,10 +85,12 @@ const api = await startServeApi({
 		...surfaces,
 	},
 });
-const browser = await chromium.launch({ headless: true }).catch(async (error) => {
-	await api.close();
-	throw error;
-});
+const browser = await chromium
+	.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH })
+	.catch(async (error) => {
+		await api.close();
+		throw error;
+	});
 try {
 	const page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
 	page.setDefaultTimeout(6000);

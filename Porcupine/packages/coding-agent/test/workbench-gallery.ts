@@ -2,11 +2,11 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { chromium } from "playwright";
-import { startServeApi } from "../src/server/http-api.ts";
+import { chromium, type Page } from "playwright";
+import { type ServeApiSession, startServeApi } from "../src/server/http-api.ts";
 import { ContextFileStore } from "../src/server/workbench-context-files.ts";
 import { WorkbenchProjectStore } from "../src/server/workbench-projects.ts";
-import type { SessionSurfaces } from "../src/server/workbench-session-surfaces.ts";
+import type { SessionControls, SessionSurfaces } from "../src/server/workbench-session-surfaces.ts";
 
 const out = process.env.WORKBENCH_QA_SCREENSHOTS;
 if (!out) throw new Error("Set WORKBENCH_QA_SCREENSHOTS to an existing directory");
@@ -31,21 +31,19 @@ writeFileSync(
 	"# Status: Battery Aging Study\n\n## State\n`active`\n\n## Next verified action\nRerun the 200-cycle measurement.\n",
 );
 
-const controls = {
+const controls: SessionControls = {
 	interactionMode: "normal" as const,
 	reasoningMode: "medium" as const,
 	availableReasoningModes: ["off", "low", "medium", "high", "adaptive"] as const,
 	busy: false,
-	planFence: false,
 	model: { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", provider: "opencode-go" },
 };
-const surfaces: SessionSurfaces = {
+const surfaces: Partial<SessionSurfaces> & Pick<ServeApiSession, "getGoalPlan"> = {
 	getControls: () => ({ ...controls, availableReasoningModes: [...controls.availableReasoningModes] }),
 	configure: (patch) => {
 		if (patch.interactionMode) controls.interactionMode = patch.interactionMode;
 		if (patch.reasoningMode) controls.reasoningMode = patch.reasoningMode as typeof controls.reasoningMode;
-		if (patch.planFence !== undefined) controls.planFence = patch.planFence;
-		return surfaces.getControls();
+		return surfaces.getControls!();
 	},
 	getCatalog: (kind, query = "", offset = 0, limit = 50) => {
 		const all = [
@@ -124,7 +122,8 @@ const surfaces: SessionSurfaces = {
 		maxSubagents: 3,
 	}),
 	setLimits: (patch) => ({ ...surfaces.getContext!(), ...patch }),
-	getModels: () => ({
+	getModels: async () => ({
+		subagentModel: null,
 		current: { provider: "opencode-go", id: "deepseek-v4-flash" },
 		models: [
 			{
@@ -151,9 +150,9 @@ const surfaces: SessionSurfaces = {
 			{ provider: "google", id: "gemini-3-pro", name: "Gemini 3 Pro", contextWindow: 2000000, reasoning: true },
 		],
 	}),
-	setSessionModel: (provider, id) => {
-		const list = surfaces.getModels!();
-		return Promise.resolve({ current: { provider, id }, models: list.models });
+	setSessionModel: async (provider, id) => {
+		const list = await surfaces.getModels!();
+		return { current: { provider, id }, subagentModel: null, models: list.models };
 	},
 	setDefaultModel: (provider, id) => ({ provider, id }),
 	getGoalPlan: () => ({
@@ -203,12 +202,13 @@ const api = await startServeApi({
 const emit = (event: unknown) => {
 	for (const listener of listeners) listener(event);
 };
-const browser = await chromium.launch({ headless: true }).catch(async (error) => {
-	await api.close();
-	throw error;
-});
-const shot = async (page: import("playwright").Page, name: string) =>
-	page.screenshot({ path: join(out!, name), animations: "disabled" });
+const browser = await chromium
+	.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH })
+	.catch(async (error) => {
+		await api.close();
+		throw error;
+	});
+const shot = async (page: Page, name: string) => page.screenshot({ path: join(out!, name), animations: "disabled" });
 try {
 	const page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
 	const pageErrors: string[] = [];
@@ -223,13 +223,13 @@ try {
 	await page.locator("#auth-form").evaluate((form) => (form as HTMLFormElement).requestSubmit());
 	await page.waitForFunction(() => document.getElementById("auth")?.hidden === true);
 	await page.locator("#session-controls").waitFor();
-	await page.locator("#goal-card").waitFor();
+	await page.locator(".goal-activity").waitFor();
 	await streamReady;
 	await page.waitForTimeout(150);
 	await shot(page, "02 Workbench with tracked goal.png");
-	await page.locator("#goal-toggle").click();
+	await page.locator(".goal-activity > summary").last().click();
 	await shot(page, "02b Tracker collapsed.png");
-	await page.locator("#goal-toggle").click();
+	await page.locator(".goal-activity > summary").last().click();
 
 	const scene = {
 		title: "Spatial relationship",
@@ -344,7 +344,7 @@ try {
 			},
 		});
 	}
-	await page.waitForFunction(() => document.getElementById("subagent-list")?.children.length === 2);
+	await page.waitForFunction(() => document.querySelectorAll(".subagent-activity").length >= 2);
 	await shot(page, "08b Sub-agent activity.png");
 	const rich = [
 		"## Method",
@@ -434,10 +434,13 @@ try {
 			await page.locator("#appearance-theme").waitFor();
 		}
 	}
+	await page.getByRole("tab", { name: "Limits", exact: true }).click();
 	await page.locator("#limits-title").evaluate((element) => element.scrollIntoView({ block: "start" }));
 	await shot(page, "11b Settings session limits.png");
+	await page.getByRole("tab", { name: "Appearance", exact: true }).click();
 	await page.locator("#appearance-theme").selectOption("workbench");
 	await page.locator("#appearance-mode").selectOption("dark");
+	await page.getByRole("tab", { name: "Context", exact: true }).click();
 	await page.getByRole("combobox", { name: "Context file", exact: true }).selectOption("global:USER.md");
 	await page.waitForFunction(() =>
 		document.querySelector<HTMLTextAreaElement>(".context-editor")?.value.includes("table-form"),

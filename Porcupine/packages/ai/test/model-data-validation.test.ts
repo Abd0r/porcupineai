@@ -8,6 +8,7 @@ import {
 	MODEL_DATA_SCHEMA_VERSION,
 	type ModelDataStructure,
 	readModelDataStructure,
+	retainMissingProviderModels,
 	validateModelDataDirectory,
 } from "../scripts/model-data.ts";
 
@@ -77,6 +78,17 @@ function writeFixtureData(
 }
 
 describe("generated model data validation", () => {
+	it("retains a validated provider when discovery temporarily omits it", () => {
+		const { packageRoot } = createFixture();
+		const models = retainMissingProviderModels([], packageRoot);
+		expect(models.map((model) => `${model.provider}/${model.id}`)).toEqual(["test-provider/model-a"]);
+	});
+	it("does not restore stale models for a provider present in discovery", () => {
+		const { packageRoot } = createFixture();
+		const [model] = retainMissingProviderModels([], packageRoot);
+		const fresh = { ...model, id: "replacement", name: "Replacement" };
+		expect(retainMissingProviderModels([fresh], packageRoot)).toEqual([fresh]);
+	});
 	it("reads and validates API-grouped model data", () => {
 		const { dataDir, packageRoot, structure } = createFixture();
 		expect(readModelDataStructure(packageRoot)).toEqual(structure);

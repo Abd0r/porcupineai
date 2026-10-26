@@ -1,7 +1,6 @@
 import { CapabilityTree } from "@porcupineai/agent-core";
 import { describe, expect, it } from "vitest";
 import {
-	buildGoalContinuation,
 	buildPlanPrompt,
 	classifyPlanSettle,
 	filterOutGoalPlanQueue,

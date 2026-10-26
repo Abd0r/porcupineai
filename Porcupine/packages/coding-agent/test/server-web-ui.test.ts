@@ -36,6 +36,31 @@ function observableSession(): { session: ServeApiSession; emit(event: unknown): 
 }
 
 describe("serve web UI", () => {
+	it("restores transcript and busy state atomically on SSE attachment", async () => {
+		const messages = [{ role: "user" as const, content: "Earlier request" }];
+		const handle = await startServeApi({
+			session: { ...session(), getTranscript: () => messages, isStreaming: () => true },
+			token: "gui-secret",
+			port: 0,
+		});
+		handles.push(handle);
+		const controller = new AbortController();
+		const response = await fetch(`http://127.0.0.1:${handle.port()}/session/gui-session/events`, {
+			headers: { authorization: "Bearer gui-secret" },
+			signal: controller.signal,
+		});
+		const reader = response.body!.getReader();
+		const chunk = new TextDecoder().decode((await reader.read()).value);
+		await reader.cancel();
+		controller.abort();
+		const snapshot = JSON.parse(
+			chunk
+				.split("\n")
+				.find((line) => line.startsWith("data: "))!
+				.slice(6),
+		);
+		expect(snapshot).toMatchObject({ type: "server_connected", messages, streaming: true });
+	});
 	it("keeps the design tokens self-contained and retains upstream attribution", () => {
 		const declared = new Set([...WORKBENCH_STYLES.matchAll(/(--[\w-]+)\s*:/g)].map((match) => match[1]));
 		const referenced = [...WORKBENCH_STYLES.matchAll(/var\((--[\w-]+)/g)].map((match) => match[1]);

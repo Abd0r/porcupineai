@@ -2,14 +2,13 @@
 export const APPEARANCE_DIALOG = `
 <dialog class="settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
   <header class="settings-heading"><h2 id="settings-title">Settings</h2><form method="dialog"><button class="quiet-button" aria-label="Close settings" title="Close settings">×</button></form></header>
-  <section class="settings-section" aria-labelledby="appearance-title">
+  <nav class="settings-tabs" role="tablist" aria-label="Settings sections"><button class="settings-tab" id="tab-appearance" type="button" role="tab" aria-controls="panel-appearance" aria-selected="true" tabindex="0" data-settings-tab="appearance">Appearance</button><button class="settings-tab" id="tab-models" type="button" role="tab" aria-controls="panel-models" aria-selected="false" tabindex="-1" data-settings-tab="models">Models</button><button class="settings-tab" id="tab-limits" type="button" role="tab" aria-controls="panel-limits" aria-selected="false" tabindex="-1" data-settings-tab="limits">Limits</button><button class="settings-tab" id="tab-context" type="button" role="tab" aria-controls="panel-context" aria-selected="false" tabindex="-1" data-settings-tab="context">Context</button></nav>
+  <section class="settings-section" id="panel-appearance" role="tabpanel" aria-labelledby="tab-appearance" data-settings-panel="appearance">
     <h3 id="appearance-title">Appearance</h3><p>Keep the workbench quiet, or make it yours.</p>
     <div class="settings-grid">
       <label>Theme<select id="appearance-theme"><option value="workbench">Workbench</option><option value="pixel">Pixel</option><option value="cyberpunk">Cyberpunk</option><option value="static">Static · monochrome</option><option value="tokyo-night">Tokyo Night</option></select></label>
       <label>Colour mode<select id="appearance-mode"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></label>
     </div>
-    <div class="settings-divider"></div>
-    <h3>Models</h3><p>Default model for new conversations, and the model sub-agents run on. Any conversation can still pick its own model from the composer.</p><p><button id="model-default-open" class="quiet-button" type="button">Choose default model</button> <button id="model-subagent-open" class="quiet-button" type="button">Choose sub-agent model</button></p><p class="settings-note" id="subagent-model-current"></p>
     <div class="settings-divider"></div>
     <h3>Chat background</h3><p>Upload a PNG, JPEG, or WebP. It stays in this browser, never in the model prompt. Up to 6 MiB and 16 million pixels.</p>
     <label class="file-picker">Choose image<input id="appearance-image" type="file" accept="image/png,image/jpeg,image/webp"></label>
@@ -19,7 +18,10 @@ export const APPEARANCE_DIALOG = `
     <p class="settings-note">Themes and image opacity do not change agent permissions or reasoning.</p>
     <p id="appearance-error" class="error" role="alert" hidden></p>
   </section>
-  <section class="settings-section" aria-labelledby="limits-title">
+  <section class="settings-section" id="panel-models" role="tabpanel" aria-labelledby="tab-models" data-settings-panel="models" hidden>
+    <h3>Models</h3><p>Default model for new conversations, and the model sub-agents run on. Any conversation can still pick its own model from the composer.</p><p><button id="model-default-open" class="quiet-button" type="button">Choose default model</button> <button id="model-subagent-open" class="quiet-button" type="button">Choose sub-agent model</button></p><p class="settings-note" id="subagent-model-current"></p>
+  </section>
+  <section class="settings-section" id="panel-limits" role="tabpanel" aria-labelledby="tab-limits" data-settings-panel="limits" hidden>
     <h3 id="limits-title">Session limits</h3>
     <p>Compaction threshold and sub-agent concurrency. Applying writes your global settings and takes effect for later turns.</p>
     <div class="settings-grid">
@@ -29,7 +31,7 @@ export const APPEARANCE_DIALOG = `
     <p><button id="limits-apply" class="quiet-button" type="button">Apply limits</button></p>
     <p id="limits-status" class="settings-note"></p>
   </section>
-  <section class="settings-section" id="context-settings" hidden aria-labelledby="context-title"><h3 id="context-title">Agent context files</h3><p>Inspect and edit the explicitly listed local Markdown files. Saved changes may require resource reload; they never rewrite an active turn.</p><div id="context-files"></div></section>
+  <section class="settings-section" id="panel-context" role="tabpanel" aria-labelledby="tab-context" data-settings-panel="context" hidden><div id="context-settings"><h3 id="context-title">Agent context files</h3><p>Inspect and edit the explicitly listed local Markdown files. Saved changes may require resource reload; they never rewrite an active turn.</p><div id="context-files"><p>Context editing is unavailable on this server.</p></div></div></section>
 </dialog>`;
 
 export const APPEARANCE_STYLES = `
@@ -154,7 +156,11 @@ async function backgroundStorage(action,value){const db=await backgroundDatabase
 function queueBackgroundWrite(action,value){const write=backgroundWrites.catch(()=>{}).then(()=>backgroundStorage(action,value));backgroundWrites=write;return write}
 async function prepareBackground(file){if(!(file instanceof Blob)||file.size===0||file.size>6*1024*1024)throw new Error('Choose an image smaller than 6 MiB.');const bytes=new Uint8Array(await file.slice(0,16).arrayBuffer());let type='';if(bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71&&bytes[4]===13&&bytes[5]===10&&bytes[6]===26&&bytes[7]===10)type='image/png';else if(bytes[0]===255&&bytes[1]===216&&bytes[2]===255)type='image/jpeg';else if(String.fromCharCode(...bytes.slice(0,4))==='RIFF'&&String.fromCharCode(...bytes.slice(8,12))==='WEBP')type='image/webp';if(!type)throw new Error('Only PNG, JPEG, and WebP image data is supported.');const blob=new Blob([file],{type}),url=URL.createObjectURL(blob);try{const image=new Image();image.src=url;await image.decode();if(image.naturalWidth*image.naturalHeight>16000000)throw new Error('Choose an image with no more than 16 million pixels.');return{blob,url}}catch(error){URL.revokeObjectURL(url);throw error}}
 function showBackground(url){if(backgroundUrl)URL.revokeObjectURL(backgroundUrl);backgroundUrl=url;appearance.backdrop.style.backgroundImage=url?'url('+JSON.stringify(url)+')':''}
-appearance.open.addEventListener('click',()=>{appearance.dialog.showModal();void loadWorkbenchSettings()});
+let settingsTab='appearance';
+function selectSettingsTab(key){settingsTab=key;for(const tab of document.querySelectorAll('[data-settings-tab]')){const active=tab.dataset.settingsTab===key;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}for(const panel of document.querySelectorAll('[data-settings-panel]'))panel.hidden=panel.dataset.settingsPanel!==key;}
+const settingsTabs=[...document.querySelectorAll('[data-settings-tab]')];
+for(const tab of settingsTabs){tab.addEventListener('click',()=>selectSettingsTab(tab.dataset.settingsTab));tab.addEventListener('keydown',event=>{let index=settingsTabs.indexOf(tab);if(event.key==='ArrowRight')index=(index+1)%settingsTabs.length;else if(event.key==='ArrowLeft')index=(index+settingsTabs.length-1)%settingsTabs.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=settingsTabs.length-1;else return;event.preventDefault();selectSettingsTab(settingsTabs[index].dataset.settingsTab);settingsTabs[index].focus();});}
+appearance.open.addEventListener('click',()=>{selectSettingsTab(settingsTab);appearance.dialog.showModal();void loadWorkbenchSettings()});
 appearance.theme.addEventListener('change',()=>{appearancePreferences.theme=appearance.theme.value;applyAppearance(true)});
 appearance.mode.addEventListener('change',()=>{appearancePreferences.mode=appearance.mode.value;applyAppearance(true)});
 appearance.opacity.addEventListener('input',()=>{appearancePreferences.opacity=Number(appearance.opacity.value);applyAppearance(true)});

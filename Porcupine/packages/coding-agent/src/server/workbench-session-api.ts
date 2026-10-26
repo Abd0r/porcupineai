@@ -35,9 +35,6 @@ export async function handleSessionSurfaceRequest(
 		router.json(res, 200, { supported: true, ...(target.getGoalPlan() as object) });
 		return true;
 	}
-	if (goalMatch) {
-		// handled above
-	}
 	const modelsMatch = /^\/session\/([^/]+)\/models$/.exec(url.pathname);
 	if (modelsMatch) {
 		const target = router.getSession(modelsMatch[1]!);

@@ -131,7 +131,6 @@ export function createSessionSurfaces(session: AgentSession) {
 			const model = session.modelRuntime.getModel(provider, id);
 			if (!model) throw new WorkbenchError(404, "Unknown model");
 			await session.setModel(model);
-			this.persistSurfaceState();
 			return this.getModels();
 		},
 		setDefaultModel(provider: string, id: string) {
@@ -141,9 +140,6 @@ export function createSessionSurfaces(session: AgentSession) {
 		setSubagentModel(provider: string, id: string) {
 			session.settingsManager.setSubagentModel(`${provider}/${id}`);
 			return { provider, id };
-		},
-		persistSurfaceState() {
-			/* model changes are persisted by the session itself */
 		},
 		getContext,
 		setLimits(patch: { compactAtPercent?: number; maxSubagents?: number }): ContextStats {
