@@ -63,25 +63,32 @@ try {
 		);
 	}
 
-	const states: Array<[string, string, string]> = [
-		["idle", "Ready", "1.6s"],
-		["working", "Thinking", "2.4s"],
-		["tool", "Running a command", "2.4s"],
-		["dreaming", "Consolidating", "2.4s"],
-		["working", "Reasoning", "2.0s"],
-	];
-	for (const [mode, label, hold] of states) {
-		await page.evaluate(
-			([m, l]) => {
-				const root = document.getElementById("activity");
-				const text = document.getElementById("activity-label");
-				if (root) root.dataset.mode = m;
-				if (text) text.textContent = l;
-			},
-			[mode, label],
-		);
-		await page.waitForTimeout(Number.parseInt(hold, 10) * 1000);
+	// Live thinking: the glyph cycles while the turn is open, then settles.
+	const thinking =
+		"Three readings, same sensor. I should keep the comparison table small and flag that the uncertainty is supplied, not derived.";
+	for (let tick = 0; tick < 6; tick += 1) {
+		api.emit({
+			type: "message_update",
+			message: { role: "assistant", content: [{ type: "thinking", thinking }] },
+		});
+		await page.waitForTimeout(1200);
 	}
+	api.emit({
+		type: "message_end",
+		message: {
+			role: "assistant",
+			content: [
+				{ type: "thinking", thinking },
+				{ type: "text", text: "Compared all three readings; the spread is inside the supplied uncertainty." },
+			],
+		},
+	});
+	await page.locator(".thinking-head").waitFor();
+	await page.waitForTimeout(1400);
+	await page.locator(".thinking-head").click();
+	await page.waitForTimeout(1800);
+	await page.locator(".thinking-head").click();
+	await page.waitForTimeout(900);
 	// Theme sweep so motion and colour are both visible.
 	await page.evaluate(() => document.getElementById("settings-open")?.click());
 	await page.waitForTimeout(400);

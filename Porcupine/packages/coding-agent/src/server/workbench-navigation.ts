@@ -15,7 +15,6 @@ export const STACKS_NAVIGATION = `
 </details>`;
 export const STACKS_DIALOG = `
 <dialog class="settings-dialog stack-dialog" id="stack-dialog" aria-labelledby="stack-title"><header class="settings-heading"><h2 id="stack-title">Stack</h2><form method="dialog"><button class="quiet-button" aria-label="Close stack details">×</button></form></header><section class="settings-section"><p id="stack-description"></p><p id="stack-availability"></p><pre id="stack-content" tabindex="0"></pre></section></dialog>`;
-export const AGENT_ACTIVITY = `<span class="activity" id="activity" data-mode="idle" aria-live="polite"><svg class="act-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><g data-glyph="idle"><circle cx="12" cy="12" r="3"/></g><g data-glyph="working"><path class="spin" d="M12 3a9 9 0 0 1 9 9"/><path d="M12 21a9 9 0 0 1-9-9" opacity=".45"/></g><g data-glyph="tool"><path d="M4 6h9l3 6-3 6H4z"/><path d="M17 9l3 3-3 3" class="tick"/></g><g data-glyph="dreaming"><path d="M20 14.5A7.5 7.5 0 1 1 9.5 4a6 6 0 0 0 10.5 10.5z"/><path d="M17 5l.8 1.7L19.5 7.5l-1.7.8L17 10l-.8-1.7L14.5 7.5l1.7-.8z"/></g></svg><span class="activity-label" id="activity-label">Ready</span></span>`;
 export const SUBAGENT_CARD = `
 <section class="goal-card subagent-card" id="subagent-card" aria-label="Sub-agents">
   <header class="goal-head"><button class="goal-toggle" id="subagent-toggle" type="button" aria-expanded="true" aria-controls="subagent-body"><span class="goal-kicker">Sub-agents</span><span class="goal-state" id="subagent-state"></span><span class="goal-chevron" aria-hidden="true">▾</span></button></header>
@@ -28,39 +27,6 @@ export const CONTEXT_RING = `<button class="context-ring" id="context-ring" type
 export const SESSION_COMPOSER_CONTROLS = `<div class="session-controls" id="session-controls" hidden><label>Reasoning <select id="reasoning-mode" aria-label="Reasoning mode"></select></label><label>Autonomy <select id="autonomy-mode" aria-label="Autonomy mode"><option value="ask">Ask</option><option value="normal">Normal</option><option value="auto">Auto</option></select></label><button class="model-label" id="session-model" type="button" title="Change model for this conversation"></button>${CONTEXT_RING}</div>`;
 export const SESSION_NAVIGATION_STYLES = `
 .sidebar { overflow-y: auto; scrollbar-width: thin; }
-.activity { display: inline-flex; align-items: center; gap: var(--s2); color: var(--quiet); font-size: var(--small); }
-.activity { display: inline-flex; align-items: center; gap: var(--s2); color: var(--quiet); font-size: var(--small); }
-.activity svg { color: var(--quiet); }
-.activity[data-mode="working"] svg { color: var(--accent); }
-.activity[data-mode="tool"] svg { color: var(--muted); }
-.activity[data-mode="dreaming"] svg { color: var(--accent); }
-.activity g { display: none; }
-.activity[data-mode="idle"] g[data-glyph="idle"] { display: inline; }
-.activity[data-mode="working"] g[data-glyph="working"] { display: inline; }
-.activity[data-mode="tool"] g[data-glyph="tool"] { display: inline; }
-.activity[data-mode="dreaming"] g[data-glyph="dreaming"] { display: inline; }
-.activity[data-mode="working"] .spin { transform-origin: 12px 12px; animation: act-spin 1.6s linear infinite; }
-.activity[data-mode="tool"] .tick { animation: act-tick 1.1s steps(2, end) infinite; }
-.activity[data-mode="dreaming"] svg { animation: act-drift 4s ease-in-out infinite; }
-@keyframes act-spin { to { transform: rotate(360deg); } }
-@keyframes act-tick { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
-@keyframes act-drift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
-.activity-label { letter-spacing: .02em; }
-.goal-stack { position: absolute; top: calc(var(--s9) + var(--s2)); right: var(--s4); z-index: 6; display: grid; gap: var(--s2); width: 292px; max-height: calc(100dvh - var(--s9) - var(--s5)); overflow: auto; }
-.goal-stack .goal-card { position: static; width: auto; }
-.subagent-card { position: static; }
-@media (max-width: 1080px) { .goal-stack { position: static; width: auto; max-height: none; margin: var(--s4) var(--s5) 0; } }
-@media (max-width: 1080px) { .goal-stack { position: static; width: auto; margin: var(--s4) var(--s5) 0; } }
-.subagent-card .goal-step .goal-text { text-decoration: none; }
-.model-label { border: 0; background: transparent; color: var(--quiet); padding: var(--s1); font-size: var(--small); max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.model-label:hover { color: var(--text); }
-.model-list { display: grid; gap: var(--s1); max-height: 46dvh; overflow: auto; margin-top: var(--s2); }
-.model-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--s2); width: 100%; text-align: left; border: var(--unit) solid transparent; border-radius: var(--r1); background: transparent; color: var(--muted); padding: var(--s2) var(--s3); font-size: var(--small); }
-.model-row:hover { background: var(--surface-hover); color: var(--text); }
-.model-row[aria-selected="true"] { border-color: var(--accent); color: var(--text); }
-.model-row .model-meta { color: var(--quiet); font-variant-numeric: tabular-nums; }
-.model-row .model-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#model-search { width: 100%; }
 .context-ring { position: relative; display: grid; place-items: center; width: var(--s7); height: var(--s7); padding: 0; border: 0; background: transparent; border-radius: 50%; }
 .context-ring svg { transform: rotate(-90deg); }
 .ring-track { fill: none; stroke: color-mix(in srgb, var(--line) 85%, transparent); stroke-width: 4; }
@@ -157,10 +123,6 @@ const ringUi={ring:$('context-ring'),fill:$('ring-fill'),tip:$('context-tip')};
 function formatTokens(value){if(!Number.isFinite(value))return '—';if(value>=1000000){const millions=value/1000000;return (millions>=10?Math.round(millions):Math.round(millions*10)/10)+'M'}if(value>=1000){const thousands=value/1000;return (thousands>=100?Math.round(thousands):Math.round(thousands*10)/10)+'k'}return String(Math.round(value))}
 const RING_CIRCUMFERENCE=2*Math.PI*15;
 let lastContext=null;
-const activityUi={root:$('activity'),label:$('activity-label')};
-const activityWords={thinking:'Thinking',reasoning:'Reasoning',coding:'Writing code',tools:'Using tools',planning:'Planning',research:'Researching',reading:'Reading',writing:'Writing',testing:'Testing',dreaming:'Consolidating',idle:'Ready'};
-const activityGlyph={thinking:'working',reasoning:'working',planning:'working',coding:'tool',tools:'tool',testing:'tool',writing:'tool',reading:'tool',research:'tool',dreaming:'dreaming',idle:'idle'};
-function setActivity(mode,label){if(!activityUi.root)return;activityUi.root.dataset.mode=activityGlyph[mode]||(mode==='working'?'working':mode==='tool'?'tool':'idle');activityUi.label.textContent=label||activityWords[mode]||'Ready'}
 const subagentUi={card:$('subagent-card'),toggle:$('subagent-toggle'),state:$('subagent-state'),list:$('subagent-list'),empty:$('subagent-empty')};
 const subagentRuns=new Map();
 const subagentCollapseKey='porcupine.workbench.subagents-collapsed';

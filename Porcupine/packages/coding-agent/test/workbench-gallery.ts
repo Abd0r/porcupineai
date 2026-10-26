@@ -368,6 +368,27 @@ try {
 		"> Uncertainty is quoted as supplied; nothing here is extrapolated.",
 	].join("\n");
 	emit({ type: "message_end", message: { role: "assistant", content: rich } });
+	emit({
+		type: "message_end",
+		message: {
+			role: "assistant",
+			content: [
+				{
+					type: "thinking",
+					thinking:
+						"The reader asked for a method. I should show the computation, keep the table small, and state that the uncertainty is supplied rather than derived.",
+				},
+				{ type: "text", text: "Computed from the supplied log; nothing here is extrapolated." },
+			],
+		},
+	});
+	await page.locator(".thinking-head").last().waitFor();
+	await page.locator(".thinking-head").last().click();
+	await page
+		.locator(".thinking-body")
+		.last()
+		.evaluate((element) => element.scrollIntoView({ block: "center" }));
+	await shot(page, "11b Thinking disclosure.png");
 	await page.locator(".rich .code-block").first().waitFor();
 	await page
 		.locator(".rich")
@@ -384,7 +405,7 @@ try {
 	await shot(page, "09 Permission approval.png");
 	await page.locator(".permission").evaluate((element) => element.remove());
 	emit({ type: "agent_start" });
-	await page.waitForFunction(() => document.getElementById("activity-label")?.textContent === "Working");
+	await page.waitForFunction(() => document.getElementById("status-text")?.textContent === "Working");
 	await shot(page, "10 Working state.png");
 	emit({ type: "agent_end" });
 
