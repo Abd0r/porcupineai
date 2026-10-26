@@ -158,6 +158,12 @@ export {
 	truncateTail,
 } from "./truncate.ts";
 export {
+	createVisualizeTool,
+	createVisualizeToolDefinition,
+	type VisualDetails,
+	type VisualParameters,
+} from "./visualize.ts";
+export {
 	createVisualize3DTool,
 	createVisualize3DToolDefinition,
 	type VisualizationDetails,
@@ -277,6 +283,7 @@ import {
 	createExtractSkillTool,
 	createExtractSkillToolDefinition,
 } from "./skill-tools.ts";
+import { createVisualizeTool, createVisualizeToolDefinition } from "./visualize.ts";
 import { createVisualize3DTool, createVisualize3DToolDefinition } from "./visualize-3d.ts";
 
 export {
@@ -366,6 +373,7 @@ export type ToolName =
 	| "remind_me"
 	| "show_markdown"
 	| "visualize_3d"
+	| "visualize"
 	| "x_search"
 	| "x_read"
 	| "x_draft"
@@ -414,6 +422,7 @@ export const allToolNames: Set<ToolName> = new Set([
 	"remind_me",
 	"show_markdown",
 	"visualize_3d",
+	"visualize",
 	"x_search",
 	"x_read",
 	"x_draft",
@@ -518,6 +527,7 @@ export function createCodingToolDefinitions(cwd: string, options?: ToolsOptions)
 		createLiteratureToolDefinition(options?.literature),
 		createShowMarkdownToolDefinition(cwd),
 		createVisualize3DToolDefinition(),
+		createVisualizeToolDefinition(),
 		createXSearchToolDefinition(options?.x),
 		createXReadToolDefinition(options?.x),
 		createXDraftToolDefinition(options?.x),
@@ -546,6 +556,7 @@ export function createReadOnlyToolDefinitions(cwd: string, options?: ToolsOption
 		createSessionSearchToolDefinition({ cwd, ...options?.session_search }),
 		createShowMarkdownToolDefinition(cwd),
 		createVisualize3DToolDefinition(),
+		createVisualizeToolDefinition(),
 	];
 }
 
@@ -577,6 +588,7 @@ export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): R
 		literature: createLiteratureToolDefinition(options?.literature),
 		show_markdown: createShowMarkdownToolDefinition(cwd),
 		visualize_3d: createVisualize3DToolDefinition(),
+		visualize: createVisualizeToolDefinition(),
 		subagent: options?.subagent
 			? createSubagentToolDefinition(options.subagent)
 			: createUnavailableSubagentToolDefinition(),
@@ -634,6 +646,7 @@ export function createCodingTools(cwd: string, options?: ToolsOptions): Tool[] {
 		createLiteratureTool(options?.literature),
 		createShowMarkdownTool(cwd),
 		createVisualize3DTool(),
+		createVisualizeTool(),
 		createXSearchTool(options?.x),
 		createXReadTool(options?.x),
 		createXDraftTool(options?.x),
@@ -662,6 +675,7 @@ export function createReadOnlyTools(cwd: string, options?: ToolsOptions): Tool[]
 		createSessionSearchTool({ cwd, ...options?.session_search }),
 		createShowMarkdownTool(cwd),
 		createVisualize3DTool(),
+		createVisualizeTool(),
 	];
 }
 
@@ -693,6 +707,7 @@ export function createAllTools(cwd: string, options?: ToolsOptions): Record<Tool
 		literature: createLiteratureTool(options?.literature),
 		show_markdown: createShowMarkdownTool(cwd),
 		visualize_3d: createVisualize3DTool(),
+		visualize: createVisualizeTool(),
 		subagent: wrapToolDefinition(
 			options?.subagent ? createSubagentToolDefinition(options.subagent) : createUnavailableSubagentToolDefinition(),
 		),

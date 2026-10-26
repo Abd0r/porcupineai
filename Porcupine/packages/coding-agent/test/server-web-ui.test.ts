@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { type ServeApiSession, startServeApi } from "../src/server/http-api.ts";
+import { WORKBENCH_STYLES } from "../src/server/web-ui-styles.ts";
 
 const handles: Array<{ close(): Promise<void> }> = [];
 
@@ -35,6 +36,14 @@ function observableSession(): { session: ServeApiSession; emit(event: unknown): 
 }
 
 describe("serve web UI", () => {
+	it("keeps the design tokens self-contained and retains upstream attribution", () => {
+		const declared = new Set([...WORKBENCH_STYLES.matchAll(/(--[\w-]+)\s*:/g)].map((match) => match[1]));
+		const referenced = [...WORKBENCH_STYLES.matchAll(/var\((--[\w-]+)/g)].map((match) => match[1]);
+		expect(referenced.length).toBeGreaterThan(20);
+		expect(referenced.filter((token) => !declared.has(token))).toEqual([]);
+		expect(WORKBENCH_STYLES).toContain("Copyright (c) 2026 DeepSeek");
+		expect(WORKBENCH_STYLES).not.toContain("url(");
+	});
 	it("serves a safe browser shell while keeping session APIs behind bearer auth", async () => {
 		const handle = await startServeApi({ session: session(), token: "gui-secret", port: 0 });
 		handles.push(handle);
@@ -46,9 +55,10 @@ describe("serve web UI", () => {
 		expect(page.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
 		const html = await page.text();
 		expect(html).toContain("Porcupine Workbench");
-		expect(html).toContain("event.toolName==='visualize_3d'");
+		expect(html).toContain("function renderVisual(");
 		expect(html).toContain("canvas.getContext('2d')");
 		expect(html).not.toContain(".innerHTML");
+		expect(html).toContain("Copyright (c) 2026 DeepSeek");
 
 		const denied = await fetch(`${base}/session`);
 		expect(denied.status).toBe(401);
