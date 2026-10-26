@@ -15,9 +15,9 @@ export const STACKS_NAVIGATION = `
 </details>`;
 export const STACKS_DIALOG = `
 <dialog class="settings-dialog stack-dialog" id="stack-dialog" aria-labelledby="stack-title"><header class="settings-heading"><h2 id="stack-title">Stack</h2><form method="dialog"><button class="quiet-button" aria-label="Close stack details">×</button></form></header><section class="settings-section"><p id="stack-description"></p><p id="stack-availability"></p><pre id="stack-content" tabindex="0"></pre></section></dialog>`;
-export const AGENT_ACTIVITY = `<span class="activity" id="activity" data-mode="idle" aria-live="polite"><span class="orb" aria-hidden="true"><i></i><i></i><i></i></span><span class="terminal-mini" aria-hidden="true"><b></b><b></b><b></b></span><span class="activity-label" id="activity-label">Ready</span></span>`;
+export const AGENT_ACTIVITY = `<span class="activity" id="activity" data-mode="idle" aria-live="polite"><svg class="act-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><g data-glyph="idle"><circle cx="12" cy="12" r="3"/></g><g data-glyph="working"><path class="spin" d="M12 3a9 9 0 0 1 9 9"/><path d="M12 21a9 9 0 0 1-9-9" opacity=".45"/></g><g data-glyph="tool"><path d="M4 6h9l3 6-3 6H4z"/><path d="M17 9l3 3-3 3" class="tick"/></g><g data-glyph="dreaming"><path d="M20 14.5A7.5 7.5 0 1 1 9.5 4a6 6 0 0 0 10.5 10.5z"/><path d="M17 5l.8 1.7L19.5 7.5l-1.7.8L17 10l-.8-1.7L14.5 7.5l1.7-.8z"/></g></svg><span class="activity-label" id="activity-label">Ready</span></span>`;
 export const SUBAGENT_CARD = `
-<section class="goal-card subagent-card" id="subagent-card" aria-label="Sub-agents" hidden>
+<section class="goal-card subagent-card" id="subagent-card" aria-label="Sub-agents">
   <header class="goal-head"><button class="goal-toggle" id="subagent-toggle" type="button" aria-expanded="true" aria-controls="subagent-body"><span class="goal-kicker">Sub-agents</span><span class="goal-state" id="subagent-state"></span><span class="goal-chevron" aria-hidden="true">▾</span></button></header>
   <div class="goal-body" id="subagent-body"><ol class="goal-steps" id="subagent-list"></ol><p class="goal-empty" id="subagent-empty">No sub-agent activity.</p></div>
 </section>`;
@@ -26,26 +26,27 @@ export const SESSION_COMPOSER_CONTROLS = `<div class="session-controls" id="sess
 export const SESSION_NAVIGATION_STYLES = `
 .sidebar { overflow-y: auto; scrollbar-width: thin; }
 .activity { display: inline-flex; align-items: center; gap: var(--s2); color: var(--quiet); font-size: var(--small); }
-.activity .orb { position: relative; width: var(--s5); height: var(--s5); border-radius: 50%; background: radial-gradient(circle at 32% 28%, var(--text), color-mix(in srgb, var(--accent) 55%, var(--canvas)) 58%, var(--canvas)); box-shadow: inset 0 0 6px rgb(0 0 0 / 45%); }
-.activity .orb i { position: absolute; inset: 0; border-radius: 50%; border: var(--unit) solid color-mix(in srgb, var(--accent) 45%, transparent); opacity: .0; }
-.activity[data-mode="working"] .orb i:nth-child(1) { opacity: .7; transform: rotate(0deg) scaleY(.45); animation: orbit-a 3.2s linear infinite; }
-.activity[data-mode="working"] .orb i:nth-child(2) { opacity: .5; transform: rotate(60deg) scaleY(.45); animation: orbit-b 4.1s linear infinite; }
-.activity[data-mode="working"] .orb i:nth-child(3) { opacity: .35; transform: rotate(120deg) scaleY(.45); animation: orbit-a 5.4s linear infinite reverse; }
-@keyframes orbit-a { from { transform: rotate(0deg) scaleY(.45); } to { transform: rotate(360deg) scaleY(.45); } }
-@keyframes orbit-b { from { transform: rotate(60deg) scaleY(.45); } to { transform: rotate(-300deg) scaleY(.45); } }
-.activity[data-mode="working"] .orb { animation: orb-breathe 2.6s ease-in-out infinite; }
-@keyframes orb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
-.terminal-mini { display: none; width: 26px; height: 18px; border: var(--unit) solid var(--line); border-radius: var(--r1); padding: 2px 3px; background: var(--canvas); overflow: hidden; }
-.terminal-mini b { display: block; height: 2px; margin: 2px 0; background: currentColor; opacity: .55; animation: term-type 1.4s steps(6, end) infinite; transform-origin: left center; }
-.terminal-mini b:nth-child(2) { width: 70%; animation-delay: .18s; }
-.terminal-mini b:nth-child(3) { width: 45%; animation-delay: .36s; }
-@keyframes term-type { 0% { transform: scaleX(0); } 60%, 100% { transform: scaleX(1); } }
-.activity[data-mode="tool"] .orb { display: none; }
-.activity[data-mode="tool"] .terminal-mini { display: block; color: var(--accent); }
-.activity[data-mode="tool"] { color: var(--muted); }
-.goal-stack { position: absolute; top: calc(var(--s9) + var(--s2)); right: var(--s4); z-index: 6; display: grid; gap: var(--s2); width: 292px; max-height: calc(100dvh - var(--s9) - var(--s5)); }
-.goal-stack .goal-card { position: static; width: auto; right: auto; top: auto; max-height: none; }
+.activity { display: inline-flex; align-items: center; gap: var(--s2); color: var(--quiet); font-size: var(--small); }
+.activity svg { color: var(--quiet); }
+.activity[data-mode="working"] svg { color: var(--accent); }
+.activity[data-mode="tool"] svg { color: var(--muted); }
+.activity[data-mode="dreaming"] svg { color: var(--accent); }
+.activity g { display: none; }
+.activity[data-mode="idle"] g[data-glyph="idle"] { display: inline; }
+.activity[data-mode="working"] g[data-glyph="working"] { display: inline; }
+.activity[data-mode="tool"] g[data-glyph="tool"] { display: inline; }
+.activity[data-mode="dreaming"] g[data-glyph="dreaming"] { display: inline; }
+.activity[data-mode="working"] .spin { transform-origin: 12px 12px; animation: act-spin 1.6s linear infinite; }
+.activity[data-mode="tool"] .tick { animation: act-tick 1.1s steps(2, end) infinite; }
+.activity[data-mode="dreaming"] svg { animation: act-drift 4s ease-in-out infinite; }
+@keyframes act-spin { to { transform: rotate(360deg); } }
+@keyframes act-tick { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+@keyframes act-drift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+.activity-label { letter-spacing: .02em; }
+.goal-stack { position: absolute; top: calc(var(--s9) + var(--s2)); right: var(--s4); z-index: 6; display: grid; gap: var(--s2); width: 292px; max-height: calc(100dvh - var(--s9) - var(--s5)); overflow: auto; }
+.goal-stack .goal-card { position: static; width: auto; }
 .subagent-card { position: static; }
+@media (max-width: 1080px) { .goal-stack { position: static; width: auto; max-height: none; margin: var(--s4) var(--s5) 0; } }
 @media (max-width: 1080px) { .goal-stack { position: static; width: auto; margin: var(--s4) var(--s5) 0; } }
 .subagent-card .goal-step .goal-text { text-decoration: none; }
 .context-ring { position: relative; display: grid; place-items: center; width: var(--s7); height: var(--s7); padding: 0; border: 0; background: transparent; border-radius: 50%; }
@@ -135,17 +136,17 @@ function formatTokens(value){if(!Number.isFinite(value))return '—';if(value>=1
 const RING_CIRCUMFERENCE=2*Math.PI*15;
 let lastContext=null;
 const activityUi={root:$('activity'),label:$('activity-label')};
-activityUi.root.addEventListener('click',()=>{if(!subagentUi.card)return;subagentUi.card.hidden=!subagentUi.card.hidden});
 const activityWords={thinking:'Thinking',reasoning:'Reasoning',coding:'Writing code',tools:'Using tools',planning:'Planning',research:'Researching',reading:'Reading',writing:'Writing',testing:'Testing',dreaming:'Consolidating',idle:'Ready'};
-function setActivity(mode,label){if(!activityUi.root)return;activityUi.root.dataset.mode=mode==='working'?'working':mode==='tool'?'tool':'idle';activityUi.label.textContent=label||activityWords[mode]||'Ready'}
+const activityGlyph={thinking:'working',reasoning:'working',planning:'working',coding:'tool',tools:'tool',testing:'tool',writing:'tool',reading:'tool',research:'tool',dreaming:'dreaming',idle:'idle'};
+function setActivity(mode,label){if(!activityUi.root)return;activityUi.root.dataset.mode=activityGlyph[mode]||(mode==='working'?'working':mode==='tool'?'tool':'idle');activityUi.label.textContent=label||activityWords[mode]||'Ready'}
 const subagentUi={card:$('subagent-card'),toggle:$('subagent-toggle'),state:$('subagent-state'),list:$('subagent-list'),empty:$('subagent-empty')};
 const subagentRuns=new Map();
 const subagentCollapseKey='porcupine.workbench.subagents-collapsed';
 function applySubagentCollapse(collapsed,save=false){subagentUi.card.classList.toggle('collapsed',collapsed);subagentUi.toggle.setAttribute('aria-expanded',String(!collapsed));if(save)try{window.localStorage.setItem(subagentCollapseKey,collapsed?'1':'0')}catch{}}
 try{applySubagentCollapse(window.localStorage.getItem(subagentCollapseKey)==='1')}catch{}
 subagentUi.toggle.addEventListener('click',()=>applySubagentCollapse(!subagentUi.card.classList.contains('collapsed'),true));
-function renderSubagents(){subagentUi.list.replaceChildren();const runs=[...subagentRuns.values()];subagentUi.card.hidden=runs.length===0;if(!runs.length)return;const active=runs.filter(run=>run.status==='running').length;subagentUi.state.textContent=active?active+' running':'idle';subagentUi.state.dataset.state=active?'active':'done';for(const run of runs.slice(-6)){const item=document.createElement('li');item.className='goal-step';item.dataset.status=run.status==='running'?'active':run.status==='done'?'done':'blocked';const glyph=document.createElement('span');glyph.className='glyph';glyph.textContent=run.status==='running'?'◌':run.status==='done'?'✓':'!';const text=document.createElement('span');text.className='goal-text';text.textContent=run.name+' · '+(run.summary||run.status);item.append(glyph,text);subagentUi.list.append(item)}subagentUi.empty.hidden=true}
-function noteSubagent(message){const tag=String(message.agentTag||message.tag||message.subagentId||message.id||'agent');const run=subagentRuns.get(tag)||{name:'@'+String(tag).slice(0,12),status:'running',summary:''};const text=textOf(message.content)||'';run.summary=text.split(String.fromCharCode(10))[0].slice(0,90);run.status=String(message.customType||'').includes('report')?'done':'running';subagentRuns.set(tag,run);renderSubagents()}
+function renderSubagents(){subagentUi.list.replaceChildren();const runs=[...subagentRuns.values()];if(!runs.length){subagentUi.state.textContent='';subagentUi.state.removeAttribute('data-state');subagentUi.empty.hidden=false;return}const active=runs.filter(run=>run.status==='running').length;subagentUi.state.textContent=active?active+' running':'idle';subagentUi.state.dataset.state=active?'active':'done';for(const run of runs.slice(-6)){const item=document.createElement('li');item.className='goal-step';item.dataset.status=run.status==='running'?'active':run.status==='done'?'done':'blocked';const glyph=document.createElement('span');glyph.className='glyph';glyph.textContent=run.status==='running'?'◌':run.status==='done'?'✓':'!';const text=document.createElement('span');text.className='goal-text';text.textContent=run.name+(run.summary?' · '+run.summary:' · '+run.status);item.append(glyph,text);subagentUi.list.append(item)}subagentUi.empty.hidden=runs.length>0}
+function noteSubagent(message){const info=message.details&&typeof message.details==='object'?message.details:{};const tag=String(info.agentTag||info.tag||message.agentTag||message.tag||info.subagentId||message.subagentId||'agent');const run=subagentRuns.get(tag)||{name:'@'+String(tag).slice(0,12),status:'running',summary:''};const text=textOf(message.content)||'';run.summary=text.split(String.fromCharCode(10))[0].replace(/^@[\w-]+\s*[·:-]?\s*/,'').slice(0,90);run.status=String(message.customType||'').includes('report')?'done':'running';subagentRuns.set(tag,run);renderSubagents()}
 const limitsUi={open:$('settings-open'),compact:$('limit-compact'),subagents:$('limit-subagents'),apply:$('limits-apply'),status:$('limits-status')};
 function syncLimitInputs(){if(!lastContext)return;limitsUi.compact.value=String(Math.round(lastContext.compactAtPercent||80));limitsUi.subagents.value=String(Math.round(lastContext.maxSubagents||3))}
 limitsUi.open.addEventListener('click',syncLimitInputs);

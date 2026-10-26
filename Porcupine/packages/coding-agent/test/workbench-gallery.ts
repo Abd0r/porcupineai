@@ -298,6 +298,22 @@ try {
 			.evaluate((element) => element.scrollIntoView({ block: "start" }));
 		await shot(page, `${name}.png`);
 	}
+	for (const [tag, text] of [
+		["buck", "@buck · Extracting the measurement table from the PDF"],
+		["tinker", "@tinker · Verifying the chart values against the CSV"],
+	] as const) {
+		emit({
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "subagent_message",
+				details: { agentTag: tag },
+				content: [{ type: "text", text }],
+			},
+		});
+	}
+	await page.waitForFunction(() => document.getElementById("subagent-list")?.children.length === 2);
+	await shot(page, "08b Sub-agent activity.png");
 	emit({
 		type: "permission_request",
 		permissionId: "perm-demo",
