@@ -107,6 +107,35 @@ export function createSessionSurfaces(session: AgentSession) {
 			: null,
 	});
 	return {
+		async getModels() {
+			const current = session.model ? { provider: session.model.provider, id: session.model.id } : null;
+			const available = await session.modelRuntime.getAvailable();
+			const models = available
+				.map((model) => ({
+					provider: model.provider,
+					id: model.id,
+					name: model.name,
+					contextWindow: model.contextWindow ?? 0,
+					reasoning: Boolean(model.reasoning),
+				}))
+				.sort((a, b) => `${a.provider}/${a.name}`.localeCompare(`${b.provider}/${b.name}`));
+			return { current, models };
+		},
+		async setSessionModel(provider: string, id: string) {
+			if (session.isStreaming) throw new WorkbenchError(409, "Wait for the current turn to settle before switching models");
+			const model = session.modelRuntime.getModel(provider, id);
+			if (!model) throw new WorkbenchError(404, "Unknown model");
+			await session.setModel(model);
+			this.persistSurfaceState();
+			return this.getModels();
+		},
+		setDefaultModel(provider: string, id: string) {
+			session.settingsManager.setDefaultModelAndProvider(provider, id);
+			return { provider, id };
+		},
+		persistSurfaceState() {
+			/* model changes are persisted by the session itself */
+		},
 		getContext,
 		setLimits(patch: { compactAtPercent?: number; maxSubagents?: number }): ContextStats {
 			const window = session.model?.contextWindow ?? 0;
@@ -219,6 +248,18 @@ export interface SurfaceControl {
 	setClientSurface?(surface: "tui" | "web" | "none"): void;
 }
 
+export interface ModelChoice {
+	provider: string;
+	id: string;
+	name: string;
+	contextWindow: number;
+	reasoning: boolean;
+}
+export interface ModelsSurfaces {
+	getModels?(): Promise<{ current: { provider: string; id: string } | null; models: ModelChoice[] }>;
+	setSessionModel?(provider: string, id: string): Promise<{ current: { provider: string; id: string } | null; models: ModelChoice[] }>;
+	setDefaultModel?(provider: string, id: string): { provider: string; id: string };
+}
 export interface ContextSurfaces {
 	getContext?(): ContextStats;
 	setLimits?(patch: { compactAtPercent?: number; maxSubagents?: number }): ContextStats;

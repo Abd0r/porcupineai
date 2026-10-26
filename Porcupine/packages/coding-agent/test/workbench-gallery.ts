@@ -124,6 +124,38 @@ const surfaces: SessionSurfaces = {
 		maxSubagents: 3,
 	}),
 	setLimits: (patch) => ({ ...surfaces.getContext!(), ...patch }),
+	getModels: () => ({
+		current: { provider: "opencode-go", id: "deepseek-v4-flash" },
+		models: [
+			{
+				provider: "opencode-go",
+				id: "deepseek-v4-flash",
+				name: "DeepSeek V4 Flash",
+				contextWindow: 1000000,
+				reasoning: false,
+			},
+			{
+				provider: "opencode-go",
+				id: "deepseek-v4-pro",
+				name: "DeepSeek V4 Pro",
+				contextWindow: 1000000,
+				reasoning: true,
+			},
+			{
+				provider: "anthropic",
+				id: "claude-sonnet-4-5",
+				name: "Claude Sonnet 4.5",
+				contextWindow: 200000,
+				reasoning: true,
+			},
+			{ provider: "google", id: "gemini-3-pro", name: "Gemini 3 Pro", contextWindow: 2000000, reasoning: true },
+		],
+	}),
+	setSessionModel: (provider, id) => {
+		const list = surfaces.getModels!();
+		return Promise.resolve({ current: { provider, id }, models: list.models });
+	},
+	setDefaultModel: (provider, id) => ({ provider, id }),
 	getGoalPlan: () => ({
 		supported: true,
 		goal: {
@@ -416,6 +448,12 @@ try {
 	await page.getByRole("button", { name: "＋ New project", exact: true }).click();
 	await shot(page, "28 New project.png");
 	await page.getByRole("button", { name: "Close new project" }).click();
+	await page.locator("#session-model").click();
+	await page.locator("#model-list .model-row").first().waitFor();
+	await shot(page, "35 Model picker.png");
+	await page.locator("#model-search").fill("claude");
+	await shot(page, "36 Model search.png");
+	await page.getByRole("button", { name: "Close model picker" }).click();
 
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page
