@@ -73,6 +73,12 @@ try {
 		});
 		await page.waitForTimeout(1200);
 	}
+	api.emit({ type: "tool_execution_start", toolName: "web_search" });
+	await page.waitForTimeout(1400);
+	api.emit({ type: "tool_execution_start", toolName: "read" });
+	await page.waitForTimeout(1400);
+	api.emit({ type: "tool_execution_start", toolName: "bash" });
+	await page.waitForTimeout(1200);
 	api.emit({
 		type: "message_end",
 		message: {

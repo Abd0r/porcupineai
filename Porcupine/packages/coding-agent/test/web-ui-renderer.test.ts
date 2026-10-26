@@ -213,6 +213,9 @@ function loadRenderer(): {
 		},
 	};
 	const sandbox = {
+		setInterval: () => 0,
+		clearInterval: () => {},
+		setTimeout: () => 0,
 		document,
 		window: {
 			devicePixelRatio: 1,
@@ -469,5 +472,50 @@ describe("rich message rendering", () => {
 		expect(link?.attributes.get("rel")).toBe("noopener noreferrer");
 		expect(descendants(node).some((child) => child.tagName === "img")).toBe(false);
 		expect(descendants(node).some((child) => child.textContent?.includes("<img src=x"))).toBe(true);
+	});
+});
+
+describe("inline thinking state", () => {
+	it("starts a live row, names real tool activity, and settles with the chain of thought", () => {
+		const { event, feed } = loadRenderer();
+		event({ type: "agent_start" });
+		expect(feed.children).toHaveLength(1);
+		const row = feed.children[0];
+		if (!row) throw new Error("thinking row missing");
+		const label = () => descendants(row).find((child) => child.className === "thinking-label")?.textContent;
+		expect(label()).toBe("Thinking…");
+
+		event({ type: "tool_execution_start", toolName: "web_search" });
+		expect(label()).toBe("Searching the web");
+
+		event({ type: "tool_execution_start", toolName: "read" });
+		expect(label()).toBe("Reading");
+
+		event({ type: "tool_execution_start", toolName: "bash" });
+		expect(label()).toBe("Running a command");
+
+		event({ type: "tool_execution_start", toolName: "some_new_tool" });
+		expect(label()).toBe("Using some_new_tool");
+
+		event({
+			type: "message_end",
+			message: {
+				role: "assistant",
+				content: [
+					{ type: "thinking", thinking: "I should compare the three readings." },
+					{ type: "text", text: "Compared." },
+				],
+			},
+		});
+		expect(label()).toMatch(/^Thought for \d+ seconds?$/);
+		const body = descendants(feed).find((child) => child.className === "thinking-body");
+		expect(body?.textContent).toContain("compare the three readings");
+		expect(descendants(feed).some((child) => child.textContent === "Compared.")).toBe(true);
+	});
+
+	it("does not create a row for an unrelated tool completion", () => {
+		const { event, feed } = loadRenderer();
+		event({ type: "tool_execution_end", toolName: "visualize", isError: true });
+		expect(feed.children).toHaveLength(0);
 	});
 });
