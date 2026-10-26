@@ -10,7 +10,6 @@ export type InteractionMode = "ask" | "normal" | "auto";
 const controlPatchSchema = Type.Object(
 	{
 		interactionMode: Type.Optional(Type.Union([Type.Literal("ask"), Type.Literal("normal"), Type.Literal("auto")])),
-		planFence: Type.Optional(Type.Boolean()),
 		reasoningMode: Type.Optional(
 			Type.Union([
 				Type.Literal("off"),
@@ -32,12 +31,20 @@ export function parseControlPatch(value: unknown): ControlPatch {
 		throw new WorkbenchError(400, "Change exactly one supported reasoning or interaction mode");
 	return value;
 }
+export interface ContextStats {
+	tokens: number;
+	contextWindow: number;
+	percent: number;
+	compactAtPercent: number;
+	reserveTokens: number | null;
+	maxSubagents: number;
+	cost?: number;
+}
 export interface SessionControls {
 	interactionMode: InteractionMode;
 	reasoningMode: ReasoningMode;
 	availableReasoningModes: ReasoningMode[];
 	busy: boolean;
-	planFence: boolean;
 	model: { id: string; name: string; provider: string } | null;
 }
 export type CatalogKind = "skills" | "tools";
@@ -58,18 +65,62 @@ export interface CatalogPage {
 }
 
 /** Read live session state and known registry entries; never execute a tool to inspect it. */
+function limitsOf(session: AgentSession): {
+	compactAtPercent: number;
+	reserveTokens: number | null;
+	maxSubagents: number;
+} {
+	const window = session.model?.contextWindow ?? 0;
+	const settings = session.settingsManager;
+	const reserve = settings.getCompactionSettings().reserveTokens;
+	const maxSubagents = settings.getSubagentSettings().maxConcurrent;
+	const effectiveReserve = reserve ?? (window > 0 ? Math.round(window * 0.2) : 0);
+	const compactAtPercent =
+		window > 0 && effectiveReserve > 0
+			? Math.max(1, Math.min(99, Math.round(((window - effectiveReserve) / window) * 100)))
+			: 80;
+	return { compactAtPercent, reserveTokens: reserve ?? null, maxSubagents };
+}
+
 export function createSessionSurfaces(session: AgentSession) {
+	const getContext = (): ContextStats => {
+		const usage = session.getContextUsage();
+		const window = usage?.contextWindow ?? session.model?.contextWindow ?? 0;
+		const tokens = usage?.tokens ?? 0;
+		const limits = limitsOf(session);
+		return {
+			tokens,
+			contextWindow: window,
+			percent: window > 0 ? Math.min(100, Math.round((tokens / window) * 1000) / 10) : 0,
+			compactAtPercent: limits.compactAtPercent,
+			reserveTokens: limits.reserveTokens,
+			maxSubagents: limits.maxSubagents,
+		};
+	};
 	const getControls = (): SessionControls => ({
 		interactionMode: session.interactionMode,
 		reasoningMode: session.getReasoningMode(),
 		availableReasoningModes: session.getAvailableReasoningModes(),
 		busy: session.isStreaming || session.isCompacting,
-		planFence: session.planFenceActive,
 		model: session.model
 			? { id: session.model.id, name: session.model.name, provider: session.model.provider }
 			: null,
 	});
 	return {
+		getContext,
+		setLimits(patch: { compactAtPercent?: number; maxSubagents?: number }): ContextStats {
+			const window = session.model?.contextWindow ?? 0;
+			if (patch.compactAtPercent !== undefined) {
+				if (!Number.isFinite(patch.compactAtPercent) || patch.compactAtPercent < 50 || patch.compactAtPercent > 95)
+					throw new WorkbenchError(400, "Compaction threshold must be between 50% and 95%");
+				if (window <= 0) throw new WorkbenchError(409, "No context window is known for this model yet");
+				session.settingsManager.setCompactionReserveTokens(
+					Math.round(window * ((100 - patch.compactAtPercent) / 100)),
+				);
+			}
+			if (patch.maxSubagents !== undefined) session.settingsManager.setSubagentMaxConcurrent(patch.maxSubagents);
+			return getContext();
+		},
 		getControls,
 		configure(patch: ControlPatch): SessionControls {
 			parseControlPatch(patch);
@@ -78,7 +129,6 @@ export function createSessionSurfaces(session: AgentSession) {
 			if (patch.reasoningMode && !current.availableReasoningModes.includes(patch.reasoningMode))
 				throw new WorkbenchError(400, "That reasoning mode is not supported by the active model");
 			if (patch.reasoningMode) session.setReasoningMode(patch.reasoningMode);
-			if (patch.planFence !== undefined) session.setPlanFenceActive(patch.planFence);
 			if (patch.interactionMode) session.setInteractionMode(patch.interactionMode);
 			return getControls();
 		},
@@ -167,6 +217,11 @@ export type SessionSurfaces = ReturnType<typeof createSessionSurfaces>;
 
 export interface SurfaceControl {
 	setClientSurface?(surface: "tui" | "web" | "none"): void;
+}
+
+export interface ContextSurfaces {
+	getContext?(): ContextStats;
+	setLimits?(patch: { compactAtPercent?: number; maxSubagents?: number }): ContextStats;
 }
 
 export interface GoalPlanSurfaces {

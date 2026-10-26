@@ -51,11 +51,7 @@ export function isLoopbackHost(host: string | undefined): boolean {
 
 export function adaptSessionToServeApi(session: AgentSession): ServeApiSession {
 	const goalPlanListeners = new Set<(view: unknown) => void>();
-	const tracker = () => ({
-		goal: session.getGoal(),
-		planFence: session.planFenceActive,
-		busy: session.isStreaming,
-	});
+	const tracker = () => ({ goal: session.getGoal(), busy: session.isStreaming });
 	session.subscribe((event) => {
 		if (event.type !== "goal_changed") return;
 		for (const listener of goalPlanListeners) listener(tracker());

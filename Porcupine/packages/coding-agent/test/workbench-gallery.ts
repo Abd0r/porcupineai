@@ -115,6 +115,15 @@ const surfaces: SessionSurfaces = {
 			.sort((a, b) => a.name.localeCompare(b.name));
 		return { skillsCount: 4, toolsCount: 4, entries: all.slice(offset, offset + limit), total: all.length, offset };
 	},
+	getContext: () => ({
+		tokens: 128400,
+		contextWindow: 1000000,
+		percent: 12.8,
+		compactAtPercent: 80,
+		reserveTokens: null,
+		maxSubagents: 3,
+	}),
+	setLimits: (patch) => ({ ...surfaces.getContext!(), ...patch }),
 	getGoalPlan: () => ({
 		supported: true,
 		goal: {
@@ -129,7 +138,6 @@ const surfaces: SessionSurfaces = {
 			createdAt: "2026-10-27T00:00:00.000Z",
 			updatedAt: "2026-10-27T00:00:00.000Z",
 		},
-		planFence: false,
 		busy: false,
 	}),
 	inspectCatalog: (kind, name) => ({

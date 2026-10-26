@@ -17,7 +17,6 @@ const controls = {
 	reasoningMode: "medium" as const,
 	availableReasoningModes: ["off", "low", "medium", "high", "adaptive"] as const,
 	busy: false,
-	planFence: false,
 	model: { id: "faux-1", name: "Faux Model", provider: "faux" },
 };
 const surfaces: SessionSurfaces = {
@@ -25,7 +24,6 @@ const surfaces: SessionSurfaces = {
 	configure: (patch) => {
 		if (patch.interactionMode) controls.interactionMode = patch.interactionMode;
 		if (patch.reasoningMode) controls.reasoningMode = patch.reasoningMode as typeof controls.reasoningMode;
-		if (patch.planFence !== undefined) controls.planFence = patch.planFence;
 		return surfaces.getControls();
 	},
 	getCatalog: (kind, query = "", offset = 0, limit = 50) => {
@@ -114,11 +112,6 @@ try {
 	await page.locator("#autonomy-mode").selectOption("ask");
 	await page.waitForFunction(() => document.querySelector<HTMLSelectElement>("#autonomy-mode")?.value === "ask");
 	assert.equal(controls.interactionMode, "ask");
-	await page.locator("#plan-toggle").click();
-	await page.waitForFunction(() => document.getElementById("plan-toggle")?.getAttribute("aria-pressed") === "true");
-	assert.equal(controls.planFence, true);
-	await page.locator("#plan-toggle").click();
-	await page.waitForFunction(() => document.getElementById("plan-toggle")?.getAttribute("aria-pressed") === "false");
 
 	// Stacks: live skills and tools with source inspection.
 	await page.locator("#stacks-tree > summary").click();

@@ -17,6 +17,16 @@ export const APPEARANCE_DIALOG = `
     <p class="settings-note">Themes and image opacity do not change agent permissions or reasoning.</p>
     <p id="appearance-error" class="error" role="alert" hidden></p>
   </section>
+  <section class="settings-section" aria-labelledby="limits-title">
+    <h3 id="limits-title">Session limits</h3>
+    <p>Compaction threshold and sub-agent concurrency. Applying writes your global settings and takes effect for later turns.</p>
+    <div class="settings-grid">
+      <label>Compact at %<input id="limit-compact" type="number" min="50" max="95" step="1"></label>
+      <label>Max sub-agents<input id="limit-subagents" type="number" min="1" max="8" step="1"></label>
+    </div>
+    <p><button id="limits-apply" class="quiet-button" type="button">Apply limits</button></p>
+    <p id="limits-status" class="settings-note"></p>
+  </section>
   <section class="settings-section" id="context-settings" hidden aria-labelledby="context-title"><h3 id="context-title">Agent context files</h3><p>Inspect and edit the explicitly listed local Markdown files. Saved changes may require resource reload; they never rewrite an active turn.</p><div id="context-files"></div></section>
 </dialog>`;
 
@@ -68,11 +78,10 @@ export const APPEARANCE_STYLES = `
 :root[data-theme="pixel"] .composer-wrap,
 :root[data-theme="pixel"] .settings-dialog,
 :root[data-theme="pixel"] .file-picker,
-:root[data-theme="pixel"] .plan-toggle,
 :root[data-theme="pixel"] .send { box-shadow: var(--pixel-shadow); }
 :root[data-theme="pixel"] .new-session:active,
 :root[data-theme="pixel"] .send:active,
-:root[data-theme="pixel"] .plan-toggle:active { box-shadow: none; transform: translate(2px, 2px); }
+:root[data-theme="pixel"] .send:active { box-shadow: none; transform: translate(2px, 2px); }
 :root[data-theme="pixel"] .welcome h1 { letter-spacing: 0; text-transform: uppercase; }
 :root[data-theme="pixel"] .welcome h1::after { content: " ▮"; color: var(--accent); }
 :root[data-theme="pixel"] .message.user { border: var(--unit) solid var(--line); }

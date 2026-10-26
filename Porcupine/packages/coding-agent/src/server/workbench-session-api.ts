@@ -35,6 +35,53 @@ export async function handleSessionSurfaceRequest(
 		router.json(res, 200, { supported: true, ...(target.getGoalPlan() as object) });
 		return true;
 	}
+	if (goalMatch) {
+		// handled above
+	}
+	const contextMatch = /^\/session\/([^/]+)\/context$/.exec(url.pathname);
+	if (contextMatch) {
+		const target = router.getSession(contextMatch[1]!);
+		if (!target) {
+			router.json(res, 404, { error: "No such session" });
+			return true;
+		}
+		if (!target.getContext) {
+			router.json(res, 200, { supported: false });
+			return true;
+		}
+		if (method === "GET") {
+			router.json(res, 200, { supported: true, ...target.getContext() });
+			return true;
+		}
+		if (method !== "POST") {
+			res.setHeader("allow", "GET, POST");
+			router.json(res, 405, { error: "Method not allowed" });
+			return true;
+		}
+		if (!target.setLimits) throw new WorkbenchError(501, "This session does not support limit changes");
+		let limits: unknown;
+		try {
+			limits = JSON.parse(await router.readBody(req));
+		} catch {
+			throw new WorkbenchError(400, "Expected JSON limits");
+		}
+		if (!limits || typeof limits !== "object" || Array.isArray(limits))
+			throw new WorkbenchError(400, "Expected an object");
+		const patch = limits as { compactAtPercent?: unknown; maxSubagents?: unknown };
+		for (const key of Object.keys(limits)) {
+			if (key !== "compactAtPercent" && key !== "maxSubagents")
+				throw new WorkbenchError(400, "Unexpected limit field");
+		}
+		if (patch.compactAtPercent !== undefined && typeof patch.compactAtPercent !== "number")
+			throw new WorkbenchError(400, "compactAtPercent must be a number");
+		if (patch.maxSubagents !== undefined && typeof patch.maxSubagents !== "number")
+			throw new WorkbenchError(400, "maxSubagents must be a number");
+		router.json(res, 200, {
+			supported: true,
+			...target.setLimits(patch as { compactAtPercent?: number; maxSubagents?: number }),
+		});
+		return true;
+	}
 	const match = /^\/session\/([^/]+)\/(controls|catalog)(?:\/(skills|tools)\/([^/]+))?$/.exec(url.pathname);
 	if (!match) return false;
 	const session = router.getSession(match[1]!);

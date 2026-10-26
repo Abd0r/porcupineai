@@ -38,10 +38,19 @@ import type { ContextFileStore } from "./workbench-context-files.ts";
 import type { WorkbenchProjectStore } from "./workbench-projects.ts";
 import { handleProjectRequest } from "./workbench-projects-api.ts";
 import { handleSessionSurfaceRequest } from "./workbench-session-api.ts";
-import type { GoalPlanSurfaces, SessionSurfaces, SurfaceControl } from "./workbench-session-surfaces.ts";
+import type {
+	ContextSurfaces,
+	GoalPlanSurfaces,
+	SessionSurfaces,
+	SurfaceControl,
+} from "./workbench-session-surfaces.ts";
 
 /** Minimal session surface the HTTP API drives. */
-export interface ServeApiSession extends Partial<SessionSurfaces>, Partial<GoalPlanSurfaces>, Partial<SurfaceControl> {
+export interface ServeApiSession
+	extends Partial<SessionSurfaces>,
+		Partial<GoalPlanSurfaces>,
+		Partial<SurfaceControl>,
+		Partial<ContextSurfaces> {
 	readonly id: string;
 	sendUserMessage(text: string): Promise<void>;
 	abort(): Promise<void>;

@@ -839,6 +839,30 @@ export class SettingsManager {
 		return this.settings.compaction?.enabled ?? true;
 	}
 
+	/** Compaction headroom in tokens. Undefined restores the 20% rule. */
+	setCompactionReserveTokens(tokens: number | undefined): void {
+		if (tokens === undefined) {
+			if (this.globalSettings.compaction) delete this.globalSettings.compaction.reserveTokens;
+			this.markModified("compaction", "reserveTokens");
+			this.save();
+			return;
+		}
+		if (!Number.isFinite(tokens) || tokens < 1024) throw new Error("Reserve must be at least 1024 tokens.");
+		if (!this.globalSettings.compaction) this.globalSettings.compaction = {};
+		this.globalSettings.compaction.reserveTokens = Math.round(tokens);
+		this.markModified("compaction", "reserveTokens");
+		this.save();
+	}
+
+	/** How many sub-agents may run at once (1-8). */
+	setSubagentMaxConcurrent(limit: number): void {
+		if (!Number.isInteger(limit) || limit < 1 || limit > 8) throw new Error("Sub-agent limit must be 1-8.");
+		if (!this.globalSettings.subagent) this.globalSettings.subagent = {};
+		this.globalSettings.subagent.maxConcurrent = limit;
+		this.markModified("subagent", "maxConcurrent");
+		this.save();
+	}
+
 	setCompactionEnabled(enabled: boolean): void {
 		if (!this.globalSettings.compaction) {
 			this.globalSettings.compaction = {};

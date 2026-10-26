@@ -37,7 +37,22 @@ class FakeElement {
 	readonly children: FakeElement[] = [];
 	readonly attributes = new Map<string, string>();
 	readonly listeners = new Set<string>();
-	readonly classList = { toggle: (_name: string, _force?: boolean) => {} };
+	readonly classes = new Set<string>();
+	readonly classList = {
+		add: (name: string) => {
+			this.classes.add(name);
+		},
+		remove: (name: string) => {
+			this.classes.delete(name);
+		},
+		contains: (name: string) => this.classes.has(name),
+		toggle: (name: string, force?: boolean) => {
+			const next = force ?? !this.classes.has(name);
+			if (next) this.classes.add(name);
+			else this.classes.delete(name);
+			return next;
+		},
+	};
 	readonly style = { setProperty: (_name: string, _value: string) => {} };
 	className = "";
 	textContent = "";
@@ -85,6 +100,7 @@ function loadRenderer(): {
 	event(event: unknown): void;
 	feed: FakeElement;
 	canvasContext: FakeCanvasContext;
+	rich(node: FakeElement, text: string): FakeElement;
 } {
 	const canvasContext = new FakeCanvasContext();
 	const elements = new Map<string, FakeElement>();
@@ -105,6 +121,13 @@ function loadRenderer(): {
 		"status-text",
 		"status-dot",
 		"session-title",
+		"limit-compact",
+		"limit-subagents",
+		"limits-apply",
+		"limits-status",
+		"context-ring",
+		"ring-fill",
+		"context-tip",
 		"goal-card",
 		"goal-toggle",
 		"goal-body",
@@ -112,9 +135,7 @@ function loadRenderer(): {
 		"goal-objective",
 		"goal-steps",
 		"goal-empty",
-		"goal-fence",
 		"session-controls",
-		"plan-toggle",
 		"reasoning-mode",
 		"autonomy-mode",
 		"session-model",
@@ -161,6 +182,7 @@ function loadRenderer(): {
 	}
 	const document = {
 		documentElement: new FakeElement("html", canvasContext),
+		addEventListener(): void {},
 		getElementById(id: string): FakeElement {
 			const element = elements.get(id);
 			if (!element) throw new Error(`Unknown test element: ${id}`);
@@ -168,6 +190,11 @@ function loadRenderer(): {
 		},
 		createElement(tagName: string): FakeElement {
 			return new FakeElement(tagName, canvasContext);
+		},
+		createTextNode(text: string): FakeElement {
+			const node = new FakeElement("#text", canvasContext);
+			node.textContent = text;
+			return node;
 		},
 	};
 	const sandbox = {
@@ -190,7 +217,7 @@ function loadRenderer(): {
 	if (!script) throw new Error("Workbench script is missing");
 	const instrumented = script.replace(
 		/\}\)\(\);\s*$/,
-		"globalThis.__renderVisualization=renderVisual;globalThis.__renderEvent=renderEvent;})();",
+		"globalThis.__renderVisualization=renderVisual;globalThis.__renderEvent=renderEvent;globalThis.__renderRichText=renderRichText;})();",
 	);
 	if (instrumented === script) throw new Error("Could not expose the renderer to its test harness");
 	runInNewContext(instrumented, sandbox);
@@ -198,7 +225,11 @@ function loadRenderer(): {
 	const feed = elements.get("feed");
 	if (!feed) throw new Error("Test feed element is missing");
 	const event = runInNewContext("globalThis.__renderEvent", sandbox) as (event: unknown) => void;
-	return { render, event, feed, canvasContext };
+	const rich = runInNewContext("globalThis.__renderRichText", sandbox) as (
+		node: FakeElement,
+		text: string,
+	) => FakeElement;
+	return { render, event, rich, feed, canvasContext };
 }
 
 const scene = {
@@ -345,5 +376,83 @@ describe("browser 3D scene renderer", () => {
 		render({ ...scene, objects: [{ type: "mesh", source: "<script>" }] });
 		render({ ...scene, objects: Array.from({ length: 81 }, () => scene.objects[0]) });
 		expect(feed.children).toHaveLength(0);
+	});
+});
+
+describe("rich message rendering", () => {
+	it("renders fenced code with a language label and copy control", () => {
+		const { rich } = loadRenderer();
+		const node = rich(new FakeElement("div", new FakeCanvasContext()), "Intro\n\n```ts\nconst x = 1 < 2;\n```");
+		const block = descendants(node).find((child) => child.className === "code-block");
+		if (!block) throw new Error("code block missing");
+		expect(descendants(block).some((child) => child.textContent === "ts")).toBe(true);
+		expect(descendants(block).some((child) => child.textContent === "const x = 1 < 2;")).toBe(true);
+		expect(
+			descendants(block)
+				.filter((child) => child.tagName === "button")
+				.map((child) => child.textContent),
+		).toEqual(["Copy"]);
+	});
+
+	it("renders a Markdown table with scoped headers", () => {
+		const { rich } = loadRenderer();
+		const node = rich(
+			new FakeElement("div", new FakeCanvasContext()),
+			"| Step | Time (s) |\n| --- | --- |\n| warm | 0.4 |",
+		);
+		const table = descendants(node).find((child) => child.tagName === "table");
+		if (!table) throw new Error("table missing");
+		expect(
+			descendants(table)
+				.filter((child) => child.tagName === "th")
+				.map((child) => child.textContent),
+		).toEqual(["Step", "Time (s)"]);
+		expect(
+			descendants(table)
+				.filter((child) => child.tagName === "td")
+				.map((child) => child.textContent),
+		).toEqual(["warm", "0.4"]);
+	});
+
+	it("renders LaTeX as MathML for fractions, roots, scripts and Greek", () => {
+		const { rich } = loadRenderer();
+		const node = rich(
+			new FakeElement("div", new FakeCanvasContext()),
+			"Inline $\\frac{a}{b}$ and $x^2 + \\sqrt{y}$ then $$\\sum_{i=1}^{n} \\alpha_i$$",
+		);
+		const tags = descendants(node).map((child) => child.tagName);
+		expect(tags).toContain("math");
+		expect(tags).toContain("mfrac");
+		expect(tags).toContain("msup");
+		expect(tags).toContain("msqrt");
+		expect(tags.some((tag) => tag === "msub" || tag === "munderover")).toBe(true);
+		expect(descendants(node).some((child) => child.textContent === "α")).toBe(true);
+		const display = rich(new FakeElement("div", new FakeCanvasContext()), "$$\\int_0^1 f(x)\\,dx$$");
+		expect(descendants(display).some((child) => child.className === "math-display")).toBe(true);
+		expect(descendants(display).some((child) => child.tagName === "math")).toBe(true);
+	});
+
+	it("keeps unsupported LaTeX visible instead of silently dropping it", () => {
+		const { rich } = loadRenderer();
+		const node = rich(new FakeElement("div", new FakeCanvasContext()), "$\\notacommand{x}$");
+		expect(descendants(node).some((child) => child.textContent?.includes("\\notacommand"))).toBe(true);
+	});
+
+	it("renders headings, lists, blockquotes and links without HTML injection", () => {
+		const { rich } = loadRenderer();
+		const node = rich(
+			new FakeElement("div", new FakeCanvasContext()),
+			"## Notes\n- one\n- **two**\n\n> quoted\n\n[site](https://example.com) and <img src=x onerror=alert(1)>",
+		);
+		const tags = descendants(node).map((child) => child.tagName);
+		expect(tags).toContain("h3");
+		expect(tags).toContain("ul");
+		expect(tags).toContain("blockquote");
+		expect(tags).toContain("strong");
+		const link = descendants(node).find((child) => child.tagName === "a");
+		expect(link?.attributes.get("href")).toBe("https://example.com");
+		expect(link?.attributes.get("rel")).toBe("noopener noreferrer");
+		expect(descendants(node).some((child) => child.tagName === "img")).toBe(false);
+		expect(descendants(node).some((child) => child.textContent?.includes("<img src=x"))).toBe(true);
 	});
 });
