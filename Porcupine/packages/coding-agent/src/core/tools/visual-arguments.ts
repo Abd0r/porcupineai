@@ -9,6 +9,20 @@ const arrayKeys = new Set([
 	"options",
 	"questions",
 	"correctAnswers",
+	"fields",
+	"columns",
+	"rows",
+	"parameters",
+	"nodes",
+	"edges",
+	"steps",
+	"criteria",
+	"scores",
+	"cards",
+	"claims",
+	"milestones",
+	"decisions",
+	"keyframes",
 ]);
 
 /** Some providers encode array-valued arguments as JSON strings. Decode only known array slots. */

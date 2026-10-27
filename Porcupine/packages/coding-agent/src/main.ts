@@ -902,6 +902,7 @@ export async function main(args: string[], options?: MainOptions) {
 		// Serve mode: headless HTTP API. Defaults to loopback without a token.
 		printTimings();
 		const exitCode = await runServeMode(runtime, {
+			gui: parsed.gui,
 			port: parsed.port,
 			host: parsed.host,
 			token: parsed.token ?? process.env.PORCUPINE_SERVER_TOKEN,

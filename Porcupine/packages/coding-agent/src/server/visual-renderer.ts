@@ -1,13 +1,15 @@
+import { ADAPTIVE_RENDERER_SCRIPT } from "./adaptive-renderer.ts";
 import { QUIZ_RENDERER_SCRIPT } from "./quiz-renderer.ts";
 /** Browser-only declarative 2D/chart renderer. Embedded in the same-origin workbench script. */
 export const VISUAL_RENDERER_SCRIPT = String.raw`
 ${QUIZ_RENDERER_SCRIPT}
+${ADAPTIVE_RENDERER_SCRIPT}
 const visualObservers=new Map(),componentCards=new Map(),componentAnswers=new Map();
-function componentAnswerText(content){const text=textOf(content);if(text.length>24000||!text.startsWith('[Adaptive UI response]\n'))return null;try{const value=JSON.parse(text.slice(23));if(!isRecord(value)||!validText(value.componentId,200)||typeof value.title!=='string'||value.title.length>100||typeof value.revision!=='string'||value.revision.length>12000||!Array.isArray(value.answers)||value.answers.length>12||!value.answers.every(answer=>typeof answer==='string'&&answer.length<=4000))return null;return value}catch{return null}}
+function componentAnswerText(content){const text=textOf(content);if(text.length>240000||!text.startsWith('[Adaptive UI response]\n'))return null;try{const value=JSON.parse(text.slice(23));if(!isRecord(value)||!validText(value.componentId,200)||typeof value.title!=='string'||value.title.length>100||typeof value.revision!=='string'||value.revision.length>120000||!Array.isArray(value.answers)||value.answers.length>12||!value.answers.every(answer=>typeof answer==='string'&&answer.length<=120000))return null;return value}catch{return null}}
 function restoreComponentAnswer(content){const answer=componentAnswerText(content);if(!answer)return;componentAnswers.set(answer.componentId,answer);const card=componentCards.get(answer.componentId);if(card&&card.restore)card.restore(answer)}
-function componentUserText(content){const answer=componentAnswerText(content);return answer?'Answer to '+answer.title+'\n'+answer.answers.join('; '):userMessageText(content)}
+function componentUserText(content){const answer=componentAnswerText(content);if(!answer)return userMessageText(content);if(answer.kind==='quiz')return 'Submitted quiz: '+answer.title;if(answer.kind){try{const state=JSON.parse(answer.answers[0]);if(answer.kind==='form'&&Array.isArray(state.values))return answer.title+'\n'+state.values.map(field=>String(field.label)+': '+String(field.value)).join('\n');if(answer.kind==='table')return 'Shared table: '+answer.title+' · '+(Array.isArray(state.selected)?state.selected.length:0)+' rows selected';return 'Shared '+answer.kind+' workspace: '+answer.title}catch{}}return 'Answer to '+answer.title+'\n'+answer.answers.join('; ')}
 
-function clearVisuals(){for(const item of visualObservers.values())if(item.observer)item.observer.disconnect();visualObservers.clear();componentCards.clear();componentAnswers.clear()}
+function clearVisuals(){for(const item of visualObservers.values())if(item.observer)item.observer.disconnect();visualObservers.clear();for(const item of componentCards.values())if(item.dispose)item.dispose();componentCards.clear();componentAnswers.clear()}
 function observeVisual(canvas,draw){const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>{if(visualObservers.has(canvas))draw()}):null;visualObservers.set(canvas,{draw,observer});if(observer)observer.observe(canvas)}
 function redrawVisuals(){for(const item of visualObservers.values())item.draw()}
 window.addEventListener('porcupine-theme-change',redrawVisuals);
@@ -18,6 +20,7 @@ function bounded(value,min,max){return typeof value==='number'&&Number.isFinite(
 function validPoint2(value){return Array.isArray(value)&&value.length===2&&value.every(n=>bounded(n,-20,20))}
 function validVisual(visual){
   if(!isRecord(visual)||(visual.componentId!==undefined&&!validText(visual.componentId,80))||visual.version!==2||!validText(visual.title,100)||!(visual.description===undefined||(typeof visual.description==='string'&&visual.description.length<=300)))return false;
+  if(validAdaptive(visual))return true;
   if(visual.kind==='quiz')return validQuiz(visual);
   if(visual.kind==='question')return hasOnlyKeys(visual,['version','kind','title','question','options'],['description','multiple','componentId'])&&validText(visual.question,2000)&&Array.isArray(visual.options)&&visual.options.length<=12&&visual.options.every(option=>validText(option,200))&&(visual.multiple===undefined||typeof visual.multiple==='boolean');
   if(visual.kind==='diagram'){
@@ -40,13 +43,14 @@ function renderVisual(visual,callId){
   if(!validVisual(visual)){if(visual){const error=visualElement('p','This visual could not be displayed. Ask the agent to correct its data.');error.setAttribute('role','status');ui.feed.append(error)}return;}
   const identity=visual.componentId||callId;
   const previous=identity&&componentCards.get(identity);
-  if(previous){for(const canvas of previous.card.querySelectorAll('canvas')){const item=visualObservers.get(canvas);if(item&&item.observer)item.observer.disconnect();visualObservers.delete(canvas)}}
+  if(previous){if(previous.dispose)previous.dispose();for(const canvas of previous.card.querySelectorAll('canvas')){const item=visualObservers.get(canvas);if(item&&item.observer)item.observer.disconnect();visualObservers.delete(canvas)}}
   ui.welcome.hidden=true;
   const card=visualElement('section');card.className='visualization-card';
-  function mountComponent(){if(previous&&previous.card.parentNode===ui.feed){ui.feed.insertBefore(card,previous.card);previous.card.remove()}else ui.feed.append(card)}
-  card.append(visualElement('h2',visual.title),visualElement('div',visual.description||(visual.kind==='diagram'?'2D conceptual diagram':'Data chart')));
+  let mounted=false;function mountComponent(){if(mounted)return;mounted=true;if(previous&&previous.card.parentNode===ui.feed){ui.feed.insertBefore(card,previous.card);previous.card.remove()}else ui.feed.append(card)}
+  card.append(visualElement('h2',visual.title),visualElement('div',visual.description||(visual.kind==='diagram'?'2D conceptual diagram':visual.kind==='chart'?'Data chart':'Interactive '+visual.kind)));
   card.classList.add('interactive-visual');if(identity){card.dataset.componentId=identity;componentCards.set(identity,{card})}
   if(visual.description)renderRichText(card.lastChild,visual.description);
+  if(validAdaptive(visual)){renderAdaptive(card,visual,identity,mountComponent);return;}
   if(visual.kind==='quiz'){renderQuiz(card,visual,identity,mountComponent);return;}
   if(visual.kind==='question'){
     card.lastChild.remove();

@@ -17,7 +17,7 @@
  * The server stays alive until SIGINT/SIGTERM, then shuts down the runtime.
  */
 
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { dirname } from "node:path";
 import { getAgentDir, VERSION } from "../config.ts";
 import type { AgentSession } from "../core/agent-session.ts";
@@ -32,8 +32,10 @@ import { WorkbenchProjectStore } from "../server/workbench-projects.ts";
 import { getSessionProject, moveSessionToTrash, setSessionProject } from "../server/workbench-session-projects.ts";
 import { createSessionSurfaces } from "../server/workbench-session-surfaces.ts";
 import { serializeWorkbenchHistory } from "../server/workbench-transcript.ts";
+import { openBrowser } from "../utils/open-browser.ts";
 
 export interface ServeModeOptions {
+	gui?: boolean;
 	port?: number;
 	host?: string;
 	/** Optional bearer token. When binding a non-loopback host, a token is required. */
@@ -195,6 +197,12 @@ export function adaptSessionToServeApi(session: AgentSession, attachmentRoot = g
  * interrupted (SIGINT/SIGTERM) or the server errors.
  */
 export async function runServeMode(runtime: AgentSessionRuntime, options: ServeModeOptions): Promise<number> {
+	if (options.gui && !isLoopbackHost(options.host)) {
+		process.stderr.write("GUI launch requires a loopback host. Use --serve for remote hosting.\n");
+		return 1;
+	}
+	if (options.gui)
+		options = { ...options, token: options.token || randomBytes(32).toString("hex"), port: options.port ?? 0 };
 	if (!isLoopbackHost(options.host) && !options.token) {
 		process.stderr.write(
 			"Refusing to bind a non-loopback host without a token. Pass --token or set PORCUPINE_SERVER_TOKEN.\n",
@@ -294,6 +302,14 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 	});
 
 	process.stderr.write(`Porcupine serve listening on http://${options.host ?? "127.0.0.1"}:${handle.port()}\n`);
+	if (options.gui) {
+		const host = options.host === "::1" ? "[::1]" : options.host || "127.0.0.1";
+		const url = `http://${host}:${handle.port()}/#token=${encodeURIComponent(options.token!)}`;
+		openBrowser(url);
+		process.stderr.write(
+			`GUI opened in your browser. If it did not open, paste this local launch URL:\n${url}\nKeep this terminal open; Ctrl+C stops the GUI server.\n`,
+		);
+	}
 	if (!options.token) {
 		if (process.env.PORCUPINE_SERVE_ALLOW_TOKENLESS !== "1") {
 			// Fail closed: no token and no explicit opt-in means every request is

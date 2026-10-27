@@ -1,5 +1,7 @@
 # Local Browser Workbench
 
+Run `porcupine -gui` (or `porcupine --gui`) to start a local workbench and open the browser. The launcher selects an available port and creates a token for that run; the browser consumes the launch fragment and removes it from the address bar. Keep the terminal process running. Plain `porcupine` continues to launch the terminal interface. `--port` can select a fixed port. GUI launch is loopback-only; `--serve` remains the explicit server route.
+
 `porcupine --serve` serves a local browser workbench at the server root, for example `http://127.0.0.1:4096/`. The existing terminal interface remains available; the workbench is an additional client of the same session API.
 
 Start the server with a token:
@@ -17,6 +19,32 @@ The Conversations list discovers saved Porcupine sessions using the same session
 The interface uses an open conversation column, neutral surfaces, compact controls, and a shared adaptive width for text, figures, and the composer. Its semantic tokens and layout patterns are adapted from the MIT-licensed DeepSeek Harness UI, not its branding or plugin runtime. See [source notes and license](./gui-third-party-notices.md).
 
 ## Visual explanations
+
+### Interactive workspaces
+
+The following `visualize` kinds extend the same component identity and session replay flow. Users can inspect and change a workspace locally, then press **Send to agent** to persist that state in conversation history and ask the agent to continue. Unsubmitted changes are not saved across reloads. Updating a component with changed content starts a new revision.
+
+| Kind | Current controls |
+| --- | --- |
+| `form` | Text, number, choice and toggle fields; required values and number bounds; submitted values restore |
+| `table` | Search, sortable columns, row selection, optional cell editing; original row identities retained through sorting |
+| `simulation` | Parameter sliders, formula plot, time scrubbing, play/pause/reset; linear, projectile and oscillator models |
+| `graph` | Select nodes, inspect their descriptions and follow labelled connections |
+| `timeline` | Previous/next steps and a step scrubber with explanations |
+| `comparison` | Adjustable criterion weights, supplied scores and weighted ranking |
+| `flashcards` | Reveal, Again/Remembered, review intervals and next-review dates; send progress to retain it across sessions |
+| `evidence` | Expand claims and evidence, inspect supplied confidence, open source links and select claims to discuss |
+| `progress` | Expand milestones and evidence, select a decision and send it to the agent |
+| `code` | Before/after text, editable proposed content, Markdown preview, a line comparison, copy controls and an apply request sent to the agent |
+| `motion` | Circle/rectangle/text layers with position, scale, opacity and rotation keyframes; play/pause, reset and time scrubbing |
+
+Example form:
+
+```json
+{"kind":"form","componentId":"experiment-setup","title":"Experiment setup","fields":[{"label":"Trial name","type":"text","required":true},{"label":"Samples","type":"number","min":1,"max":100,"required":true},{"label":"Method","type":"choice","options":["Control","Treatment"]}]}
+```
+
+Simulation parameter names are fixed: `slope`/`intercept`, `speed`/`angle`/`gravity` (angle in degrees), or `amplitude`/`frequency` (cycles per second). The plotted interval is 0–10 seconds. These are illustrative formula calculators; they do not run a general solver, enforce ground collisions or validate experimental assumptions. Put units and assumptions in parameter labels and the description. Motion uses linear interpolation, normalized 0–100 positions and at most 60 seconds; playback starts only on user action. Video export, arbitrary meshes, executable formulas and document file mutation inside the card are not implemented. Code changes are requested through the agent's normal tool and permission flow. Evidence links and confidence are model-supplied data, not independent source verification. Spaced review runs only while the deck is open; there is no reminder service.
 
 For a scored quiz, call `visualize` with `kind: "quiz"`, a title and 1–6 questions. Each question supplies `question`, 2–6 `options`, zero-based `correctAnswers`, an `explanation`, and an optional `hint`. More than one correct answer enables multiple selection. Submission reveals an exact-match score and review for every question; answers and review restore from session history. The score checks the supplied answer key, so the agent must verify that key. Written answers continue through the question card for agent evaluation.
 
@@ -46,7 +74,7 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 - Put units in `xLabel` and `yLabel`. Optional `error` is an absolute symmetric y uncertainty (`y ± error`), not a percentage. Omitted uncertainty is shown as **Not supplied**, not silently treated as a measured zero.
 - 2D/3D diagrams allow at most 80 objects with coordinates in `[-20, 20]`. Charts allow at most 8 series and 200 points per series, with finite coordinates in `[-1e12, 1e12]`. Uncertainty must be finite and in `[0, 1e12]`.
 - Backend validation and independent browser validation reject unsupported types, extra properties, and out-of-bounds data. The model supplies data, not executable code, HTML, meshes, URLs, or external assets. Formula labels are plain text, not executed expressions or typeset LaTeX.
-- This is a first visual communication layer, not a general plotting package or scientific solver. Heatmaps, surface plots, animation, and user-authored drawing are not implemented.
+- Heatmaps, surface plots, chart animation and user-authored drawing are not implemented. The separate motion component supports bounded keyframe animation.
 
 ## Workspace surfaces
 

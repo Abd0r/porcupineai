@@ -1,6 +1,7 @@
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 import type { ToolDefinition } from "../extensions/types.ts";
+import { adaptiveIssue, adaptiveSchemas } from "./adaptive-schema.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 import { prepareVisualArguments } from "./visual-arguments.ts";
 
@@ -38,6 +39,7 @@ const object = Type.Union([
 const number = Type.Number({ minimum: -1e12, maximum: 1e12 });
 const point = strict({ x: number, y: number, error: Type.Optional(Type.Number({ minimum: 0, maximum: 1e12 })), label });
 const schema = Type.Union([
+	...adaptiveSchemas,
 	strict({
 		...common,
 		kind: Type.Literal("quiz"),
@@ -86,9 +88,11 @@ export function createVisualizeToolDefinition(): ToolDefinition<typeof schema, V
 		name: "visualize",
 		label: "Visual explanation",
 		description:
-			"Present an interactive question, bounded 2D diagram or line/scatter/bar chart. For question cards supply question and options (empty for a written answer); multiple allows several choices. The user submits their answer as a normal conversation message after your turn. Supply declarative data, never scripts or external assets. For spatial 3D scenes use visualize_3d.",
+			"Create an interactive workspace: form, editable table, simulation, linked graph, timeline, weighted comparison, flashcards, evidence, progress, code comparison, motion graphics, question, quiz, 2D diagram or chart. Supply declarative data; users send selections and edits back as session messages. Reuse componentId for updates. For spatial 3D use visualize_3d.",
 		promptSnippet: "Explain with 2D diagrams or data-backed charts, including units and uncertainty",
 		promptGuidelines: [
+			"Evidence URLs and confidence are supplied claims, not automatic source verification. Progress must reflect observed runtime evidence; never mark work verified without checks. Code Request apply sends a user request for normal tools and permission policy; the card itself does not write files. Flashcard review and all other workspace state become durable session history when the user presses Send to agent.",
+			"Interactive workspaces: form collects typed fields; table supports editing/filtering/selection; graph expands node details; timeline steps through explanations; comparison weights supplied scores; flashcards schedules review; evidence links claims to sources; progress displays evidence and decisions; code compares text; motion animates bounded keyframes. simulation supports linear (slope/intercept), projectile (speed/angle/gravity) and oscillator (amplitude/frequency). Use those exact parameter names. State units and assumptions. These are illustrative calculators, not general scientific solvers. Finish your turn for user interaction.",
 			"For a scored quiz use kind quiz with 1–6 questions. Each question needs options, zero-based correctAnswers and an explanation; hint is optional. Multiple correctAnswers enable multiple selection. Answers and explanations are shown only after submission; finish your turn to let the user respond.",
 			"Supply componentId to give a visual a stable identity. Reuse that ID to update it in place. Question responses include that ID and the question revision so earlier answers remain attached to the correct question.",
 			"Use visuals when they clarify the conversation, especially teaching and science. Explain what the visual demonstrates in the description and accompanying answer.",
@@ -110,7 +114,16 @@ export function createVisualizeToolDefinition(): ToolDefinition<typeof schema, V
 			)
 				throw new Error("Invalid quiz answer key or duplicate options");
 			const lines = [params.title, params.description || ""];
-			if (params.kind === "quiz") {
+			if (
+				params.kind !== "quiz" &&
+				params.kind !== "question" &&
+				params.kind !== "chart" &&
+				params.kind !== "diagram"
+			) {
+				const issue = adaptiveIssue(params);
+				if (issue) throw new Error(issue);
+				lines.push(`Interactive ${params.kind} workspace created.`, JSON.stringify(params));
+			} else if (params.kind === "quiz") {
 				lines.push(
 					...params.questions.map((q) => q.question),
 					"Wait for the submitted quiz responses before discussing the answer key.",

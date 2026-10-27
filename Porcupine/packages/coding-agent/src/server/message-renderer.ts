@@ -9,6 +9,20 @@
  */
 
 export const RICH_TEXT_STYLES = `
+.interactive-visual > button, .interactive-visual form > button, .adaptive-body button { font: inherit; font-size: var(--small); border: 1px solid var(--line); border-radius: var(--r1); padding: var(--s2) var(--s3); background: var(--surface); color: var(--text); cursor: pointer; transition: background .15s ease; }
+.interactive-visual button:hover { background: var(--line-soft); }
+.interactive-visual button:disabled { opacity: .5; cursor: default; }
+.interactive-visual button:focus-visible, .interactive-visual input:focus-visible, .interactive-visual select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.interactive-visual > div:nth-child(2) { color: var(--muted); font-size: var(--small); margin-block: var(--s2); }
+.adaptive-body { margin: var(--s3) 0; min-width: 0; }
+.adaptive-body form { display: grid; gap: var(--s2); }
+.adaptive-body form label { flex-wrap: wrap; justify-content: space-between; }
+.adaptive-body form input:not([type="checkbox"]), .adaptive-body select { min-width: 0; width: min(100%,240px); padding: var(--s2); border: 1px solid var(--line); border-radius: var(--r1); background: var(--surface); color: var(--text); }
+.adaptive-body .table-scroll input:not([type="checkbox"]) { width: 140px; max-width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: var(--r1); padding: var(--s2); }
+.interactive-visual > .scene-controls label { flex-wrap: wrap; font-size: var(--small); }
+.adaptive-body details { margin-block: var(--s2); padding: var(--s2); border: 1px solid var(--line-soft); border-radius: var(--r1); }
+.adaptive-body summary { cursor: pointer; }
+.adaptive-body button[aria-pressed="true"] { background: var(--surface); color: var(--text); }
 .interactive-visual fieldset { display: grid; gap: var(--s2); border: 0; margin: var(--s3) 0; padding: 0; min-width: 0; }
 .interactive-visual legend { color: var(--muted); font-size: var(--small); margin-bottom: var(--s2); }
 .interactive-visual label { display: flex; align-items: center; gap: var(--s2); padding: var(--s3); border: 1px solid var(--line); border-radius: var(--r1); cursor: pointer; }

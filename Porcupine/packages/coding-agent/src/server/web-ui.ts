@@ -179,6 +179,7 @@ ${ORGANIZATION_SCRIPT}
 ${COMMAND_SCRIPT}
 ${CONTEXT_SETTINGS_SCRIPT}
 ${APPEARANCE_SCRIPT}
+if(window.location&&window.location.hash.startsWith('#token=')){const launchToken=new URLSearchParams(window.location.hash.slice(1)).get('token');window.history.replaceState(null,'',window.location.pathname+window.location.search);if(launchToken){ui.token.value=launchToken;ui.authForm.requestSubmit();}}
 })();
 </script>
 </body>

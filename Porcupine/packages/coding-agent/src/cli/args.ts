@@ -38,6 +38,7 @@ export interface Args {
 	print?: boolean;
 	headless?: boolean;
 	serve?: boolean;
+	gui?: boolean;
 	port?: number;
 	host?: string;
 	token?: string;
@@ -180,6 +181,9 @@ export function parseArgs(args: string[]): Args {
 				result.messages.push(next);
 				i++;
 			}
+		} else if (arg === "-gui" || arg === "--gui") {
+			result.gui = true;
+			result.serve = true;
 		} else if (arg === "--serve") {
 			// Serve mode: run the agent as a headless HTTP server (see docs/server.md).
 			result.serve = true;
@@ -313,6 +317,8 @@ ${chalk.bold("Options:")}
   --print, -p                    Non-interactive mode: process prompt and exit
   --headless                      Headless task mode: run prompt to completion, print
                                   final report, exit 0 on success / 1 on error (CI)
+  -gui, --gui                    Start the local workbench and open the browser
+  --serve                       Start the HTTP server without opening a browser
   --continue, -c                 Continue previous session
   --resume, -r                   Select a session to resume
   --session <path|id>            Use specific session file or partial UUID
