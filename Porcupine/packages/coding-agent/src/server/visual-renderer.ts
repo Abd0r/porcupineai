@@ -1,7 +1,11 @@
 /** Browser-only declarative 2D/chart renderer. Embedded in the same-origin workbench script. */
 export const VISUAL_RENDERER_SCRIPT = String.raw`
-const visualObservers=new Map();
-function clearVisuals(){for(const item of visualObservers.values())if(item.observer)item.observer.disconnect();visualObservers.clear()}
+const visualObservers=new Map(),componentCards=new Map(),componentAnswers=new Map();
+function componentAnswerText(content){const text=textOf(content);if(text.length>24000||!text.startsWith('[Adaptive UI response]\n'))return null;try{const value=JSON.parse(text.slice(23));if(!isRecord(value)||!validText(value.componentId,200)||typeof value.title!=='string'||value.title.length>100||typeof value.revision!=='string'||value.revision.length>12000||!Array.isArray(value.answers)||value.answers.length>12||!value.answers.every(answer=>typeof answer==='string'&&answer.length<=4000))return null;return value}catch{return null}}
+function restoreComponentAnswer(content){const answer=componentAnswerText(content);if(!answer)return;componentAnswers.set(answer.componentId,answer);const card=componentCards.get(answer.componentId);if(card&&card.restore)card.restore(answer)}
+function componentUserText(content){const answer=componentAnswerText(content);return answer?'Answer to '+answer.title+'\n'+answer.answers.join('; '):userMessageText(content)}
+
+function clearVisuals(){for(const item of visualObservers.values())if(item.observer)item.observer.disconnect();visualObservers.clear();componentCards.clear();componentAnswers.clear()}
 function observeVisual(canvas,draw){const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>{if(visualObservers.has(canvas))draw()}):null;visualObservers.set(canvas,{draw,observer});if(observer)observer.observe(canvas)}
 function redrawVisuals(){for(const item of visualObservers.values())item.draw()}
 window.addEventListener('porcupine-theme-change',redrawVisuals);
@@ -11,10 +15,10 @@ function validText(value,max){return typeof value==='string'&&value.trim().lengt
 function bounded(value,min,max){return typeof value==='number'&&Number.isFinite(value)&&value>=min&&value<=max}
 function validPoint2(value){return Array.isArray(value)&&value.length===2&&value.every(n=>bounded(n,-20,20))}
 function validVisual(visual){
-  if(!isRecord(visual)||visual.version!==2||!validText(visual.title,100)||!(visual.description===undefined||(typeof visual.description==='string'&&visual.description.length<=300)))return false;
-  if(visual.kind==='question')return hasOnlyKeys(visual,['version','kind','title','question','options'],['description','multiple'])&&validText(visual.question,2000)&&Array.isArray(visual.options)&&visual.options.length<=12&&visual.options.every(option=>validText(option,200))&&(visual.multiple===undefined||typeof visual.multiple==='boolean');
+  if(!isRecord(visual)||(visual.componentId!==undefined&&!validText(visual.componentId,80))||visual.version!==2||!validText(visual.title,100)||!(visual.description===undefined||(typeof visual.description==='string'&&visual.description.length<=300)))return false;
+  if(visual.kind==='question')return hasOnlyKeys(visual,['version','kind','title','question','options'],['description','multiple','componentId'])&&validText(visual.question,2000)&&Array.isArray(visual.options)&&visual.options.length<=12&&visual.options.every(option=>validText(option,200))&&(visual.multiple===undefined||typeof visual.multiple==='boolean');
   if(visual.kind==='diagram'){
-    if(!hasOnlyKeys(visual,['version','kind','title','objects'],['description'])||!Array.isArray(visual.objects)||visual.objects.length<1||visual.objects.length>80)return false;
+    if(!hasOnlyKeys(visual,['version','kind','title','objects'],['description','componentId'])||!Array.isArray(visual.objects)||visual.objects.length<1||visual.objects.length>80)return false;
     return visual.objects.every(o=>{
       if(!isRecord(o)||!validColor(o.color))return false;
       if(o.type==='text')return hasOnlyKeys(o,['type','position','text','color'])&&validPoint2(o.position)&&validText(o.text,120);
@@ -24,17 +28,21 @@ function validVisual(visual){
       return ['line','arrow'].includes(o.type)&&hasOnlyKeys(o,['type','from','to','color'],['label'])&&validPoint2(o.from)&&validPoint2(o.to);
     });
   }
-  if(visual.kind!=='chart'||!hasOnlyKeys(visual,['version','kind','title','chartType','xLabel','yLabel','series'],['description'])||!['line','scatter','bar'].includes(visual.chartType)||!validText(visual.xLabel,60)||!validText(visual.yLabel,60)||!Array.isArray(visual.series)||visual.series.length<1||visual.series.length>8)return false;
+  if(visual.kind!=='chart'||!hasOnlyKeys(visual,['version','kind','title','chartType','xLabel','yLabel','series'],['description','componentId'])||!['line','scatter','bar'].includes(visual.chartType)||!validText(visual.xLabel,60)||!validText(visual.yLabel,60)||!Array.isArray(visual.series)||visual.series.length<1||visual.series.length>8)return false;
   return visual.series.every(s=>hasOnlyKeys(s,['name','color','points'])&&validText(s.name,60)&&validColor(s.color)&&Array.isArray(s.points)&&s.points.length>=1&&s.points.length<=200&&s.points.every(p=>hasOnlyKeys(p,['x','y'],['error','label'])&&bounded(p.x,-1e12,1e12)&&bounded(p.y,-1e12,1e12)&&(p.error===undefined||bounded(p.error,0,1e12))&&validLabel(p.label)));
 }
 function visualElement(tag,text){const node=document.createElement(tag);if(text!==undefined)node.textContent=String(text);return node}
-function renderVisual(visual){
+function renderVisual(visual,callId){
   if(visual&&visual.version===1){renderVisualization(visual);return}
   if(!validVisual(visual)){if(visual){const error=visualElement('p','This visual could not be displayed. Ask the agent to correct its data.');error.setAttribute('role','status');ui.feed.append(error)}return;}
+  const identity=visual.componentId||callId;
+  const previous=identity&&componentCards.get(identity);
+  if(previous){for(const canvas of previous.card.querySelectorAll('canvas')){const item=visualObservers.get(canvas);if(item&&item.observer)item.observer.disconnect();visualObservers.delete(canvas)}}
   ui.welcome.hidden=true;
   const card=visualElement('section');card.className='visualization-card';
+  function mountComponent(){if(previous&&previous.card.parentNode===ui.feed){ui.feed.insertBefore(card,previous.card);previous.card.remove()}else ui.feed.append(card)}
   card.append(visualElement('h2',visual.title),visualElement('div',visual.description||(visual.kind==='diagram'?'2D conceptual diagram':'Data chart')));
-  card.classList.add('interactive-visual');
+  card.classList.add('interactive-visual');if(identity){card.dataset.componentId=identity;componentCards.set(identity,{card})}
   if(visual.description)renderRichText(card.lastChild,visual.description);
   if(visual.kind==='question'){
     card.lastChild.remove();
@@ -44,9 +52,11 @@ function renderVisual(visual){
     const inputs=[];
     for(const option of visual.options){const label=visualElement('label'),input=visualElement('input');input.type=visual.multiple?'checkbox':'radio';input.name='answer';input.value=option;label.append(input,document.createTextNode(option));group.append(label);inputs.push(input)}
     const written=visualElement('textarea');written.setAttribute('aria-label','Written answer');written.maxLength=4000;written.placeholder='Type your answer';if(!inputs.length)group.append(written);
-    const submit=visualElement('button','Send answer'),status=visualElement('p');submit.type='submit';status.setAttribute('role','status');form.append(group,submit,status);card.append(form);const owner=sessionId;
-    form.addEventListener('submit',async event=>{event.preventDefault();const answers=inputs.filter(input=>input.checked).map(input=>input.value);const answer=inputs.length?answers.join('; '):written.value.trim();if(!answer){status.textContent='Choose or write an answer first.';return}if(owner!==sessionId||streaming||!connected){status.textContent='Wait until the agent is ready and connected.';return}submit.disabled=true;setBusy(true);try{await json('/session/'+encodeURIComponent(owner)+'/message',{method:'POST',body:JSON.stringify({text:'Answer to '+visual.title+'\n'+visual.question+'\n\n'+answer})});group.disabled=true;status.textContent='Answer sent.'}catch(error){submit.disabled=false;setBusy(false);status.textContent=error.message}});
-    ui.feed.append(card);scrollFeed();return;
+    const submit=visualElement('button','Send answer'),status=visualElement('p');submit.type='submit';status.setAttribute('role','status');form.append(group,submit,status);card.append(form);const owner=sessionId,revision=JSON.stringify([visual.question,visual.options,Boolean(visual.multiple)]);
+    const restore=answer=>{if(answer.revision!==revision)return;for(const input of inputs)input.checked=answer.answers.includes(input.value);written.value=answer.answers.join('; ');group.disabled=true;submit.disabled=true;status.textContent='Answer sent.'};
+    if(identity){componentCards.set(identity,{card,restore});const saved=componentAnswers.get(identity);if(saved)restore(saved)}
+    form.addEventListener('submit',async event=>{event.preventDefault();const answers=inputs.filter(input=>input.checked).map(input=>input.value);const answer=inputs.length?answers.join('; '):written.value.trim();if(!answer){status.textContent='Choose or write an answer first.';return}if(owner!==sessionId||streaming||!connected){status.textContent='Wait until the agent is ready and connected.';return}submit.disabled=true;setBusy(true);try{await json('/session/'+encodeURIComponent(owner)+'/message',{method:'POST',body:JSON.stringify({text:identity?'[Adaptive UI response]\n'+JSON.stringify({componentId:identity,revision,title:visual.title,question:visual.question,answers:inputs.length?answers:[answer]}):'Answer to '+visual.title+'\n'+visual.question+'\n\n'+answer})});group.disabled=true;if(identity)componentAnswers.set(identity,{revision,answers:inputs.length?answers:[answer]});status.textContent='Answer sent.'}catch(error){submit.disabled=false;setBusy(false);status.textContent=error.message}});
+    mountComponent();scrollFeed();return;
   }
   const canvas=visualElement('canvas');canvas.className='scene-canvas';canvas.setAttribute('role','img');canvas.setAttribute('aria-label',visual.title+'. '+(visual.description||'')+' Full values and labels are available below.');card.append(canvas);
   const details=visualElement('details');details.className='scene-contents';details.append(visualElement('summary',visual.kind==='diagram'?'Diagram contents':'Data and uncertainty'));
@@ -60,7 +70,7 @@ function renderVisual(visual){
   }
   card.append(details);
   const ask=visualElement('button','Ask about this visual');ask.type='button';ask.className='stop';ask.addEventListener('click',()=>{ui.prompt.value='Explain "'+visual.title+'" step by step, including its labels and assumptions.';resizeComposer();ui.prompt.focus()});card.append(ask);
-  ui.feed.append(card);scrollFeed();
+  mountComponent();scrollFeed();
   const ctx=canvas.getContext('2d');if(!ctx)return;let colors=plotColors(canvas);
   function line(x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
   function draw(){

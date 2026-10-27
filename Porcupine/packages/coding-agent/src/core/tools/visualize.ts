@@ -11,7 +11,11 @@ const position = Type.Tuple([coordinate, coordinate]);
 const dimension = Type.Number({ minimum: 0.05, maximum: 20 });
 const color = Type.String({ pattern: "^#[0-9a-fA-F]{6}$" });
 const label = Type.Optional(Type.String({ maxLength: 60 }));
-const common = { title: text(100), description: Type.Optional(Type.String({ maxLength: 300 })) };
+const common = {
+	title: text(100),
+	description: Type.Optional(Type.String({ maxLength: 300 })),
+	componentId: Type.Optional(text(80)),
+};
 const object = Type.Union([
 	strict({ type: Type.Literal("rectangle"), position, size: Type.Tuple([dimension, dimension]), color, label }),
 	strict({
@@ -66,6 +70,7 @@ export function createVisualizeToolDefinition(): ToolDefinition<typeof schema, V
 			"Present an interactive question, bounded 2D diagram or line/scatter/bar chart. For question cards supply question and options (empty for a written answer); multiple allows several choices. The user submits their answer as a normal conversation message after your turn. Supply declarative data, never scripts or external assets. For spatial 3D scenes use visualize_3d.",
 		promptSnippet: "Explain with 2D diagrams or data-backed charts, including units and uncertainty",
 		promptGuidelines: [
+			"Supply componentId to give a visual a stable identity. Reuse that ID to update it in place. Question responses include that ID and the question revision so earlier answers remain attached to the correct question.",
 			"Use visuals when they clarify the conversation, especially teaching and science. Explain what the visual demonstrates in the description and accompanying answer.",
 			"Use labelled arrows, shapes and text for conceptual diagrams; coordinates span -20 to 20, with positive y pointing up. Use line charts for ordered samples, scatter for relationships, and bars for discrete values. Points are drawn in supplied order.",
 			"Chart only supplied or explicitly illustrative/synthetic data. Put units in axis labels. error is an absolute symmetric y uncertainty, not a percentage; never invent measurements or uncertainty. Use point labels for categories/annotations and series names for the legend.",
