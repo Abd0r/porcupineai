@@ -1,3 +1,5 @@
+import { CANVAS_MATH_SCRIPT } from "./canvas-math.ts";
+import { formatLearningMath } from "./learning-math.ts";
 /**
  * Message rendering for the browser workbench.
  *
@@ -9,6 +11,10 @@
  */
 
 export const RICH_TEXT_STYLES = `
+.canvas-label-host { position: relative; min-width: 0; }
+.diagram-viewport .canvas-label-host { min-width: 640px; }
+.canvas-math-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.canvas-math-label { position: absolute; font: 12px system-ui; color: var(--plot-text); line-height: 1.3; }
 .diagram-viewport { max-width: 100%; overflow: auto; border-radius: var(--r1); }
 .diagram-canvas { min-width: 640px; height: 480px !important; }
 .diagram-hint { color: var(--quiet); font-size: var(--small); }
@@ -52,6 +58,8 @@ export const RICH_TEXT_STYLES = `
 .table-scroll th { color: var(--text); }
 .math-display { margin: 0 0 var(--s3); overflow-x: auto; padding: var(--s2) 0; }
 .math-expression { color: var(--text); }
+.adaptive-body .math-expression { display: inline-block; max-width: 100%; overflow-x: auto; vertical-align: middle; padding-block: 4px; }
+.field-math-preview { flex-basis: 100%; max-width: 100%; overflow-x: auto; }
 .katex { font-size: 1.1em; }
 .math-display .katex-display { margin: 0; padding-block: 4px; }
 .math-display { max-width: 100%; }
@@ -59,7 +67,10 @@ export const RICH_TEXT_STYLES = `
 .rich a { color: var(--accent); text-underline-offset: 2px; }
 `;
 export const MESSAGE_RENDERER_SCRIPT = `
+const formatLearningMath=${formatLearningMath.toString()};
+${CANVAS_MATH_SCRIPT}
 const mathRenderCache=new Map(),richTextSources=new WeakMap();
+function renderMathLabel(node,text){node.replaceChildren();for(const child of inlineNodes(formatLearningMath(String(text))))node.append(child);return node;}
 function mathFallback(tex,display){const span=document.createElement('code');span.className='math-fallback';span.textContent=(display?'\\\\[':'\\\\(')+tex+(display?'\\\\]':'\\\\)');return span}
 function renderMathSafe(tex,display){
   if(!window.katex||tex.length>20000)return mathFallback(tex,display);
@@ -97,7 +108,7 @@ function renderTable(lines){const table=document.createElement("div");table.clas
   const head=document.createElement("thead");const headRow=document.createElement("tr");for(const cell of rows[0]||[]){const th=document.createElement("th");th.scope="col";for(const node of inlineNodes(cell))th.append(node);headRow.append(th)}head.append(headRow);element.append(head);
   const body=document.createElement("tbody");for(const row of rows.slice(1)){const tr=document.createElement("tr");for(const cell of row){const td=document.createElement("td");for(const node of inlineNodes(cell))td.append(node);tr.append(td)}body.append(tr)}element.append(body);table.append(element);return table}
 function renderRichText(container,text){
-  if(richTextSources.get(container)===text)return container;richTextSources.set(container,text);
+  const source=String(text);if(richTextSources.get(container)===source)return container;richTextSources.set(container,source);text=formatLearningMath(source);
   container.replaceChildren();container.classList.add("rich");
   const lines=String(text).split("\\n");let index=0;
   while(index<lines.length){const line=lines[index];

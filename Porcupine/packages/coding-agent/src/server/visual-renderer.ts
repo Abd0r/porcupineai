@@ -37,7 +37,7 @@ function validVisual(visual){
   if(visual.kind!=='chart'||!hasOnlyKeys(visual,['version','kind','title','chartType','xLabel','yLabel','series'],['description','componentId'])||!['line','scatter','bar'].includes(visual.chartType)||!validText(visual.xLabel,60)||!validText(visual.yLabel,60)||!Array.isArray(visual.series)||visual.series.length<1||visual.series.length>8)return false;
   return visual.series.every(s=>hasOnlyKeys(s,['name','color','points'])&&validText(s.name,60)&&validColor(s.color)&&Array.isArray(s.points)&&s.points.length>=1&&s.points.length<=200&&s.points.every(p=>hasOnlyKeys(p,['x','y'],['error','label'])&&bounded(p.x,-1e12,1e12)&&bounded(p.y,-1e12,1e12)&&(p.error===undefined||bounded(p.error,0,1e12))&&validLabel(p.label)));
 }
-function visualElement(tag,text){const node=document.createElement(tag);if(text!==undefined)node.textContent=String(text);return node}
+function visualElement(tag,text){const node=document.createElement(tag);if(text!==undefined){if(['h2','h3','summary','legend','caption','th','td','li','p','span','a','button'].includes(tag))renderMathLabel(node,text);else node.textContent=String(text)}return node}
 function renderVisual(visual,callId){
   if(visual&&visual.version===1){renderVisualization(visual);return}
   if(!validVisual(visual)){if(visual){const error=visualElement('p','This visual could not be displayed. Ask the agent to correct its data.');error.setAttribute('role','status');ui.feed.append(error)}return;}
@@ -58,7 +58,7 @@ function renderVisual(visual,callId){
     const question=visualElement('div');renderRichText(question,visual.question);card.append(question);
     const form=visualElement('form'),group=visualElement('fieldset'),legend=visualElement('legend',visual.multiple?'Choose all that apply':'Your answer');group.append(legend);
     const inputs=[];
-    for(const option of visual.options){const label=visualElement('label'),input=visualElement('input');input.type=visual.multiple?'checkbox':'radio';input.name='answer';input.value=option;label.append(input,document.createTextNode(option));group.append(label);inputs.push(input)}
+    for(const option of visual.options){const label=visualElement('label'),input=visualElement('input');input.type=visual.multiple?'checkbox':'radio';input.name='answer';input.value=option;const optionText=visualElement('span',option);label.append(input,optionText);group.append(label);inputs.push(input)}
     const written=visualElement('textarea');written.setAttribute('aria-label','Written answer');written.maxLength=4000;written.placeholder='Type your answer';if(!inputs.length)group.append(written);
     const submit=visualElement('button','Send answer'),status=visualElement('p');submit.type='submit';status.setAttribute('role','status');form.append(group,submit,status);card.append(form);const owner=sessionId,revision=JSON.stringify([visual.question,visual.options,Boolean(visual.multiple)]);
     const restore=answer=>{if(answer.revision!==revision)return;for(const input of inputs)input.checked=answer.answers.includes(input.value);written.value=answer.answers.join('; ');group.disabled=true;submit.disabled=true;status.textContent='Answer sent.'};
@@ -79,11 +79,12 @@ function renderVisual(visual,callId){
   card.append(details);
   const ask=visualElement('button','Ask about this visual');ask.type='button';ask.className='stop';ask.addEventListener('click',()=>{ui.prompt.value='Explain "'+visual.title+'" step by step, including its labels and assumptions.';resizeComposer();ui.prompt.focus()});card.append(ask);
   mountComponent();scrollFeed();
-  const ctx=canvas.getContext('2d');if(!ctx)return;let colors=plotColors(canvas);
+  const ctx=canvas.getContext('2d');if(!ctx)return;const mathLabels=createCanvasMathLabels(canvas);let colors=plotColors(canvas);
+  function figureText(text,x,y,width){if(!mathLabels.draw(text,x,y,width))ctx.fillText(text,x,y,width);}
   function line(x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
-  function diagramLabel(text,x,y,width){const lines=String(text).split('\n');ctx.textBaseline='middle';for(let i=0;i<lines.length;i++)ctx.fillText(lines[i],x,y+(i-(lines.length-1)/2)*14,width);ctx.textBaseline='alphabetic';}
+  function diagramLabel(text,x,y,width){if(mathLabels.draw(text,x,y,width))return;const lines=String(text).split('\n');ctx.textBaseline='middle';for(let i=0;i<lines.length;i++)figureText(lines[i],x,y+(i-(lines.length-1)/2)*14,width);ctx.textBaseline='alphabetic';}
   function draw(){
-    colors=plotColors(canvas);
+    mathLabels.begin();colors=plotColors(canvas);
     const rect=canvas.getBoundingClientRect(),w=Math.max(1,rect.width),h=Math.max(1,rect.height),ratio=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,w,h);ctx.font='12px system-ui';ctx.textAlign='center';ctx.lineWidth=2;
     if(visual.kind==='diagram'){
       let extent=4;for(const o of visual.objects){if(o.from)extent=Math.max(extent,...o.from.map(Math.abs),...o.to.map(Math.abs));else extent=Math.max(extent,...o.position.map((n,i)=>Math.abs(n)+(o.radius||((o.size&&o.size[i]/2)||0))))}
@@ -92,7 +93,7 @@ function renderVisual(visual,callId){
         if(o.from){const a=xy(o.from),b=xy(o.to);line(...a,...b);if(o.type==='arrow'){const angle=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.beginPath();ctx.moveTo(...b);ctx.lineTo(b[0]-9*Math.cos(angle-.45),b[1]-9*Math.sin(angle-.45));ctx.lineTo(b[0]-9*Math.cos(angle+.45),b[1]-9*Math.sin(angle+.45));ctx.closePath();ctx.fill()}if(o.label)diagramLabel(o.label,(a[0]+b[0])/2,(a[1]+b[1])/2-10,w-20);
         }else{const p=xy(o.position);if(o.type==='rectangle'){ctx.globalAlpha=.3;ctx.fillRect(p[0]-o.size[0]*scale/2,p[1]-o.size[1]*scale/2,o.size[0]*scale,o.size[1]*scale);ctx.globalAlpha=1;const sx=o.size[0]*scale/2,sy=o.size[1]*scale/2;line(p[0]-sx,p[1]-sy,p[0]+sx,p[1]-sy);line(p[0]+sx,p[1]-sy,p[0]+sx,p[1]+sy);line(p[0]+sx,p[1]+sy,p[0]-sx,p[1]+sy);line(p[0]-sx,p[1]+sy,p[0]-sx,p[1]-sy)}else if(o.type==='circle'){ctx.beginPath();ctx.arc(...p,o.radius*scale,0,Math.PI*2);ctx.stroke()}if(o.type==='text'||o.label){if(o.type!=='text')ctx.fillStyle=colors.text;diagramLabel(o.type==='text'?o.text:o.label,p[0],p[1],Math.max(60,o.size?o.size[0]*scale-6:w-20))}}
       }
-      return;
+      mathLabels.end();return;
     }
     const points=visual.series.flatMap(s=>s.points),xs=points.map(p=>p.x),ys=points.flatMap(p=>[p.y-(p.error||0),p.y+(p.error||0)]);
     if(visual.chartType==='bar'){
@@ -104,22 +105,22 @@ function renderVisual(visual,callId){
     }
     function range(values){let min=Math.min(...values),max=Math.max(...values);if(min===max){const pad=Math.max(1,Math.abs(min)*.05);min-=pad;max+=pad}else{const pad=(max-min)*.08;min-=pad;max+=pad}return[min,max]}
     const xr=range(xs),yr=range(ys),left=Math.min(80,w*.25),right=w-20,top=38,bottom=h-52,plotW=Math.max(1,right-left),plotH=Math.max(1,bottom-top),px=x=>left+(x-xr[0])/(xr[1]-xr[0])*plotW,py=y=>bottom-(y-yr[0])/(yr[1]-yr[0])*plotH;
-    ctx.fillStyle=colors.text;ctx.fillText(visual.yLabel,w/2,18,w-16);ctx.fillText(visual.xLabel,w/2,h-8,w-16);
+    ctx.fillStyle=colors.text;figureText(visual.yLabel,w/2,18,w-16);figureText(visual.xLabel,w/2,h-8,w-16);
     const format=n=>n===0?'0':(Math.abs(n)>=1e5||Math.abs(n)<.001)?n.toExponential(1):Number(n.toPrecision(4)).toString();
     ctx.font='10px system-ui';ctx.lineWidth=1;
-    for(let i=0;i<=4;i++){const x=xr[0]+(xr[1]-xr[0])*i/4,y=yr[0]+(yr[1]-yr[0])*i/4;ctx.strokeStyle=colors.grid;line(px(x),top,px(x),bottom);line(left,py(y),right,py(y));ctx.fillStyle=colors.label;ctx.textAlign='center';ctx.fillText(format(x),px(x),bottom+16,plotW/4);ctx.textAlign='right';ctx.fillText(format(y),left-7,py(y)+3,left-10)}
+    for(let i=0;i<=4;i++){const x=xr[0]+(xr[1]-xr[0])*i/4,y=yr[0]+(yr[1]-yr[0])*i/4;ctx.strokeStyle=colors.grid;line(px(x),top,px(x),bottom);line(left,py(y),right,py(y));ctx.fillStyle=colors.label;ctx.textAlign='center';figureText(format(x),px(x),bottom+16,plotW/4);ctx.textAlign='right';figureText(format(y),left-7,py(y)+3,left-10)}
     ctx.strokeStyle=colors.axis;line(left,top,left,bottom);line(left,bottom,right,bottom);
     const uniqueX=[...new Set(points.map(p=>p.x))].sort((a,b)=>a-b);let gap=plotW;for(let i=1;i<uniqueX.length;i++)gap=Math.min(gap,px(uniqueX[i])-px(uniqueX[i-1]));const barWidth=Math.max(.1,Math.min(28,gap*.7/visual.series.length));
     for(let si=0;si<visual.series.length;si++){const s=visual.series[si];ctx.strokeStyle=s.color;ctx.fillStyle=s.color;ctx.lineWidth=2;ctx.textAlign='center';let previous=null;
       for(const p of s.points){const x=px(p.x)+(visual.chartType==='bar'?(si-(visual.series.length-1)/2)*barWidth:0),y=py(p.y);
         if(visual.chartType==='bar'){const zero=py(0);ctx.globalAlpha=.75;ctx.fillRect(x-barWidth/2,Math.min(y,zero),barWidth*.9,Math.max(1,Math.abs(y-zero)));ctx.globalAlpha=1}else{if(previous&&visual.chartType==='line')line(previous[0],previous[1],x,y);ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill()}
         if(p.error!==undefined){const a=py(p.y-p.error),b=py(p.y+p.error);line(x,a,x,b);line(x-4,a,x+4,a);line(x-4,b,x+4,b)}
-        if(p.label)ctx.fillText(p.label,x,y-9,Math.max(40,plotW/4));previous=[x,y];
+        if(p.label)figureText(p.label,x,y-9,Math.max(40,plotW/4));previous=[x,y];
       }
     }
     // The table retains full precision and labels when the canvas is dense.
-    let legendX=left;for(const s of visual.series){ctx.fillStyle=s.color;ctx.textAlign='left';ctx.fillText(s.name,legendX,h-27,plotW/visual.series.length-4);legendX+=plotW/visual.series.length}
+    let legendX=left;for(const s of visual.series){ctx.fillStyle=s.color;ctx.textAlign='left';figureText(s.name,legendX,h-27,plotW/visual.series.length-4);legendX+=plotW/visual.series.length}
   }
-  observeVisual(canvas,draw);draw();
+  observeVisual(canvas,()=>{draw();mathLabels.end()});draw();mathLabels.end();
 }
 `;

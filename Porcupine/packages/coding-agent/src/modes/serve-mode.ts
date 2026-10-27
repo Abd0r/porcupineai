@@ -72,26 +72,28 @@ export function adaptSessionToServeApi(session: AgentSession, attachmentRoot = g
 	const goalPlanListeners = new Set<(view: unknown) => void>();
 	const tracker = () => ({ goal: session.getGoal(), busy: session.isStreaming });
 	const subagentSnapshot = () =>
-		session.subagentState.runs.map(({ id, name, task, status, phase, lastTool, lastToolArgs }) => ({
-			id,
-			name,
-			task,
-			status,
-			activity:
-				status !== "running"
-					? { kind: "reasoning", summary: status === "done" ? "Completed the task" : `Task ${status}` }
-					: phase === "tool" && lastTool
-						? describeWorkbenchActivity(lastTool, lastToolArgs)
-						: {
-								kind: phase === "thinking" ? "reasoning" : "dreaming",
-								summary:
-									phase === "compacting"
-										? "Compacting context"
-										: phase === "thinking"
-											? "Reasoning through the task"
-											: "Working on the task",
-							},
-		}));
+		session.subagentState.runs
+			.filter((run) => run.status === "running")
+			.map(({ id, name, task, status, phase, lastTool, lastToolArgs }) => ({
+				id,
+				name,
+				task,
+				status,
+				activity:
+					status !== "running"
+						? { kind: "reasoning", summary: status === "done" ? "Completed the task" : `Task ${status}` }
+						: phase === "tool" && lastTool
+							? describeWorkbenchActivity(lastTool, lastToolArgs)
+							: {
+									kind: phase === "thinking" ? "reasoning" : "dreaming",
+									summary:
+										phase === "compacting"
+											? "Compacting context"
+											: phase === "thinking"
+												? "Reasoning through the task"
+												: "Working on the task",
+								},
+			}));
 	session.subscribe((event) => {
 		if (event.type !== "goal_changed") return;
 		for (const listener of goalPlanListeners) listener(tracker());

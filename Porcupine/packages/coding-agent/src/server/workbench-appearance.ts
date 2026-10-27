@@ -8,6 +8,8 @@ export const APPEARANCE_DIALOG = `
     <div class="settings-grid">
       <label>Theme<select id="appearance-theme"><option value="workbench">Workbench</option><option value="pixel">Pixel</option><option value="cyberpunk">Cyberpunk</option><option value="static">Static · monochrome</option><option value="tokyo-night">Tokyo Night</option></select></label>
       <label>Colour mode<select id="appearance-mode"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></label>
+      <label>Todos panel<select id="appearance-todos-placement"><option value="side">Side</option><option value="overlay">Overlay on chat</option><option value="hidden">Hidden</option></select></label>
+      <label>Subagents panel<select id="appearance-workers-placement"><option value="side">Side</option><option value="overlay">Overlay on chat</option><option value="hidden">Hidden</option></select></label>
     </div>
     <label class="reasoning-preference" for="appearance-reasoning"><span><strong>Always show reasoning</strong><small>Expand available reasoning in live and saved conversations.</small></span><input id="appearance-reasoning" type="checkbox" role="switch"></label>
     <p id="appearance-error" class="error" role="alert" hidden></p>
@@ -156,12 +158,12 @@ export const APPEARANCE_STYLES = `
 `;
 
 export const APPEARANCE_SCRIPT = `
-const appearance={dialog:$('settings-dialog'),open:$('settings-open'),theme:$('appearance-theme'),mode:$('appearance-mode'),reasoning:$('appearance-reasoning'),error:$('appearance-error')};
+const appearance={dialog:$('settings-dialog'),open:$('settings-open'),theme:$('appearance-theme'),mode:$('appearance-mode'),reasoning:$('appearance-reasoning'),todos:$('appearance-todos-placement'),workers:$('appearance-workers-placement'),error:$('appearance-error')};
 const appearanceKey='porcupine.workbench.appearance.v1',appearanceThemes=['workbench','pixel','cyberpunk','static','tokyo-night'];
-let appearancePreferences={theme:'workbench',mode:'dark',showReasoning:false};
-try{const saved=JSON.parse(window.localStorage.getItem(appearanceKey)||'null');if(saved&&appearanceThemes.includes(saved.theme)&&['dark','light','system'].includes(saved.mode))appearancePreferences={theme:saved.theme,mode:saved.mode,showReasoning:saved.showReasoning===true}}catch{}
+let appearancePreferences={theme:'workbench',mode:'dark',showReasoning:false,todosPlacement:'side',workersPlacement:'side'};
+try{const saved=JSON.parse(window.localStorage.getItem(appearanceKey)||'null');if(saved&&appearanceThemes.includes(saved.theme)&&['dark','light','system'].includes(saved.mode))appearancePreferences={theme:saved.theme,mode:saved.mode,showReasoning:saved.showReasoning===true,todosPlacement:['side','overlay','hidden'].includes(saved.todosPlacement)?saved.todosPlacement:'side',workersPlacement:['side','overlay','hidden'].includes(saved.workersPlacement)?saved.workersPlacement:'side'}}catch{}
 function appearanceError(message){appearance.error.textContent=message;appearance.error.hidden=!message}
-function applyAppearance(save=false){const preference=appearancePreferences,mode=preference.mode==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):preference.mode;document.documentElement.setAttribute('data-theme',preference.theme);document.documentElement.setAttribute('data-colour-mode',mode);appearance.theme.value=preference.theme;appearance.mode.value=preference.mode;appearance.reasoning.checked=preference.showReasoning;window.dispatchEvent(new Event('porcupine-theme-change'));if(save)try{window.localStorage.setItem(appearanceKey,JSON.stringify(preference))}catch{appearanceError('Preferences work for this tab, but browser storage is unavailable.')}}
+function applyAppearance(save=false){const preference=appearancePreferences,mode=preference.mode==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):preference.mode;document.documentElement.setAttribute('data-theme',preference.theme);document.documentElement.setAttribute('data-colour-mode',mode);appearance.theme.value=preference.theme;appearance.mode.value=preference.mode;appearance.reasoning.checked=preference.showReasoning;appearance.todos.value=preference.todosPlacement;appearance.workers.value=preference.workersPlacement;applyPanelPlacements();window.dispatchEvent(new Event('porcupine-theme-change'));if(save)try{window.localStorage.setItem(appearanceKey,JSON.stringify(preference))}catch{appearanceError('Preferences work for this tab, but browser storage is unavailable.')}}
 let settingsTab='appearance';
 function selectSettingsTab(key){settingsTab=key;for(const tab of document.querySelectorAll('[data-settings-tab]')){const active=tab.dataset.settingsTab===key;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}for(const panel of document.querySelectorAll('[data-settings-panel]'))panel.hidden=panel.dataset.settingsPanel!==key;}
 const settingsTabs=[...document.querySelectorAll('[data-settings-tab]')];
@@ -169,6 +171,7 @@ for(const tab of settingsTabs){tab.addEventListener('click',()=>selectSettingsTa
 appearance.open.addEventListener('click',()=>{selectSettingsTab(settingsTab);appearance.dialog.showModal();void loadWorkbenchSettings()});
 appearance.theme.addEventListener('change',()=>{appearancePreferences.theme=appearance.theme.value;applyAppearance(true)});
 appearance.mode.addEventListener('change',()=>{appearancePreferences.mode=appearance.mode.value;applyAppearance(true)});
+for(const [control,key] of [[appearance.todos,'todosPlacement'],[appearance.workers,'workersPlacement']])control.addEventListener('change',()=>{appearancePreferences[key]=control.value;applyAppearance(true)});
 appearance.reasoning.addEventListener('change',()=>{appearancePreferences.showReasoning=appearance.reasoning.checked;applyAppearance(true);for(const row of ui.feed.querySelectorAll('.thinking')){const head=row.querySelector('.thinking-head'),body=row.querySelector('.thinking-body');if(!head||!body||head.disabled)continue;head.setAttribute('aria-expanded',String(appearancePreferences.showReasoning));body.hidden=!appearancePreferences.showReasoning;}});
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(appearancePreferences.mode==='system')applyAppearance()});
 applyAppearance();

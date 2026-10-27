@@ -242,6 +242,8 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"settings-dialog",
 		"settings-open",
 		"appearance-theme",
+		"appearance-todos-placement",
+		"appearance-workers-placement",
 		"appearance-mode",
 		"appearance-reasoning",
 		"appearance-image",
@@ -259,6 +261,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"inspector-toggle",
 		"history-notice",
 		"work-rail",
+		"work-rail-overlay",
 		"rail-toggle",
 		"todos-panel",
 		"todos-objective",
@@ -561,7 +564,7 @@ describe("browser 3D scene renderer", () => {
 		expect(card.children[0]?.textContent).toBe(scene.title);
 		expect(canvasContext.clearCount).toBe(1);
 		expect(canvasContext.fillCount).toBeGreaterThan(0);
-		const canvas = card.children.find((child) => child.tagName === "canvas");
+		const canvas = descendants(card).find((child) => child.tagName === "canvas");
 		expect(canvas?.attributes.get("role")).toBe("img");
 		expect(canvas?.listeners.has("keydown")).toBe(true);
 		const controls = card.children.find((child) => child.className === "scene-controls");

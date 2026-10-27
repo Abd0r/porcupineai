@@ -61,6 +61,7 @@ function toolDescription(name,args){return describeWorkbenchActivity(name,args).
 function toolResultText(result){const text=textOf(result&&result.content),details=result&&result.details;const diff=details&&(typeof details.diff==='string'?details.diff:typeof details.patch==='string'?details.patch:'');return text+(diff?'\n\nChanges\n'+diff:'');}
 function setToolOutput(run,text,tail=false){run.resultText=text;run.tail=tail;const full=run.args+(text?'\n\n'+text:'');run.more.hidden=text.length<=16000;run.more.textContent=run.expanded?'Show preview':'Show full output';run.more.setAttribute('aria-expanded',String(run.expanded));run.output.textContent=run.expanded||text.length<=16000?full:run.args+'\n\n'+(tail?text.slice(-16000):text.slice(0,16000))+'\n[Preview · expand for full saved output]';}
 function showToolStart(event){
+	if(event.toolName==='subagent')return;
 	if(!replaying&&liveThinking){if(liveThinking.hasReasoning)finalizeThinking(liveThinking.reasoningText);else{stopThinking(liveThinking);liveThinking.wrap.remove();liveThinking=null;}}
   ui.welcome.hidden=true;
   const row=document.createElement('details');row.className='tool-activity';row.dataset.state='running';

@@ -2,9 +2,13 @@ export const WORKBENCH_RAIL = `
 <aside class="work-rail" id="work-rail" aria-label="Task overview" hidden>
   <details class="rail-card" id="todos-panel" aria-labelledby="todos-title" open hidden><summary><h2 id="todos-title">Todos</h2><span id="todos-count"></span></summary><p id="todos-objective" class="rail-objective"></p><p id="todos-goal" class="rail-note" hidden></p><ol id="todos-list" class="todo-list"></ol></details>
   <details class="rail-card" id="workers-panel" aria-labelledby="workers-title" open hidden><summary><h2 id="workers-title">Subagents</h2><span id="workers-count"></span></summary><div id="workers-list" class="worker-list"></div></details>
-</aside>`;
+</aside><aside class="work-rail-overlay" id="work-rail-overlay" data-open="true" aria-label="Floating task overview" hidden></aside>`;
 
 export const WORKBENCH_RAIL_STYLES = `
+.main { position: relative; }
+.work-rail-overlay { position: absolute; top: 62px; right: 14px; width: min(320px,calc(100% - 28px)); max-height: min(60dvh,600px); overflow: auto; z-index: 9; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r1); padding: 16px; box-shadow: 0 8px 24px rgb(0 0 0 / 16%); }
+.work-rail-overlay:not([data-open="true"]) { display: none; }
+.rail-card[data-placement="hidden"] { display: none !important; }
 .main:has(.work-rail:not([hidden])) { grid-template-columns: minmax(0,1fr) 240px; }
 .work-rail { grid-column: 2; grid-row: 2; min-width: 0; overflow: auto; padding: 22px 18px 22px 0; scrollbar-width: thin; }
 .rail-card { padding: 16px 0; border-bottom: 1px solid var(--line-soft); }
@@ -33,7 +37,7 @@ export const WORKBENCH_RAIL_STYLES = `
 .worker-icon svg { width: 21px; height: 21px; overflow: visible; }
 .worker-name { grid-column: 2; display: flex; align-items: baseline; gap: 8px; font-size: 11px; font-weight: 500; color: var(--text); }
 .worker-state { margin-left: auto; color: var(--quiet); font-size: 10px; font-weight: 400; }
-.worker-task,.worker-activity,.worker-result { grid-column: 2; margin: 0; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; color: var(--muted); }
+.worker-task,.worker-activity { grid-column: 2; margin: 0; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; color: var(--muted); }
 .worker-task { color: var(--quiet); }
 .worker[data-state="done"] .worker-icon { color: var(--quiet); }
 .rail-toggle { border: 0; background: transparent; color: var(--quiet); padding: 6px 9px; font-size: 11px; border-radius: 7px; }
