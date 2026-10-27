@@ -1,5 +1,7 @@
+import { QUIZ_RENDERER_SCRIPT } from "./quiz-renderer.ts";
 /** Browser-only declarative 2D/chart renderer. Embedded in the same-origin workbench script. */
 export const VISUAL_RENDERER_SCRIPT = String.raw`
+${QUIZ_RENDERER_SCRIPT}
 const visualObservers=new Map(),componentCards=new Map(),componentAnswers=new Map();
 function componentAnswerText(content){const text=textOf(content);if(text.length>24000||!text.startsWith('[Adaptive UI response]\n'))return null;try{const value=JSON.parse(text.slice(23));if(!isRecord(value)||!validText(value.componentId,200)||typeof value.title!=='string'||value.title.length>100||typeof value.revision!=='string'||value.revision.length>12000||!Array.isArray(value.answers)||value.answers.length>12||!value.answers.every(answer=>typeof answer==='string'&&answer.length<=4000))return null;return value}catch{return null}}
 function restoreComponentAnswer(content){const answer=componentAnswerText(content);if(!answer)return;componentAnswers.set(answer.componentId,answer);const card=componentCards.get(answer.componentId);if(card&&card.restore)card.restore(answer)}
@@ -16,6 +18,7 @@ function bounded(value,min,max){return typeof value==='number'&&Number.isFinite(
 function validPoint2(value){return Array.isArray(value)&&value.length===2&&value.every(n=>bounded(n,-20,20))}
 function validVisual(visual){
   if(!isRecord(visual)||(visual.componentId!==undefined&&!validText(visual.componentId,80))||visual.version!==2||!validText(visual.title,100)||!(visual.description===undefined||(typeof visual.description==='string'&&visual.description.length<=300)))return false;
+  if(visual.kind==='quiz')return validQuiz(visual);
   if(visual.kind==='question')return hasOnlyKeys(visual,['version','kind','title','question','options'],['description','multiple','componentId'])&&validText(visual.question,2000)&&Array.isArray(visual.options)&&visual.options.length<=12&&visual.options.every(option=>validText(option,200))&&(visual.multiple===undefined||typeof visual.multiple==='boolean');
   if(visual.kind==='diagram'){
     if(!hasOnlyKeys(visual,['version','kind','title','objects'],['description','componentId'])||!Array.isArray(visual.objects)||visual.objects.length<1||visual.objects.length>80)return false;
@@ -44,6 +47,7 @@ function renderVisual(visual,callId){
   card.append(visualElement('h2',visual.title),visualElement('div',visual.description||(visual.kind==='diagram'?'2D conceptual diagram':'Data chart')));
   card.classList.add('interactive-visual');if(identity){card.dataset.componentId=identity;componentCards.set(identity,{card})}
   if(visual.description)renderRichText(card.lastChild,visual.description);
+  if(visual.kind==='quiz'){renderQuiz(card,visual,identity,mountComponent);return;}
   if(visual.kind==='question'){
     card.lastChild.remove();
     if(visual.description){const description=visualElement('div');renderRichText(description,visual.description);card.append(description)}

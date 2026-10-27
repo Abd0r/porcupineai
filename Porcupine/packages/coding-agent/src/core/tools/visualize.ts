@@ -2,6 +2,7 @@ import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 import type { ToolDefinition } from "../extensions/types.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
+import { prepareVisualArguments } from "./visual-arguments.ts";
 
 const strict = <const T extends Parameters<typeof Type.Object>[0]>(properties: T) =>
 	Type.Object(properties, { additionalProperties: false });
@@ -39,6 +40,24 @@ const point = strict({ x: number, y: number, error: Type.Optional(Type.Number({ 
 const schema = Type.Union([
 	strict({
 		...common,
+		kind: Type.Literal("quiz"),
+		questions: Type.Array(
+			strict({
+				question: text(300),
+				options: Type.Array(text(120), { minItems: 2, maxItems: 6 }),
+				correctAnswers: Type.Array(Type.Integer({ minimum: 0, maximum: 5 }), {
+					minItems: 1,
+					maxItems: 6,
+					uniqueItems: true,
+				}),
+				hint: Type.Optional(text(300)),
+				explanation: text(1000),
+			}),
+			{ minItems: 1, maxItems: 6 },
+		),
+	}),
+	strict({
+		...common,
 		kind: Type.Literal("question"),
 		question: text(2000),
 		options: Type.Array(text(200), { maxItems: 12 }),
@@ -70,6 +89,7 @@ export function createVisualizeToolDefinition(): ToolDefinition<typeof schema, V
 			"Present an interactive question, bounded 2D diagram or line/scatter/bar chart. For question cards supply question and options (empty for a written answer); multiple allows several choices. The user submits their answer as a normal conversation message after your turn. Supply declarative data, never scripts or external assets. For spatial 3D scenes use visualize_3d.",
 		promptSnippet: "Explain with 2D diagrams or data-backed charts, including units and uncertainty",
 		promptGuidelines: [
+			"For a scored quiz use kind quiz with 1–6 questions. Each question needs options, zero-based correctAnswers and an explanation; hint is optional. Multiple correctAnswers enable multiple selection. Answers and explanations are shown only after submission; finish your turn to let the user respond.",
 			"Supply componentId to give a visual a stable identity. Reuse that ID to update it in place. Question responses include that ID and the question revision so earlier answers remain attached to the correct question.",
 			"Use visuals when they clarify the conversation, especially teaching and science. Explain what the visual demonstrates in the description and accompanying answer.",
 			"Use labelled arrows, shapes and text for conceptual diagrams; coordinates span -20 to 20, with positive y pointing up. Use line charts for ordered samples, scatter for relationships, and bars for discrete values. Points are drawn in supplied order.",
@@ -77,10 +97,25 @@ export function createVisualizeToolDefinition(): ToolDefinition<typeof schema, V
 			"No HTML, executable expressions, scripts, URLs, meshes or assets. Max 80 diagram objects, 8 chart series and 200 points per series. Existing visualize_3d handles spatial explanations.",
 		],
 		parameters: schema,
+		prepareArguments: (input) => prepareVisualArguments(input) as VisualParameters,
 		async execute(_id, params) {
 			if (!Value.Check(schema, params)) throw new Error("Invalid or unsupported visualization");
+			if (
+				params.kind === "quiz" &&
+				params.questions.some(
+					(q) =>
+						q.correctAnswers.some((index) => index >= q.options.length) ||
+						new Set(q.options).size !== q.options.length,
+				)
+			)
+				throw new Error("Invalid quiz answer key or duplicate options");
 			const lines = [params.title, params.description || ""];
-			if (params.kind === "question") {
+			if (params.kind === "quiz") {
+				lines.push(
+					...params.questions.map((q) => q.question),
+					"Wait for the submitted quiz responses before discussing the answer key.",
+				);
+			} else if (params.kind === "question") {
 				lines.push(params.question, ...params.options.map((option, index) => `${index + 1}. ${option}`));
 				lines.push(
 					"Wait for the user's submitted answer before evaluating it. Do not reveal quiz answers prematurely.",

@@ -1,3 +1,4 @@
+import { validateToolArguments } from "@porcupineai/ai";
 import { describe, expect, it } from "vitest";
 import { createAllToolDefinitions, createAllTools, createReadOnlyToolDefinitions } from "../src/core/tools/index.ts";
 import { createVisualizeToolDefinition } from "../src/core/tools/visualize.ts";
@@ -28,6 +29,57 @@ const run = (input: unknown) =>
 	createVisualizeToolDefinition().execute("visual-test", input as never, undefined, undefined, undefined as never);
 
 describe("visualize tool", () => {
+	it("accepts JSON-encoded array arguments before runtime schema validation", async () => {
+		const tool = createVisualizeToolDefinition();
+		const input = { ...diagram, objects: JSON.stringify([{ ...diagram.objects[0], from: "[0,0]", to: "[0,4]" }]) };
+		const prepared = tool.prepareArguments?.(input) ?? input;
+		const args = validateToolArguments(tool, {
+			type: "toolCall",
+			id: "encoded",
+			name: tool.name,
+			arguments: prepared,
+		});
+		expect((await run(args)).details.visualization).toEqual({ version: 2, ...diagram });
+		expect(typeof input.objects).toBe("string");
+		const chartInput = {
+			...chart,
+			series: JSON.stringify([{ ...chart.series[0], points: JSON.stringify(chart.series[0].points) }]),
+		};
+		const chartArgs = validateToolArguments(tool, {
+			type: "toolCall",
+			id: "chart",
+			name: tool.name,
+			arguments: tool.prepareArguments!(chartInput),
+		});
+		expect((await run(chartArgs)).details.visualization).toEqual({ version: 2, ...chart });
+		for (const objects of ["invalid json", '{"type":"arrow"}', '[{"type":"script"}]']) {
+			expect(() =>
+				validateToolArguments(tool, {
+					type: "toolCall",
+					id: "bad",
+					name: tool.name,
+					arguments: tool.prepareArguments!({ ...diagram, objects }),
+				}),
+			).toThrow();
+		}
+	});
+	it("validates quiz answer keys before presenting scored questions", async () => {
+		const quiz = {
+			kind: "quiz",
+			title: "Physics",
+			questions: [
+				{
+					question: "Unit of force?",
+					options: ["Newton", "Joule"],
+					correctAnswers: [0],
+					explanation: "Force is measured in newtons.",
+				},
+			],
+		};
+		expect((await run(quiz)).details.visualization).toEqual({ version: 2, ...quiz });
+		for (const correctAnswers of [[2], [], [0, 0]])
+			await expect(run({ ...quiz, questions: [{ ...quiz.questions[0], correctAnswers }] })).rejects.toThrow();
+	});
 	it("creates choice and written-answer cards without inventing an answer", async () => {
 		for (const options of [[], ["Mass", "Velocity"]]) {
 			const input = { kind: "question", title: "Check understanding", question: "What changes?", options };

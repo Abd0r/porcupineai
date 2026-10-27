@@ -96,6 +96,53 @@ try {
 	assert.equal(await page.locator("fieldset:disabled").count(), 0);
 	assert.equal(await page.getByLabel("Force", { exact: true }).isChecked(), false);
 	assert.equal(await page.locator("[data-component-id=physics]").count(), 1);
+	const quizEvent = {
+		type: "tool_execution_end",
+		toolCallId: "quiz-1",
+		toolName: "visualize",
+		isError: false,
+		result: {
+			content: [],
+			details: {
+				visualization: {
+					version: 2,
+					kind: "quiz",
+					componentId: "quiz-physics",
+					title: "Units quiz",
+					questions: [
+						{
+							question: "Unit of energy?",
+							options: ["Joule", "Newton"],
+							correctAnswers: [0],
+							hint: "Think of work.",
+							explanation: "Energy is measured in joules.",
+						},
+						{
+							question: "Select SI units",
+							options: ["Metre", "Second", "Foot"],
+							correctAnswers: [0, 1],
+							explanation: "Metre and second are SI base units.",
+						},
+					],
+				},
+			},
+		},
+	} satisfies WorkbenchReplayEvent;
+	timeline.push(quizEvent);
+	for (const fn of listeners) fn(quizEvent);
+	await page.getByRole("button", { name: "Check answers" }).waitFor();
+	assert.equal(await page.getByText("Energy is measured in joules.", { exact: true }).count(), 0);
+	await page.getByLabel("Joule", { exact: true }).check();
+	await page.getByLabel("Metre", { exact: true }).check();
+	await page.getByLabel("Second", { exact: true }).check();
+	await page.getByRole("button", { name: "Check answers" }).click();
+	await page.getByText("Score: 2 / 2", { exact: true }).waitFor();
+	assert.equal(answers.length, 2);
+	await page.reload();
+	await page.locator("#token").fill("question-smoke-token");
+	await page.locator("#auth-form").evaluate((form) => (form as HTMLFormElement).requestSubmit());
+	await page.getByText("Score: 2 / 2", { exact: true }).waitFor();
+	assert.equal(await page.getByLabel("Metre", { exact: true }).isChecked(), true);
 	assert.deepEqual(errors, []);
 	console.log("Question submission and local LaTeX rendering passed.");
 } finally {

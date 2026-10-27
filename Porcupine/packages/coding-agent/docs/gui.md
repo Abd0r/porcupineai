@@ -18,6 +18,10 @@ The interface uses an open conversation column, neutral surfaces, compact contro
 
 ## Visual explanations
 
+For a scored quiz, call `visualize` with `kind: "quiz"`, a title and 1–6 questions. Each question supplies `question`, 2–6 `options`, zero-based `correctAnswers`, an `explanation`, and an optional `hint`. More than one correct answer enables multiple selection. Submission reveals an exact-match score and review for every question; answers and review restore from session history. The score checks the supplied answer key, so the agent must verify that key. Written answers continue through the question card for agent evaluation.
+
+The visualization tools prepare JSON-encoded array arguments before runtime validation, including nested coordinates, chart points and series, and 3D objects. Invalid JSON, wrong shapes and bounds still fail validation.
+
 `visualize` also supports `kind: "question"`: supply a title, question and options. Users can select one answer, select several with `multiple: true`, or write an answer when options is empty. Submission sends a structured response in a normal session message for the agent to evaluate. The card locks after a successful send; failures allow retry. Answers and selected controls restore from conversation history. A changed question revision starts unanswered. This is an initial question component, not automatic scoring or a complete quiz engine. Questions and visual descriptions support the same math rendering as chat.
 
 Supply `componentId` to give a 2D visual, chart or question a stable identity. Later tool calls with the same ID replace that component at its existing position. Without an explicit ID, the browser uses the tool-call ID, which still supports replay and saved question answers. These identities are scoped to the selected session branch; no browser storage is required for answers.

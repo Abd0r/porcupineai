@@ -3,6 +3,7 @@ import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 import type { ToolDefinition } from "../extensions/types.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
+import { prepareVisualArguments } from "./visual-arguments.ts";
 
 const CoordinateSchema = Type.Number({ minimum: -20, maximum: 20 });
 const PositionSchema = Type.Tuple([CoordinateSchema, CoordinateSchema, CoordinateSchema], {
@@ -77,6 +78,7 @@ export function createVisualize3DToolDefinition(): ToolDefinition<
 			"Coordinates and box dimensions are bounded to 20 units; colors must be #RRGGBB. No meshes, scripts, URLs, or external assets are supported.",
 		],
 		parameters: VisualizationParametersSchema,
+		prepareArguments: (input) => prepareVisualArguments(input) as VisualizationParameters,
 		async execute(_toolCallId, params): Promise<{ content: TextContent[]; details: VisualizationDetails }> {
 			if (!Value.Check(VisualizationParametersSchema, params) || !params.title.trim()) {
 				throw new Error("Invalid or unsupported 3D scene");
