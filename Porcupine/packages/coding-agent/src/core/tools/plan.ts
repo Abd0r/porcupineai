@@ -60,6 +60,11 @@ const planSchema = Type.Object({
 export type PlanToolInput = Static<typeof planSchema>;
 
 export interface PlanToolDetails {
+	plan?: {
+		objective: string;
+		revision: number;
+		steps: Array<{ id: string; objective: string; status: PlanRecordStepStatus; owner?: string }>;
+	} | null;
 	action: string;
 	stepId?: string;
 	revision?: number;
@@ -269,6 +274,18 @@ export function createPlanToolDefinition(
 			return {
 				content: [{ type: "text", text }],
 				details: {
+					plan: store.active
+						? {
+								objective: store.active.objective,
+								revision: store.active.revision,
+								steps: store.active.steps.map(({ id, objective, status, owner }) => ({
+									id,
+									objective,
+									status,
+									owner,
+								})),
+							}
+						: null,
 					action,
 					stepId,
 					revision: store.active?.revision,

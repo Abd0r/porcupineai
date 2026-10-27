@@ -2,9 +2,19 @@ import { MESSAGE_RENDERER_SCRIPT, RICH_TEXT_STYLES } from "./message-renderer.ts
 import { VISUAL_RENDERER_SCRIPT } from "./visual-renderer.ts";
 import { WORKBENCH_STYLES } from "./web-ui-styles.ts";
 import { WORKBENCH_ACTIVITY_SCRIPT } from "./workbench-activity.ts";
+import { ACTIVITY_DESCRIPTION_SCRIPT } from "./workbench-activity-description.ts";
 import { APPEARANCE_DIALOG, APPEARANCE_SCRIPT, APPEARANCE_STYLES } from "./workbench-appearance.ts";
+import {
+	ATTACHMENT_BUTTON,
+	ATTACHMENT_CONTROLS,
+	ATTACHMENT_SCRIPT,
+	ATTACHMENT_STYLES,
+} from "./workbench-attachments-ui.ts";
 import { WORKBENCH_CLIENT_SCRIPT } from "./workbench-client.ts";
+import { COMMAND_MENU, COMMAND_SCRIPT, COMMAND_STYLES } from "./workbench-commands-ui.ts";
+import { ACTIVITY_GLYPHS_SCRIPT, ACTIVITY_GLYPHS_STYLES } from "./workbench-glyphs.ts";
 import { WORKBENCH_LAYOUT_STYLES } from "./workbench-layout.ts";
+import { MODE_ICON_SCRIPT, MODE_ICON_STYLES } from "./workbench-mode-icons.ts";
 import { WORKBENCH_MOTION_STYLES } from "./workbench-motion.ts";
 import {
 	MODEL_DIALOG,
@@ -14,7 +24,9 @@ import {
 	STACKS_DIALOG,
 	STACKS_NAVIGATION,
 } from "./workbench-navigation.ts";
+import { ORGANIZATION_DIALOG, ORGANIZATION_SCRIPT, ORGANIZATION_STYLES } from "./workbench-organization-ui.ts";
 import { PROJECT_DIALOG, PROJECTS_NAVIGATION, PROJECTS_SCRIPT, PROJECTS_STYLES } from "./workbench-projects-ui.ts";
+import { WORKBENCH_RAIL, WORKBENCH_RAIL_STYLES } from "./workbench-rail.ts";
 import { CONTEXT_SETTINGS_SCRIPT, CONTEXT_SETTINGS_STYLES } from "./workbench-settings.ts";
 import { THINKING_SCRIPT, THINKING_STYLES } from "./workbench-thinking.ts";
 
@@ -38,6 +50,12 @@ ${THINKING_STYLES}
 ${SESSION_NAVIGATION_STYLES}
 ${PROJECTS_STYLES}
 ${WORKBENCH_LAYOUT_STYLES}
+${ACTIVITY_GLYPHS_STYLES}
+${WORKBENCH_RAIL_STYLES}
+${ATTACHMENT_STYLES}
+${ORGANIZATION_STYLES}
+${COMMAND_STYLES}
+${MODE_ICON_STYLES}
 </style>
 </head>
 <body>
@@ -52,16 +70,17 @@ ${PROJECTS_NAVIGATION}
 <div class="side-foot">Local workspace</div>
 </aside>
 <main class="main">
-<header class="topbar"><button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-expanded="true" title="Toggle sidebar (Ctrl/Cmd+B)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4v16"/></svg></button><strong id="session-title">Workbench</strong><div class="topbar-actions"><button class="quiet-button" id="reconnect" type="button" hidden>Reconnect</button><div class="status" aria-live="polite"><span id="status-text">Ready</span></div><button class="settings-trigger" id="settings-open" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></button></div></header>
+<header class="topbar"><button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-expanded="true" title="Toggle sidebar (Ctrl/Cmd+B)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4v16"/></svg></button><strong id="session-title">Workbench</strong><div class="topbar-actions"><button id="rail-toggle" class="rail-toggle" type="button" aria-controls="work-rail" aria-expanded="false" hidden>Tasks</button><button class="quiet-button" id="reconnect" type="button" hidden>Reconnect</button><div class="status" aria-live="polite"><span id="status-text">Ready</span></div><button class="settings-trigger" id="settings-open" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></button></div></header>
 
 <section class="content" aria-label="Conversation">
 <div class="welcome" id="welcome"><h1>What are we working on?</h1><div class="starters"><button type="button" data-prompt="Inspect this workspace and explain its architecture. Identify the most useful next improvement with evidence."><span>Explore a codebase</span></button><button type="button" data-prompt="Help me debug an issue. Start by inspecting the workspace and ask for the failing behavior if it is not evident."><span>Fix something broken</span></button><button type="button" data-prompt="Help me turn an idea into a working implementation. Ask me what I want to build, then inspect the available tools and workspace."><span>Build an idea</span></button></div></div>
-<div class="feed-stage"><div class="chat-backdrop" id="chat-backdrop" aria-hidden="true"></div><div class="feed" id="feed" aria-live="polite" aria-relevant="additions text"></div></div>
+<div class="feed-stage"><div class="feed" id="feed" aria-live="polite" aria-relevant="additions text"></div></div>
 <button id="jump-latest" class="jump-latest" type="button" hidden>↓ Latest message</button>
-<form class="composer-wrap" id="prompt-form"><textarea class="composer" id="prompt" rows="1" aria-label="Message Porcupine" placeholder="Message Porcupine…"></textarea><div class="compose-row"><div class="compose-options">${SESSION_COMPOSER_CONTROLS}<span class="hint">Enter to send · Shift + Enter for a new line</span></div><div class="actions"><button class="stop" id="stop" type="button" hidden>Stop</button><button class="send" id="send" type="submit" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 5-5"/></svg></button></div></div></form>
+<form class="composer-wrap" id="prompt-form">${COMMAND_MENU}${ATTACHMENT_CONTROLS}<textarea class="composer" id="prompt" rows="1" aria-label="Message Porcupine" placeholder="Message Porcupine…"></textarea><div class="compose-row"><div class="compose-options">${ATTACHMENT_BUTTON}${SESSION_COMPOSER_CONTROLS}<span class="hint">Enter to send · Shift + Enter for a new line</span></div><div class="actions"><button class="stop" id="stop" type="button" hidden>Stop</button><button class="send" id="send" type="submit" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 5-5"/></svg></button></div></div></form>
 <div class="error" id="error" role="alert" hidden></div>
 <div class="notice" id="history-notice">Local workspace</div>
 </section>
+${WORKBENCH_RAIL}
 </main>
 </div>
 <div class="auth" id="auth">
@@ -71,6 +90,7 @@ ${APPEARANCE_DIALOG}
 ${STACKS_DIALOG}
 ${MODEL_DIALOG}
 ${PROJECT_DIALOG}
+${ORGANIZATION_DIALOG}
 <script>
 (()=>{
 const $=id=>document.getElementById(id);const ui={auth:$('auth'),authForm:$('auth-form'),token:$('token'),authError:$('auth-error'),sessions:$('sessions'),newSession:$('new-session'),feed:$('feed'),welcome:$('welcome'),form:$('prompt-form'),prompt:$('prompt'),send:$('send'),stop:$('stop'),error:$('error'),status:$('status-text'),title:$('session-title')};
@@ -113,8 +133,6 @@ function finalizeThinking(thinkingText,seconds,beforeNode){
   if(replaying)row.label.textContent=thinkingText?'Reasoning':'Activity';
   liveThinking=null;
 }
-const TOOL_WORDS={web_search:'Searching the web',web_extract:'Reading a page',read:'Reading',grep:'Searching files',find:'Searching files',ls:'Listing files',bash:'Running a command',edit:'Editing files',write:'Writing files',browser_navigate:'Browsing',browser_snapshot:'Inspecting a page',browser_screenshot:'Capturing a page',subagent:'Delegating',tasks:'Updating tasks',projects:'Opening a project',literature:'Checking literature',memory:'Updating memory',goal:'Updating the goal',plan:'Updating the plan',visualize:'Drawing a figure',visualize_3d:'Building a scene'};
-function toolWords(name){return TOOL_WORDS[name]||('Using '+name)}
 function ensureAssistant(){if(streamingAssistant)return streamingAssistant;ui.welcome.hidden=true;const node=appendMessage('assistant','');streamingAssistant=node;return node}
 function hasOnlyKeys(value,required,optional=[]){if(!isRecord(value))return false;const keys=Object.keys(value);return required.every(key=>keys.includes(key))&&keys.every(key=>required.includes(key)||optional.includes(key))}
 function validVector(value){return Array.isArray(value)&&value.length===3&&value.every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=-20&&n<=20)}
@@ -139,18 +157,26 @@ if(event.type==='server_connected'){
   if(event.subagents)applySubagents(event.subagents);
   setBusy(Boolean(event.streaming));if(event.streaming)ensureThinkingRow();ui.welcome.hidden=ui.feed.children.length>0;followOutput=wasFollowing;ui.feed.scrollTop=wasFollowing?ui.feed.scrollHeight:readingPosition;$('jump-latest').hidden=wasFollowing;void refreshTracker(sessionId);return;
 }
+if(event.type==='session_deleted'){setConnection(false);setError('This conversation was deleted. Choose another conversation or start a new one.');return;}
+if(event.type==='command_result'){renderCommandResult(event);return;}
 if(event.type==='subagents'){applySubagents(event.runs||[]);return;}
 if(event.type==='permission_resolved'){settlePermission(event.permissionId,event.allow);return;}
 if(event.type==='goal_plan'){trackerEpoch++;renderTracker(event.status);return;}
-if(event.type==='session_controls'){applySessionControls({...event.controls,supported:true,writable:true});return;}if(event.type==='message_update'&&event.message&&event.message.role==='assistant'){if(thinkingOf(event.message.content)){setThinkingLabel('Reasoning');setReasoningText(liveThinking,thinkingOf(event.message.content));}const text=textOf(event.message.content);if(text)queueAssistantRender(ensureAssistant(),text);return}if(event.type==='message_end'&&event.message){const role=event.message.role;if(role==='custom'){const kind=String(event.message.customType||'');if(kind.startsWith('subagent')){noteSubagent(event.message);return}return}if(role==='assistant'&&!textOf(event.message.content)&&!streamingAssistant){finalizeThinking(thinkingOf(event.message.content));return;}if(role==='user'||role==='assistant'){if(role==='assistant'){flushAssistantRender();const node=streamingAssistant||ensureAssistant();finalizeThinking(thinkingOf(event.message.content),(liveThinking&&(Date.now()-liveThinking.startedAt)/1000)||undefined,node);renderRichText(node.lastChild,textOf(event.message.content));streamingAssistant=null}else{appendMessage(role,textOf(event.message.content));if(streaming&&!replaying)ensureThinkingRow()}if(role==='user'&&!sessionNames.has(sessionId)){sessionNames.set(sessionId,textOf(event.message.content).slice(0,64));ui.title.textContent=sessionNames.get(sessionId);void refreshSessions(false)}}else if(role==='tool'){appendMessage('tool','Tool finished: '+(event.message.toolName||'unknown'))}return}if(event.type==='tool_execution_update'){showToolUpdate(event);return;}if(event.type==='tool_execution_start'){showToolStart(event);return;}if(event.type==='tool_execution_end'){showToolEnd(event);if(['visualize_3d','visualize'].includes(event.toolName)&&!event.isError)renderVisual(event.result&&event.result.details&&event.result.details.visualization);return;}if(event.type==='agent_start'){setBusy(true);if(ui.feed.lastChild&&ui.feed.lastChild.className==='message user')ensureThinkingRow()}if(event.type==='tool_execution_end'&&liveThinking)setThinkingLabel('Reasoning');if(event.type==='agent_end'&&event.willRetry){appendMessage('tool','Retrying the agent turn');return;}if(event.type==='agent_end'||event.type==='agent_settled'){finalizeThinking(liveThinking?liveThinking.reasoningText||"":'');setBusy(false);void refreshContext(sessionId);void refreshTracker(sessionId);void refreshSessionSurfaces(sessionId)}if(event.type==='permission_request')showPermission(event)}
+if(event.type==='session_controls'){applySessionControls({...event.controls,supported:true,writable:true});return;}if(event.type==='message_update'&&event.message&&event.message.role==='assistant'){if(thinkingOf(event.message.content)){setThinkingLabel('Reasoning');setReasoningText(liveThinking,thinkingOf(event.message.content));}const text=textOf(event.message.content);if(text)queueAssistantRender(ensureAssistant(),text);return}if(event.type==='message_end'&&event.message){const role=event.message.role;if(role==='custom'){const kind=String(event.message.customType||'');if(kind.startsWith('subagent')){noteSubagent(event.message);return}return}if(role==='assistant'&&!textOf(event.message.content)&&!streamingAssistant){finalizeThinking(thinkingOf(event.message.content));return;}if(role==='user'||role==='assistant'){if(role==='assistant'){flushAssistantRender();const node=streamingAssistant||ensureAssistant();finalizeThinking(thinkingOf(event.message.content),(liveThinking&&(Date.now()-liveThinking.startedAt)/1000)||undefined,node);renderRichText(node.lastChild,textOf(event.message.content));streamingAssistant=null}else{renderMessagePhotos(appendMessage(role,userMessageText(event.message.content)),event.message.content);if(streaming&&!replaying)ensureThinkingRow()}if(role==='user'&&!sessionNames.has(sessionId)){sessionNames.set(sessionId,textOf(event.message.content).slice(0,64));ui.title.textContent=sessionNames.get(sessionId);void refreshSessions(false)}}else if(role==='tool'){appendMessage('tool','Tool finished: '+(event.message.toolName||'unknown'))}return}if(event.type==='tool_execution_update'){showToolUpdate(event);return;}if(event.type==='tool_execution_start'){showToolStart(event);return;}if(event.type==='tool_execution_end'){showToolEnd(event);if(event.toolName==='plan'&&event.result&&event.result.details&&'plan' in event.result.details)renderPlan(event.result.details.plan);if(['visualize_3d','visualize'].includes(event.toolName)&&!event.isError)renderVisual(event.result&&event.result.details&&event.result.details.visualization);return;}if(event.type==='agent_start'){setBusy(true);if(ui.feed.lastChild&&ui.feed.lastChild.className==='message user')ensureThinkingRow()}if(event.type==='tool_execution_end'&&liveThinking)setThinkingLabel('Reasoning');if(event.type==='agent_end'&&event.willRetry){appendMessage('tool','Retrying the agent turn');return;}if(event.type==='agent_end'||event.type==='agent_settled'){finalizeThinking(liveThinking?liveThinking.reasoningText||"":'');setBusy(false);void refreshContext(sessionId);void refreshTracker(sessionId);void refreshSessionSurfaces(sessionId)}if(event.type==='permission_request')showPermission(event)}
 function settlePermission(id,allow){for(const card of ui.feed.querySelectorAll('.permission'))if(card.dataset.permissionId===String(id)){card.dataset.resolved='true';const buttons=card.querySelector('.actions');if(buttons){const result=document.createElement('span');result.className='permission-decision';result.textContent=allow?'Allowed':'Denied';buttons.replaceChildren(result)}}}
 function showPermission(event){const permissionSessionId=sessionId;ui.welcome.hidden=true;const card=document.createElement('section');card.className='permission';card.dataset.permissionId=String(event.permissionId);const title=document.createElement('strong');title.textContent=String(event.title||'Approval required');const message=document.createElement('p');message.textContent=String(event.message||'');const buttons=document.createElement('div');buttons.className='actions';const deny=document.createElement('button');deny.className='deny';deny.textContent='Deny';const allow=document.createElement('button');allow.className='allow';allow.textContent='Allow';async function respond(value){allow.disabled=true;deny.disabled=true;try{await json('/session/'+encodeURIComponent(permissionSessionId)+'/permissions/'+encodeURIComponent(String(event.permissionId))+'/response',{method:'POST',body:JSON.stringify({allow:value})});settlePermission(event.permissionId,value)}catch(error){message.textContent=error.message;allow.disabled=false;deny.disabled=false}}deny.addEventListener('click',()=>respond(false));allow.addEventListener('click',()=>respond(true));buttons.append(deny,allow);card.append(title,message,buttons);ui.feed.append(card);scrollFeed()}
+${ACTIVITY_DESCRIPTION_SCRIPT}
+${ACTIVITY_GLYPHS_SCRIPT}
 ${WORKBENCH_ACTIVITY_SCRIPT}
+${ATTACHMENT_SCRIPT}
 ${WORKBENCH_CLIENT_SCRIPT}
 ${THINKING_SCRIPT}
 ${MESSAGE_RENDERER_SCRIPT}
 ${SESSION_NAVIGATION_SCRIPT}
+${MODE_ICON_SCRIPT}
 ${PROJECTS_SCRIPT}
+${ORGANIZATION_SCRIPT}
+${COMMAND_SCRIPT}
 ${CONTEXT_SETTINGS_SCRIPT}
 ${APPEARANCE_SCRIPT}
 })();

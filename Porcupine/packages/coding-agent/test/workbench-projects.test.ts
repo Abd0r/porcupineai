@@ -16,6 +16,22 @@ function fixture() {
 const pdf = Buffer.from("%PDF-1.7\nsynthetic test document\n");
 
 describe("workbench project workspaces", () => {
+	it("uses the agent project index and moves deleted projects into recoverable trash", () => {
+		const { cwd, store } = fixture();
+		store.create("Study");
+		writeFileSync(
+			join(cwd, "Project", "study", "STATUS.md"),
+			"# Status\n\n## State\n`blocked`\n\n## Current position\nWaiting for observations.\n",
+		);
+		expect(store.list()[0]).toMatchObject({
+			name: "study",
+			state: "blocked",
+			statusSummary: "Waiting for observations.",
+		});
+		const deleted = store.remove("study");
+		expect(store.list()).toEqual([]);
+		expect(readFileSync(join(deleted.trashPath, "STATUS.md"), "utf8")).toContain("Waiting for observations");
+	});
 	it("discovers existing projects with original names and rescans additions", () => {
 		const { cwd, store } = fixture();
 		expect(store.list()).toEqual([]);

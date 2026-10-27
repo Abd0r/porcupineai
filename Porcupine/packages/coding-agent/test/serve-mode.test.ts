@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { convertToLlm } from "../src/core/messages.ts";
 import { adaptSessionToServeApi } from "../src/modes/serve-mode.ts";
 import { type ServeApiSession, startServeApi } from "../src/server/http-api.ts";
-import { createHarness } from "./test-harness.ts";
+import { WorkbenchProjectStore } from "../src/server/workbench-projects.ts";
+import { setSessionProject } from "../src/server/workbench-session-projects.ts";
+import { createHarness, fauxModel } from "./test-harness.ts";
 
 function fakeSession(overrides: Partial<ServeApiSession> = {}): ServeApiSession {
 	const listeners = new Set<(event: unknown) => void>();
@@ -63,6 +66,25 @@ afterEach(async () => {
 });
 
 describe("serve HTTP API", () => {
+	it("accepts attachment-only messages and rejects invalid attachments before delivery", async () => {
+		const received: unknown[] = [];
+		const { handle, base } = await start({
+			sendUserMessage: async (text, attachments) => {
+				received.push({ text, attachments });
+			},
+		});
+		cleanups.push(() => handle.close());
+		const attachments = [{ name: "notes.txt", data: "YQ==" }];
+		const send = (body: unknown) =>
+			fetch(`${base}/session/fake-session/message`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			});
+		expect((await send({ text: "", attachments })).status).toBe(202);
+		expect((await send({ text: "", attachments: [{ name: "../secret", data: "YQ==" }] })).status).toBe(400);
+		expect(received).toEqual([{ text: "", attachments }]);
+	});
 	it("GET /health returns healthy + version", async () => {
 		const { handle, base } = await start();
 		cleanups.push(() => handle.close());
@@ -203,6 +225,49 @@ describe("serve HTTP API", () => {
 });
 
 describe("serve HTTP API with a real session", () => {
+	it("loads the assigned canonical project into the next turn without changing cwd", async () => {
+		const harness = await createHarness({ responses: ["Project context received"] });
+		cleanups.push(() => harness.cleanup());
+		// Match the production SDK's custom-message conversion.
+		harness.agent.convertToLlm = convertToLlm;
+		const cwd = harness.session.sessionManager.getCwd();
+		const projects = new WorkbenchProjectStore(harness.tempDir);
+		projects.create("research", "Research workspace");
+		setSessionProject(harness.session.sessionManager, projects.path("research"));
+		await adaptSessionToServeApi(harness.session, harness.tempDir).sendUserMessage("Continue the research");
+		expect(JSON.stringify(harness.faux.contexts)).toContain("Research workspace");
+		expect(harness.session.sessionManager.getCwd()).toBe(cwd);
+	});
+	it("explains when a text-only model cannot accept a photo without calling it", async () => {
+		const harness = await createHarness({ model: { ...fauxModel, input: ["text"] } });
+		cleanups.push(() => harness.cleanup());
+		await expect(
+			adaptSessionToServeApi(harness.session, harness.tempDir).sendUserMessage("", [
+				{
+					name: "photo.png",
+					data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+				},
+			]),
+		).rejects.toThrow("supports images");
+		expect(harness.faux.callCount).toBe(0);
+	});
+	it("delivers photo pixels to the real agent and preserves them in saved GUI history", async () => {
+		const harness = await createHarness({ responses: ["Image received"] });
+		cleanups.push(() => harness.cleanup());
+		const data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+		const adapted = adaptSessionToServeApi(harness.session, harness.tempDir);
+		await adapted.sendUserMessage("Inspect", [{ name: "photo.png", data }]);
+		const user = harness.session.messages.find((message) => message.role === "user");
+		expect(user).toMatchObject({
+			content: expect.arrayContaining([{ type: "image", mimeType: "image/png", data: expect.any(String) }]),
+		});
+		expect(adapted.getTimeline!()[0]).toMatchObject({
+			message: {
+				role: "user",
+				content: expect.arrayContaining([{ type: "image", mimeType: "image/png", data: expect.any(String) }]),
+			},
+		});
+	});
 	it("retains older work in GUI replay after model context compaction", async () => {
 		const harness = await createHarness({
 			responses: [{ thinking: "Saved reasoning before compaction", text: "Original verified code" }],

@@ -17,6 +17,10 @@ describe("plan tool (T2.2)", () => {
 
 		result = await run(def, { action: "create", objective: "Ship fix", steps: "Reproduce\nFix\nVerify" });
 		expect(textOf(result)).toContain("Plan created (3 steps)");
+		expect(result.details?.plan).toMatchObject({
+			objective: "Ship fix",
+			steps: [{ status: "pending" }, { status: "pending" }, { status: "pending" }],
+		});
 
 		const stepId = "reproduce-1";
 		result = await run(def, { action: "complete", stepId });
@@ -57,6 +61,7 @@ describe("plan tool (T2.2)", () => {
 		expect(textOf(exported)).toContain("[active] second (second-2)");
 		const cleared = await run(def, { action: "clear" });
 		expect(textOf(cleared)).toContain("cleared");
+		expect(cleared.details?.plan).toBeNull();
 		const status = await run(def, { action: "status" });
 		expect(textOf(status)).toContain("No active plan");
 	});

@@ -4,7 +4,7 @@ let connected=false,connectionEpoch=0,replaying=false,pendingAssistantRender=nul
 function queueAssistantRender(node,text){pendingAssistantRender={node,text};if(!renderFrame)renderFrame=requestAnimationFrame(flushAssistantRender);}
 function flushAssistantRender(){if(renderFrame)cancelAnimationFrame(renderFrame);renderFrame=0;if(!pendingAssistantRender)return;const {node,text}=pendingAssistantRender;pendingAssistantRender=null;renderRichText(node.lastChild,text);scrollFeed();}
 const conversationViews=new Map(),sessionNames=new Map();
-function updateSend(){ui.send.disabled=streaming||!connected||!ui.prompt.value.trim();ui.prompt.setAttribute('aria-busy',String(streaming));}
+function updateSend(){ui.send.disabled=commandBusy||(streaming&&!/^\/kill(?:\s|$)/.test(ui.prompt.value.trim()))||!connected||attachmentReading.has(sessionId)||(!ui.prompt.value.trim()&&!chatAttachments().length);ui.prompt.setAttribute('aria-busy',String(streaming));}
 function resizeComposer(){ui.prompt.style.height='auto';ui.prompt.style.height=Math.min(ui.prompt.scrollHeight,Math.max(100,innerHeight*.25))+'px';updateSend();}
 function nearBottom(){return ui.feed.scrollHeight-ui.feed.scrollTop-ui.feed.clientHeight<100;}
 function scrollFeed(force=false){if(!replaying&&(force||followOutput))ui.feed.scrollTop=ui.feed.scrollHeight;}
@@ -18,9 +18,9 @@ function resetSessionView(id){
   if(liveThinking){stopThinking(liveThinking);liveThinking=null;}
   clearVisuals();toolRuns.clear();streamingAssistant=null;resetActivity();
   lastContext=null;ringUi.ring.hidden=true;ringUi.fill.style.strokeDashoffset=String(RING_CIRCUMFERENCE);ringUi.tip.textContent='Context usage unavailable';
-  limitsUi.status.textContent='';modelUi.dialog.close();modelEpoch++;stackInspection++;surfaceUi.dialog.close();sessionId=id;const cached=conversationViews.get(id);ui.feed.replaceChildren(...(cached?cached.nodes:[]));ui.prompt.value=cached?cached.draft:'';
-  ui.welcome.hidden=ui.feed.children.length>0;ui.feed.scrollTop=cached?cached.scroll:0;followOutput=cached?cached.follow:true;$('jump-latest').hidden=followOutput;resizeComposer();
-  for(const button of ui.sessions.children){button.classList.toggle('active',button.title===id);button.setAttribute('aria-current',button.title===id?'page':'false');}
+  limitsUi.status.textContent='';hideCommandMenu();modelUi.dialog.close();modelEpoch++;stackInspection++;surfaceUi.dialog.close();sessionId=id;const cached=conversationViews.get(id);ui.feed.replaceChildren(...(cached?cached.nodes:[]));ui.prompt.value=cached?cached.draft:'';
+  ui.welcome.hidden=ui.feed.children.length>0;ui.feed.scrollTop=cached?cached.scroll:0;followOutput=cached?cached.follow:true;$('jump-latest').hidden=followOutput;renderAttachments();resizeComposer();
+  for(const button of document.querySelectorAll('.session')){button.classList.toggle('active',button.title===id);button.setAttribute('aria-current',button.title===id?'page':'false');}
   ui.title.textContent=sessionNames.get(id)||'Conversation '+id.slice(-8);
   setBusy(false);setError('');
 }
@@ -33,7 +33,7 @@ async function connectEvents(id){
   try{
     await json('/session',{method:'POST',body:JSON.stringify({id})});
     if(epoch!==connectionEpoch)return;
-    void refreshSessionSurfaces(id);void refreshContext(id);
+    void refreshSessionSurfaces(id);void refreshContext(id);void refreshCommands(id);
     const response=await api('/session/'+encodeURIComponent(id)+'/events',{signal:controller.signal});
     if(!response.ok)throw new Error('Could not open session events ('+response.status+')');
     if(!response.body)throw new Error('Streaming is unavailable in this browser.');
@@ -55,15 +55,15 @@ async function connectEvents(id){
   }catch(error){if(epoch===connectionEpoch&&error.name!=='AbortError'){controller.abort();setConnection(false);if(liveThinking){stopThinking(liveThinking);liveThinking=null;}setError(error.message)}}
 }
 const toolRuns=new Map();
-function toolDescription(name,args){const input=args&&typeof args==='object'?args:{};const target=input.path||input.file_path||input.command||input.pattern||'';return toolWords(name)+(typeof target==='string'&&target?' · '+target.replace(/\s+/g,' ').slice(0,100):'');}
+function toolDescription(name,args){return describeWorkbenchActivity(name,args).summary;}
 function toolResultText(result){const text=textOf(result&&result.content),details=result&&result.details;const diff=details&&(typeof details.diff==='string'?details.diff:typeof details.patch==='string'?details.patch:'');return text+(diff?'\n\nChanges\n'+diff:'');}
 function setToolOutput(run,text,tail=false){run.resultText=text;run.tail=tail;const full=run.args+(text?'\n\n'+text:'');run.more.hidden=text.length<=16000;run.more.textContent=run.expanded?'Show preview':'Show full output';run.more.setAttribute('aria-expanded',String(run.expanded));run.output.textContent=run.expanded||text.length<=16000?full:run.args+'\n\n'+(tail?text.slice(-16000):text.slice(0,16000))+'\n[Preview · expand for full saved output]';}
 function showToolStart(event){
-	if(!replaying)setThinkingLabel(toolWords(String(event.toolName||'tool')));
+	if(!replaying&&liveThinking){if(liveThinking.hasReasoning)finalizeThinking(liveThinking.reasoningText);else{stopThinking(liveThinking);liveThinking.wrap.remove();liveThinking=null;}}
   ui.welcome.hidden=true;
   const row=document.createElement('details');row.className='tool-activity';row.dataset.state='running';
   const summary=document.createElement('summary'),name=document.createElement('span'),state=document.createElement('span'),icon=document.createElement('span');
-  icon.className='activity-glyph';icon.setAttribute('aria-hidden','true');icon.append(thinkingGlyph());
+  icon.className='activity-glyph';icon.setAttribute('aria-hidden','true');const activity=describeWorkbenchActivity(String(event.toolName||''),event.args);row.dataset.kind=activity.kind;icon.append(activityGlyph(activity.kind));
   name.textContent=toolDescription(String(event.toolName||'tool'),event.args);name.title=name.textContent;state.className='tool-state';state.textContent='Running';summary.append(icon,name,state);
   const output=document.createElement('pre');output.textContent=JSON.stringify(event.args||{},null,2);row.append(summary,output);ui.feed.append(row);
   const more=document.createElement('button');more.type='button';more.className='quiet-button tool-output-more';more.hidden=true;row.append(more);
@@ -72,21 +72,22 @@ function showToolStart(event){
 }
 function showToolUpdate(event){const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;setToolOutput(run,toolResultText(event.partialResult),true);scrollFeed();}
 function showToolEnd(event){if(liveThinking&&!replaying)setThinkingLabel('Working');const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;run.row.dataset.state=event.isError?'failed':'done';run.state.textContent=event.isError?'Failed':'Done';const svg=document.createElementNS(MATH_NS,'svg'),path=document.createElementNS(MATH_NS,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');path.setAttribute('d',event.isError?'m7 7 10 10M17 7 7 17':'m5 12 4 4L19 6');svg.append(path);run.icon.replaceChildren(svg);setToolOutput(run,toolResultText(event.result));toolRuns.delete(event.toolCallId||event.toolName);}
-function filterSessions(){const query=$('session-search').value.trim().toLowerCase();for(const button of ui.sessions.children)button.hidden=query&&!button.textContent.toLowerCase().includes(query);}
+function filterSessions(){const query=$('session-search').value.trim().toLowerCase();for(const button of document.querySelectorAll('.session'))button.parentNode.hidden=Boolean(query&&!button.textContent.toLowerCase().includes(query));}
 async function refreshSessions(selectFirst=false){
-  const data=await json('/session');ui.sessions.replaceChildren();
-  for(const item of data.sessions||[]){if(item.name)sessionNames.set(item.id,item.name);const button=document.createElement('button');button.type='button';button.className='session'+(item.id===sessionId?' active':'');button.setAttribute('aria-current',item.id===sessionId?'page':'false');button.textContent=sessionNames.get(item.id)||'Conversation '+item.id.slice(-8);button.title=item.id;button.addEventListener('click',()=>{void connectEvents(item.id);if(window.matchMedia('(max-width: 700px)').matches)applySidebar(true);});ui.sessions.append(button)}
-  filterSessions();
-  if(selectFirst&&data.sessions&&data.sessions.length)void connectEvents(data.currentSessionId||data.sessions[0].id);else if(selectFirst)await createSession();
+  const data=await json('/session');sessionCatalog=data.sessions||[];
+  for(const item of sessionCatalog)if(item.name)sessionNames.set(item.id,item.name);
+  renderSessionNavigation();if(sessionNames.has(sessionId))ui.title.textContent=sessionNames.get(sessionId);
+  if(selectFirst&&sessionCatalog.length)void connectEvents(data.currentSessionId||sessionCatalog[0].id);else if(selectFirst)await createSession();
 }
-async function createSession(){ui.newSession.disabled=true;try{const data=await json('/session',{method:'POST',body:'{}'});await refreshSessions(false);void connectEvents(data.sessionId);}finally{ui.newSession.disabled=false;}}
-ui.authForm.addEventListener('submit',async event=>{event.preventDefault();token=ui.token.value.trim();setError('',true);const submit=ui.authForm.querySelector('button');submit.disabled=true;try{const capabilities=await json('/workbench');await refreshSessions(true);ui.newSession.hidden=capabilities.canCreateSessions===false;projectsUi.tree.hidden=capabilities.projects===false;ui.auth.hidden=true;if(capabilities.projects)void refreshProjects();ui.token.value='';ui.prompt.focus()}catch(error){token='';setError(error.message,true)}finally{submit.disabled=false}});
+async function createSession(project=null){ui.newSession.disabled=true;try{const data=await json('/session',{method:'POST',body:'{}'});if(project)await json('/session/'+encodeURIComponent(data.sessionId)+'/project',{method:'PUT',body:JSON.stringify({name:project})});await refreshSessions(false);if(project)await refreshProjects();void connectEvents(data.sessionId);}finally{ui.newSession.disabled=false;}}
+ui.authForm.addEventListener('submit',async event=>{event.preventDefault();token=ui.token.value.trim();setError('',true);const submit=ui.authForm.querySelector('button');submit.disabled=true;try{const capabilities=await json('/workbench');canAssignProjects=capabilities.canAssignProjects===true;canDeleteSessions=capabilities.canDeleteSessions===true;await refreshSessions(true);ui.newSession.hidden=capabilities.canCreateSessions===false;projectsUi.tree.hidden=capabilities.projects===false;ui.auth.hidden=true;if(capabilities.projects)void refreshProjects();ui.token.value='';ui.prompt.focus()}catch(error){token='';setError(error.message,true)}finally{submit.disabled=false}});
 ui.newSession.addEventListener('click',async()=>{setError('');try{await createSession()}catch(error){setError(error.message)}});
 ui.form.addEventListener('submit',async event=>{
-  event.preventDefault();const text=ui.prompt.value.trim();if(!text||!sessionId||streaming||!connected)return;
-  const id=sessionId;setError('');ui.prompt.value='';resizeComposer();setBusy(true);
-  try{await json('/session/'+encodeURIComponent(id)+'/message',{method:'POST',body:JSON.stringify({text})});}
-  catch(error){if(id===sessionId){setBusy(false);if(!ui.prompt.value)ui.prompt.value=text;else ui.prompt.value=text+'\n\n'+ui.prompt.value;resizeComposer();setError(error.message);ui.prompt.focus()}else{const view=conversationViews.get(id);if(view)view.draft=text+(view.draft?'\n\n'+view.draft:'');}}
+  event.preventDefault();const text=ui.prompt.value.trim();if((!text&&!chatAttachments().length)||!sessionId||(streaming&&!/^\/kill(?:\s|$)/.test(text))||!connected||attachmentReading.has(sessionId))return;
+  if(text.startsWith('/')&&await submitSlashCommand(text))return;
+  const id=sessionId,attachments=chatAttachments();attachmentDrafts.delete(id);renderAttachments();setError('');ui.prompt.value='';resizeComposer();setBusy(true);
+  try{await json('/session/'+encodeURIComponent(id)+'/message',{method:'POST',body:JSON.stringify({text,attachments:attachments.map(({name,data})=>({name,data}))})});}
+  catch(error){attachmentDrafts.set(id,[...attachments,...chatAttachments(id)]);if(id===sessionId){renderAttachments();setBusy(false);if(!ui.prompt.value)ui.prompt.value=text;else ui.prompt.value=text+'\n\n'+ui.prompt.value;resizeComposer();setError(error.message);ui.prompt.focus()}else{const view=conversationViews.get(id);if(view)view.draft=text+(view.draft?'\n\n'+view.draft:'');}}
 });
 ui.prompt.addEventListener('input',resizeComposer);
 ui.prompt.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();ui.form.requestSubmit()}});

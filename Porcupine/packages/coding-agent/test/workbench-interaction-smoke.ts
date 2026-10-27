@@ -142,22 +142,18 @@ try {
 			{ id: "buck", name: "buck", task: "Run the focused checks", status: "running", steps: 1, lastTool: "bash" },
 		],
 	});
-	await page.locator(".goal-activity").filter({ hasText: "Repair the workbench" }).waitFor();
-	await page.locator(".subagent-activity").filter({ hasText: "@buck" }).waitFor();
+	await page.locator("#todos-panel").filter({ hasText: "Repair the workbench" }).waitFor({ state: "attached" });
+	await page.locator(".worker").filter({ hasText: "@buck" }).waitFor({ state: "attached" });
 	assert.equal(await page.locator(".tool-activity").getByText("Done", { exact: true }).count(), 1);
-	const flow = await page.locator("#feed > *").evaluateAll((nodes) => nodes.map((node) => node.className));
-	assert.ok(
-		flow.indexOf("tool-activity") < flow.indexOf("subagent-activity"),
-		"Sub-agent activity must follow the tool that preceded it",
-	);
+	assert.equal(await page.locator("#feed .worker").count(), 0);
+	assert.equal(await page.locator(".worker details").count(), 0);
+	if (await page.locator("#todos-panel").isHidden()) await page.locator("#rail-toggle").click();
+
 	await shot("workbench-agent-workspace.png");
 	await page.locator("#stop").click();
 	await page.waitForFunction(() => document.getElementById("status-text")?.textContent === "Ready");
-	assert.equal(
-		await page.locator(".thinking-head").first().isDisabled(),
-		true,
-		"Work without supplied reasoning must not expose an empty reasoning disclosure",
-	);
+	assert.equal(await page.locator(".thinking-live").count(), 0);
+
 	emit({ type: "agent_start" });
 	emit({
 		type: "message_update",

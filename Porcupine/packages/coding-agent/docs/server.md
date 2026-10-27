@@ -100,7 +100,9 @@ immediately.
 { "text": "investigate the failing test" }
 ```
 
-Errors: `400` for empty/invalid text, `404` for a wrong session id.
+Optional `attachments` contains up to eight `{ "name": "notes.txt", "data": "<base64>" }` objects, with 12 MiB decoded bytes total. Text may be empty when files are attached (text itself is limited to 1 MiB). Files receive unique local paths under the agent directory; supported photos also become native vision input. Normal authentication, same-origin checks and tool permissions apply.
+
+Errors: `400` for invalid text or attachments, `413` for size limits, `404` for a wrong session id. Attachment submissions while the real session is busy return `409`.
 
 ### POST /session/:id/abort
 
@@ -170,3 +172,9 @@ drain eligibility the task scheduler uses; while the session is busy or
 closed, a due reminder simply waits to be delivered on a later idle tick.
 
 Reminders persist as session custom entries, so they survive `/resume`.
+
+## Browser organization and commands
+
+The authenticated workbench also exposes `GET /session/:id/commands` for the live command catalog, and `POST /session/:id/command` with `{ "text": "/usage" }` for execution. Results appear over SSE as `command_result` and replay from the session log. Terminal-only commands return an explicit explanation.
+
+`PUT /session/:id/project` with `{ "name": "project-name" }` associates a conversation with an existing canonical workspace; use `null` to ungroup. `DELETE /session/:id` removes an idle session from discovery and moves its JSONL to local trash. `DELETE /workbench/projects/:name` moves project files to local trash and leaves conversations available. These optional capabilities are advertised by `/workbench`. IDs are resolved against discovered or live sessions, never arbitrary client paths.

@@ -39,7 +39,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .starters span { font-size: 12px; font-weight: 550; }
 .starters small { color: var(--quiet); font-size: 11px; line-height: 1.5; }
 .starters button:hover { color: var(--text); background: var(--surface); border-color: var(--line); }
-.content:has(.welcome:not([hidden])) .feed-stage { flex: 0; }
+.content:has(.welcome:not([hidden])) .feed-stage { display: none; }
 .feed { padding: 32px 8px 28px; gap: 28px; scroll-behavior: auto; }
 .message { line-height: 1.8; font-size: 15px; }
 .message .label { font-size: 11px; font-weight: 550; letter-spacing: .02em; margin-bottom: 10px; }
@@ -88,22 +88,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .permission[data-resolved="true"] { background: transparent; border-color: var(--line); color: var(--muted); }
 .permission-decision { color: var(--quiet); font-size: 11px; }
 .jump-latest { position: absolute; z-index: 3; bottom: 144px; left: 50%; transform: translateX(-50%); padding: 7px 14px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 20px; font-size: 11px; box-shadow: 0 4px 16px rgb(0 0 0 / 15%); }
-/* Agent evidence is part of the conversation, in event order. */
-.goal-activity,.subagent-activity { border-left: 2px solid var(--line); padding: 0 0 0 12px; font-size: 12px; color: var(--muted); }
-.goal-activity summary,.subagent-activity summary { display: flex; gap: 12px; align-items: baseline; padding: 8px 0; cursor: pointer; list-style: none; }
-.goal-activity summary > span:first-child,.subagent-activity summary > span:first-child { min-width: 0; overflow-wrap: anywhere; }
-.goal-activity summary::before,.subagent-activity summary::before { content: '›'; color: var(--quiet); }
-.goal-activity[open] summary::before,.subagent-activity[open] summary::before { transform: rotate(90deg); }
-.goal-activity[data-state="active"],.subagent-activity[data-state="running"] { border-color: var(--accent); }
-.goal-steps { display: grid; gap: 8px; list-style: none; margin: 8px 0; padding: 0; }
-.goal-step { line-height: 1.65; }
-.activity-detail { padding: 8px 0; color: var(--quiet); white-space: pre-wrap; overflow-wrap: anywhere; }
-.activity-detail pre { white-space: pre-wrap; font: 11px/1.7 ui-monospace,monospace; }
-.goal-activity,.subagent-activity,.tool-activity { animation: workbench-enter 200ms var(--motion-ease) both; }
+.tool-activity,.worker { animation: workbench-enter 200ms var(--motion-ease) both; }
 @supports (interpolate-size: allow-keywords) {
-  .goal-activity,.subagent-activity,.tool-activity { interpolate-size: allow-keywords; }
-  :is(.goal-activity,.subagent-activity,.tool-activity)::details-content { height: 0; opacity: 0; overflow: clip; transition: height 200ms var(--motion-ease),opacity 160ms var(--motion-ease),content-visibility 200ms allow-discrete; }
-  :is(.goal-activity,.subagent-activity,.tool-activity)[open]::details-content { height: auto; opacity: 1; }
+  .tool-activity { interpolate-size: allow-keywords; }
+  :is(.tool-activity)::details-content { height: 0; opacity: 0; overflow: clip; transition: height 200ms var(--motion-ease),opacity 160ms var(--motion-ease),content-visibility 200ms allow-discrete; }
+  :is(.tool-activity)[open]::details-content { height: auto; opacity: 1; }
 }
 .model-list { display: grid; gap: 5px; max-height: 48dvh; overflow: auto; margin-top: 14px; }
 .model-row { display: grid; gap: 4px; width: 100%; text-align: left; padding: 12px; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 10px; }

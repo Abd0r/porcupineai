@@ -107,6 +107,13 @@ const emit = (event: unknown) => {
 };
 const session: ServeApiSession = {
 	id: reopened.getSessionId(),
+	getControls: () => ({
+		interactionMode: "normal",
+		reasoningMode: "medium",
+		availableReasoningModes: ["off", "medium", "high", "adaptive"],
+		busy: false,
+		model: { id: "faux", name: "Test model", provider: "faux" },
+	}),
 	sendUserMessage: async () => {},
 	abort: async () => {},
 	isStreaming: () => false,
@@ -250,18 +257,18 @@ try {
 					["message user", "thinking thinking-live"],
 					"User prompt must precede its reasoning",
 				);
-				assert.equal(await page.locator(".thinking-live .dream-thread").count(), 3);
+				assert.equal(await page.locator(".thinking-live .glyph-pulse").count(), 1);
 				assert.equal(
 					await page
-						.locator(".thinking-live .dream-thread")
+						.locator(".thinking-live .glyph-pulse")
 						.first()
 						.evaluate((node) => getComputedStyle(node).animationName),
-					"dreaming-flow",
+					"glyph-blink",
 				);
 				await page.emulateMedia({ reducedMotion: "reduce" });
 				assert.equal(
 					await page
-						.locator(".thinking-live .dream-thread")
+						.locator(".thinking-live .glyph-pulse")
 						.first()
 						.evaluate((node) => getComputedStyle(node).animationName),
 					"none",
@@ -284,7 +291,7 @@ try {
 				assert.equal(await page.locator(".message.assistant").last().locator("math mtable").count(), 2);
 				assert.equal(
 					await page
-						.locator(".dream-thread")
+						.locator(".glyph-pulse")
 						.last()
 						.evaluate((node) => getComputedStyle(node).animationName),
 					"none",

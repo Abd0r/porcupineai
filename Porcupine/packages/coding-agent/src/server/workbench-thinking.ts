@@ -46,7 +46,7 @@ function createThinkingRow(){
   return {wrap,head,glyph,label,body,caret,startedAt:Date.now()};
 }
 function startThinking(row){row.startedAt=Date.now();row.glyph.replaceChildren(thinkingGlyph());row.wrap.classList.add('thinking-live');}
-function setReasoningText(row,text){const first=!row.hasReasoning;row.hasReasoning=Boolean(text.trim());row.reasoningText=text;renderRichText(row.body,text);row.head.disabled=!row.hasReasoning;row.caret.hidden=row.head.disabled;if(first&&row.hasReasoning&&appearancePreferences.showReasoning){row.head.setAttribute('aria-expanded','true');row.body.hidden=false;}scrollFeed();}
+function setReasoningText(row,text){const first=!row.hasReasoning;row.hasReasoning=Boolean(text.trim());row.reasoningText=text;renderRichText(row.body,text);row.head.disabled=!row.hasReasoning;row.caret.hidden=row.head.disabled;if(first&&row.hasReasoning){row.glyph.replaceChildren(activityGlyph('reasoning'));if(appearancePreferences.showReasoning){row.head.setAttribute('aria-expanded','true');row.body.hidden=false;}}scrollFeed();}
 function stopThinking(row,seconds){
   row.wrap.classList.remove('thinking-live');
   const elapsed=Math.max(1,Math.round(seconds||((Date.now()-row.startedAt)/1000)));

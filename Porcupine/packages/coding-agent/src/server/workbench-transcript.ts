@@ -10,8 +10,12 @@ interface SourceMessage {
 	customType?: string;
 	details?: unknown;
 }
-type ReplayContent = { type: "text"; text: string } | { type: "thinking"; thinking: string };
+type ReplayContent =
+	| { type: "image"; data: string; mimeType: string }
+	| { type: "text"; text: string }
+	| { type: "thinking"; thinking: string };
 export type WorkbenchReplayEvent =
+	| { type: "command_result"; command: string; text: string }
 	| {
 			type: "message_end";
 			message: {
@@ -28,7 +32,13 @@ export type WorkbenchReplayEvent =
 			toolName: string;
 			result: {
 				content: Array<{ type: "text"; text: string }>;
-				details?: { visualization?: unknown; diff?: string; patch?: string; firstChangedLine?: number };
+				details?: {
+					visualization?: unknown;
+					plan?: unknown;
+					diff?: string;
+					patch?: string;
+					firstChangedLine?: number;
+				};
 			};
 			isError: boolean;
 	  };
@@ -49,6 +59,19 @@ export function serializeWorkbenchHistory(entries: readonly SessionEntry[]): Wor
 	const messages: SourceMessage[] = [];
 	for (const entry of entries) {
 		if (entry.type === "message") messages.push(entry.message);
+		if (
+			entry.type === "custom" &&
+			entry.customType === "workbench.command" &&
+			record(entry.data) &&
+			typeof entry.data.command === "string" &&
+			typeof entry.data.text === "string"
+		)
+			messages.push({
+				role: "custom",
+				customType: "workbench.command",
+				content: entry.data.text,
+				details: { command: entry.data.command },
+			});
 		if (entry.type === "custom_message")
 			messages.push({
 				role: "custom",
@@ -92,10 +115,31 @@ export function serializeWorkbenchTimeline(messages: readonly SourceMessage[]): 
 					}
 				}
 				flush();
+			} else if (message.role === "user" && Array.isArray(message.content)) {
+				const parts: ReplayContent[] = [];
+				for (const part of message.content) {
+					if (!record(part)) continue;
+					if (part.type === "text" && typeof part.text === "string") parts.push({ type: "text", text: part.text });
+					if (
+						part.type === "image" &&
+						typeof part.data === "string" &&
+						typeof part.mimeType === "string" &&
+						["image/png", "image/jpeg", "image/webp", "image/gif"].includes(part.mimeType)
+					)
+						parts.push({ type: "image", data: part.data, mimeType: part.mimeType });
+				}
+				if (parts.length) events.push({ type: "message_end", message: { role: "user", content: parts } });
 			} else if (content) events.push({ type: "message_end", message: { role: message.role, content } });
 		} else if (message.role === "toolResult" && message.toolCallId && message.toolName) {
-			const details: { visualization?: unknown; diff?: string; patch?: string; firstChangedLine?: number } = {};
+			const details: {
+				visualization?: unknown;
+				plan?: unknown;
+				diff?: string;
+				patch?: string;
+				firstChangedLine?: number;
+			} = {};
 			if (record(message.details)) {
+				if (message.toolName === "plan" && "plan" in message.details) details.plan = message.details.plan;
 				if (message.details.visualization) details.visualization = message.details.visualization;
 				if (typeof message.details.diff === "string") details.diff = message.details.diff;
 				if (typeof message.details.patch === "string") details.patch = message.details.patch;
@@ -112,6 +156,13 @@ export function serializeWorkbenchTimeline(messages: readonly SourceMessage[]): 
 				},
 				isError: Boolean(message.isError),
 			});
+		} else if (
+			message.role === "custom" &&
+			message.customType === "workbench.command" &&
+			record(message.details) &&
+			typeof message.details.command === "string"
+		) {
+			events.push({ type: "command_result", command: message.details.command, text: content });
 		} else if (message.role === "custom" && message.customType?.startsWith("subagent")) {
 			const details: Record<string, unknown> = {};
 			if (record(message.details))

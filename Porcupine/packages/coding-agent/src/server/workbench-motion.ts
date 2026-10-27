@@ -4,7 +4,6 @@ export const WORKBENCH_MOTION_STYLES = `
 body, .sidebar, .composer-wrap { transition: background-color var(--motion-normal) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease); }
 button, select, summary { transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease); }
 .message, .visualization-card, .permission { animation: workbench-enter var(--motion-normal) var(--motion-ease) both; }
-.chat-backdrop { transition: opacity var(--motion-normal) var(--motion-ease); }
 .settings-dialog { opacity: 1; transform: translateY(0); transition: opacity var(--motion-normal) var(--motion-ease), transform var(--motion-normal) var(--motion-ease); }
 .settings-heading { position: sticky; top: 0; z-index: 2; background: var(--bg); }
 @starting-style { .settings-dialog[open] { opacity: 0; transform: translateY(var(--motion-distance)); } }

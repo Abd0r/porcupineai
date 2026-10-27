@@ -36,6 +36,19 @@ class FakeCanvasContext {
 class FakeElement {
 	readonly dataset: Record<string, string> = {};
 	readonly children: FakeElement[] = [];
+	parentNode?: FakeElement;
+	remove(): void {
+		if (this.parentNode) {
+			const siblings = this.parentNode.children;
+			siblings.splice(siblings.indexOf(this), 1);
+			this.parentNode = undefined;
+		}
+	}
+	insertBefore(item: FakeElement, before: FakeElement): void {
+		item.remove();
+		item.parentNode = this;
+		this.children.splice(this.children.indexOf(before), 0, item);
+	}
 	readonly attributes = new Map<string, string>();
 	readonly listeners = new Set<string>();
 	readonly classes = new Set<string>();
@@ -89,9 +102,11 @@ class FakeElement {
 		this.listeners.add(type);
 	}
 	append(...items: FakeElement[]): void {
+		for (const item of items) item.parentNode = this;
 		this.children.push(...items);
 	}
 	appendChild(item: FakeElement): FakeElement {
+		item.parentNode = this;
 		this.children.push(item);
 		return item;
 	}
@@ -121,6 +136,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	render(scene: unknown): void;
 	event(event: unknown): void;
 	feed: FakeElement;
+	elements: Map<string, FakeElement>;
 	canvasContext: FakeCanvasContext;
 	rich(node: FakeElement, text: string): FakeElement;
 	connect(id: string): Promise<void>;
@@ -140,6 +156,10 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"feed",
 		"welcome",
 		"prompt-form",
+		"command-menu",
+		"chat-files",
+		"attach-files",
+		"chat-attachments",
 		"prompt",
 		"send",
 		"stop",
@@ -178,6 +198,10 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"goal-empty",
 		"session-controls",
 		"reasoning-mode",
+		"reasoning-icon",
+		"autonomy-icon",
+		"reasoning-control",
+		"autonomy-control",
 		"autonomy-mode",
 		"session-model",
 		"stacks-tree",
@@ -198,6 +222,13 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"project-new",
 		"project-dialog",
 		"project-title",
+		"project-delete",
+		"project-conversation",
+		"conversation-menu",
+		"conversation-menu-title",
+		"conversation-project",
+		"conversation-delete",
+		"conversation-action-error",
 		"project-summary",
 		"project-files",
 		"project-preview",
@@ -227,6 +258,16 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"agent-inspector",
 		"inspector-toggle",
 		"history-notice",
+		"work-rail",
+		"rail-toggle",
+		"todos-panel",
+		"todos-objective",
+		"todos-goal",
+		"todos-count",
+		"todos-list",
+		"workers-panel",
+		"workers-count",
+		"workers-list",
 	]) {
 		elements.set(id, new FakeElement("div", canvasContext));
 	}
@@ -312,12 +353,12 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	};
 	const connect = runInNewContext("globalThis.__connect", sandbox) as (id: string) => Promise<void>;
 	const text = runInNewContext("globalThis.__text", sandbox) as (value: unknown) => string;
-	return { render, event, rich, feed, canvasContext, connect, text, mathCalls };
+	return { render, event, rich, feed, elements, canvasContext, connect, text, mathCalls };
 }
 
 describe("workbench transport regressions", () => {
 	it("keeps sub-agent tools internal and updates one task row without tool chatter", () => {
-		const { event, feed } = loadRenderer();
+		const { event, feed, elements } = loadRenderer();
 		const run = {
 			id: "worker",
 			name: "buck",
@@ -332,12 +373,15 @@ describe("workbench transport regressions", () => {
 			type: "subagents",
 			runs: [{ ...run, steps: 2, lastTool: "read", lastToolArgs: { path: "internal-file-marker" } }],
 		});
-		expect(feed.children.filter((node) => node.className === "subagent-activity")).toHaveLength(1);
-		expect(feed.textContent).toContain("Verify the change");
-		expect(feed.textContent).not.toMatch(/internal-command-marker|internal-file-marker|Running a command|Reading/);
+		expect(feed.children).toHaveLength(0);
+		const workers = elements.get("workers-list")!;
+		expect(workers.children).toHaveLength(1);
+		expect(workers.children[0]?.tagName).toBe("section");
+		expect(workers.textContent).toContain("Verify the change");
+		expect(workers.textContent).not.toMatch(/internal-command-marker|internal-file-marker|Running a command|Reading/);
 	});
-	it("keeps tools, goals, sub-agents and the answer in the conversation event order", () => {
-		const { event, feed } = loadRenderer();
+	it("keeps main activity in order and puts goals and workers in the overview", () => {
+		const { event, feed, elements } = loadRenderer();
 		event({ type: "message_end", message: { role: "user", content: "Fix this" } });
 		event({ type: "tool_execution_start", toolCallId: "read-1", toolName: "read", args: { path: "AGENTS.md" } });
 		event({
@@ -354,10 +398,11 @@ describe("workbench transport regressions", () => {
 		expect(feed.children.filter((node) => node.className !== "thinking").map((node) => node.className)).toEqual([
 			"message user",
 			"tool-activity",
-			"goal-activity",
-			"subagent-activity",
 			"message assistant",
 		]);
+		expect(elements.get("todos-objective")?.textContent).toBe("Fix this");
+		expect(elements.get("todos-list")?.textContent).toContain("Verify");
+		expect(elements.get("workers-list")?.textContent).toContain("Verify the fix");
 	});
 	it("renders real SSE frames split across network chunks", async () => {
 		const wire = `data: ${JSON.stringify({ type: "message_end", message: { role: "user", content: "Real event" } })}\n\n`;
@@ -647,26 +692,30 @@ describe("inline thinking state", () => {
 		const label = () => descendants(row).find((child) => child.className === "thinking-label")?.textContent;
 		expect(label()).toBe("Working…");
 
-		event({ type: "tool_execution_start", toolName: "web_search" });
-		expect(label()).toBe("Searching the web");
-
-		event({ type: "tool_execution_start", toolName: "read" });
-		expect(label()).toBe("Reading");
-
-		event({ type: "tool_execution_start", toolName: "bash" });
-		expect(label()).toBe("Running a command");
-
-		event({ type: "tool_execution_start", toolName: "some_new_tool" });
-		expect(label()).toBe("Using some_new_tool");
+		event({
+			type: "message_update",
+			message: {
+				role: "assistant",
+				content: [{ type: "thinking", thinking: "I should compare the three readings." }],
+			},
+		});
+		for (const [toolName, args, kind, summary] of [
+			["web_search", { query: "Qubits" }, "web", "Searching Qubits"],
+			["read", { path: "USER.md" }, "reading", "Reading USER.md"],
+			["bash", { command: "npm run check" }, "terminal", "Running checks"],
+			["edit", { path: "Quatrix.ts" }, "editing", "Editing Quatrix.ts"],
+			["write", { path: "plan.md" }, "writing", "Writing plan.md"],
+		] as const) {
+			event({ type: "tool_execution_start", toolName, args });
+			expect(feed.lastChild?.dataset.kind).toBe(kind);
+			expect(feed.lastChild?.children[0]?.textContent).toContain(summary);
+		}
 
 		event({
 			type: "message_end",
 			message: {
 				role: "assistant",
-				content: [
-					{ type: "thinking", thinking: "I should compare the three readings." },
-					{ type: "text", text: "Compared." },
-				],
+				content: [{ type: "text", text: "Compared." }],
 			},
 		});
 		expect(label()).toMatch(/^Thought for \d+ seconds?$/);

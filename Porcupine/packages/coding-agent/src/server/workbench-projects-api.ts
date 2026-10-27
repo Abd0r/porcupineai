@@ -25,6 +25,7 @@ interface ProjectRouter {
 	readBody(req: IncomingMessage): Promise<string>;
 	json(res: ServerResponse, status: number, body: unknown): void;
 	projects: WorkbenchProjectStore;
+	deleteProject?: (name: string) => Promise<void>;
 }
 
 /** Local project workspace routes. Project names and file paths are validated by the store. */
@@ -76,8 +77,14 @@ export async function handleProjectRequest(
 		throw new WorkbenchError(400, "Malformed project name");
 	}
 	if (match[2] === undefined) {
+		if (method === "DELETE") {
+			if (router.deleteProject) await router.deleteProject(name);
+			else router.projects.remove(name);
+			router.json(res, 200, { ok: true });
+			return true;
+		}
 		if (method !== "GET") {
-			res.setHeader("allow", "GET");
+			res.setHeader("allow", "GET, DELETE");
 			router.json(res, 405, { error: "Method not allowed" });
 			return true;
 		}

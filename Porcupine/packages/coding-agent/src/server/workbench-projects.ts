@@ -1,5 +1,16 @@
-import { lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import {
+	lstatSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	realpathSync,
+	renameSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
+import { discoverProjects } from "../porcupine/project-search.ts";
 import { WorkbenchError } from "./workbench-context-files.ts";
 
 const TEXT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".csv", ".json", ".yaml", ".yml", ".toml", ".log"]);
@@ -14,6 +25,7 @@ export interface ProjectSummary {
 	name: string;
 	title: string;
 	state: string;
+	statusSummary?: string;
 	files: number;
 	updatedAt: string;
 }
@@ -39,7 +51,7 @@ function slug(value: string): string {
 	return normalized;
 }
 
-/** Canonical Project/<name>/ workspaces only. Creates and adds files; never deletes. */
+/** Canonical Project/<name>/ workspaces, shared with the agent project index. */
 export class WorkbenchProjectStore {
 	private readonly cwd: string;
 	private readonly root: string;
@@ -48,7 +60,8 @@ export class WorkbenchProjectStore {
 		this.root = join(this.cwd, "Project");
 	}
 	private projectPath(name: string): string {
-		if (!SAFE_NAME.test(name)) throw new WorkbenchError(400, "Invalid project name");
+		if (!name.trim() || name.startsWith(".") || /[\\/\x00-\x1f]/.test(name) || Buffer.byteLength(name) > 240)
+			throw new WorkbenchError(400, "Invalid project name");
 		const directory = join(this.root, name);
 		const parent = resolve(directory, "..");
 		if (parent !== this.root && !parent.startsWith(`${this.root}${sep}`))
@@ -83,43 +96,51 @@ export class WorkbenchProjectStore {
 		}
 	}
 	list(): ProjectSummary[] {
-		let entries: string[];
+		return discoverProjects(this.cwd)
+			.filter((project) => !project.name.startsWith("."))
+			.flatMap((project) => {
+				try {
+					const directory = this.projectPath(project.name),
+						files: ProjectFile[] = [];
+					this.walk(directory, files);
+					return [
+						{
+							name: project.name,
+							title: project.title,
+							state: project.state || "unknown",
+							statusSummary: project.statusSummary,
+							files: files.length,
+							updatedAt:
+								files
+									.map((file) => file.updatedAt)
+									.sort()
+									.at(-1) || "",
+						},
+					];
+				} catch {
+					return [];
+				}
+			});
+	}
+	path(name: string): string {
+		return this.projectPath(name);
+	}
+	nameForPath(path: string | null): string | null {
+		if (!path || resolve(path, "..") !== this.root) return null;
 		try {
-			entries = readdirSync(this.root, { withFileTypes: true })
-				.filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && SAFE_NAME.test(entry.name))
-				.map((entry) => entry.name);
+			return basename(this.projectPath(basename(path)));
 		} catch {
-			return [];
+			return null;
 		}
-		const projects: ProjectSummary[] = [];
-		for (const name of entries.sort()) {
-			const directory = this.projectPath(name);
-			const files: ProjectFile[] = [];
-			this.walk(directory, files);
-			let state = "unknown";
-			let title = name;
-			try {
-				const status = readFileSync(join(directory, "STATUS.md"), "utf8");
-				state =
-					/^##\s+State\s*$[\s\S]{0,120}?`?(planning|active|blocked|paused|complete)`?/im
-						.exec(status)?.[1]
-						?.toLowerCase() ?? "unstated";
-			} catch {
-				// No status document yet.
-			}
-			try {
-				title = /^#\s+(.+)$/m.exec(readFileSync(join(directory, "README.md"), "utf8"))?.[1]?.trim() || name;
-			} catch {
-				// No readme yet.
-			}
-			const updatedAt =
-				files
-					.map((file) => file.updatedAt)
-					.sort()
-					.at(-1) ?? "";
-			projects.push({ name, title, state, files: files.length, updatedAt });
-		}
-		return projects;
+	}
+	remove(name: string): { trashPath: string } {
+		const directory = this.projectPath(name),
+			trash = join(this.cwd, ".porcupine-trash", "projects");
+		mkdirSync(trash, { recursive: true, mode: 0o700 });
+		if (realpathSync(trash) !== trash) throw new WorkbenchError(403, "Refusing an aliased trash directory");
+		const trashPath = join(trash, `${randomUUID()}-${name}`);
+		renameSync(directory, trashPath);
+		return { trashPath };
 	}
 	create(name: string, title?: string): ProjectSummary {
 		const project = slug(name);

@@ -71,55 +71,14 @@ try {
 				});
 		}
 	}
-	const image = await page.evaluate(() => {
-		const canvas = document.createElement("canvas");
-		canvas.width = 64;
-		canvas.height = 64;
-		const ctx = canvas.getContext("2d");
-		if (!ctx) throw new Error("No canvas");
-		ctx.fillStyle = "#668899";
-		ctx.fillRect(0, 0, 64, 64);
-		return canvas.toDataURL("image/png").split(",")[1];
-	});
-	await page
-		.locator("#appearance-image")
-		.setInputFiles({ name: "background.png", mimeType: "image/png", buffer: Buffer.from(image, "base64") });
-	await page.waitForFunction(() => document.getElementById("chat-backdrop")?.style.backgroundImage.includes("blob:"));
-	await page.locator("#appearance-opacity").fill("35");
-	await page.locator("#appearance-opacity").dispatchEvent("input");
-	assert.equal(await page.locator("#appearance-opacity-value").innerText(), "35%");
-	await page.waitForFunction(() => getComputedStyle(document.getElementById("chat-backdrop")!).opacity === "0.35");
-	await page.waitForFunction(async () => {
-		const db = await new Promise<IDBDatabase>((resolve, reject) => {
-			const req = indexedDB.open("porcupine-workbench", 1);
-			req.onsuccess = () => resolve(req.result);
-			req.onerror = () => reject(req.error);
-		});
-		try {
-			return await new Promise<boolean>((resolve) => {
-				const req = db.transaction("appearance").objectStore("appearance").get("background");
-				req.onsuccess = () => resolve(req.result instanceof Blob);
-			});
-		} finally {
-			db.close();
-		}
-	});
+	assert.equal(await page.locator("#appearance-image").count(), 0);
+	assert.equal(await page.locator("#chat-backdrop").count(), 0);
+	await page.getByRole("switch", { name: "Always show reasoning", exact: false }).check();
 	const restored = await context.newPage();
 	await restored.goto(`http://127.0.0.1:${api.port()}`);
-	await restored.waitForFunction(() =>
-		document.getElementById("chat-backdrop")?.style.backgroundImage.includes("blob:"),
-	);
 	assert.equal(await restored.locator("html").getAttribute("data-theme"), "tokyo-night");
-	assert.equal(await restored.locator("#appearance-opacity-value").innerText(), "35%");
+	assert.equal(await restored.locator("#appearance-reasoning").isChecked(), true);
 	await restored.close();
-	await page.locator("#appearance-image").setInputFiles({
-		name: "unsafe.svg",
-		mimeType: "image/svg+xml",
-		buffer: Buffer.from("<svg><script>alert(1)</script></svg>"),
-	});
-	await page.getByRole("alert").filter({ hasText: "Only PNG" }).waitFor();
-	await page.locator("#appearance-remove").click();
-	assert.equal(await page.locator("#chat-backdrop").evaluate((element) => element.style.backgroundImage), "");
 	await page.locator("#appearance-theme").selectOption("workbench");
 	await page.locator("#appearance-mode").selectOption("dark");
 	await page.getByRole("tab", { name: "Context", exact: true }).click();
@@ -159,7 +118,7 @@ try {
 	assert.equal(await page.getByRole("dialog", { name: "Settings", exact: true }).isVisible(), false);
 	assert.deepEqual(errors, []);
 	console.log(
-		"PASS paper-plane send, 5 themes × light/dark, local image upload/opacity/persistence, SVG rejection, remove and dialog controls",
+		"PASS paper-plane send, 5 themes × light/dark, reasoning preference persistence, no custom backgrounds, context editing and dialog controls",
 	);
 } finally {
 	await browser.close();

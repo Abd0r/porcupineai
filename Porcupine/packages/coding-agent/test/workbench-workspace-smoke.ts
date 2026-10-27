@@ -114,6 +114,22 @@ try {
 	await page.locator("#autonomy-mode").selectOption("ask");
 	await page.waitForFunction(() => document.querySelector<HTMLSelectElement>("#autonomy-mode")?.value === "ask");
 	assert.equal(controls.interactionMode, "ask");
+	for (const mode of ["ask", "normal", "auto"]) {
+		await page.locator("#autonomy-mode").selectOption(mode);
+		await page.waitForFunction((mode) => document.getElementById("autonomy-control")?.dataset.mode === mode, mode);
+		assert.equal(controls.interactionMode, mode);
+		assert.equal(await page.locator("#autonomy-icon svg path").count(), 1);
+		assert.match((await page.locator("#autonomy-control").getAttribute("title")) || "", new RegExp(mode, "i"));
+	}
+	for (const level of ["off", "low", "high", "adaptive"]) {
+		await page.locator("#reasoning-mode").selectOption(level);
+		await page.waitForFunction(
+			(level) => document.getElementById("reasoning-control")?.dataset.mode === level,
+			level,
+		);
+		assert.equal(controls.reasoningMode, level);
+		assert.equal(await page.locator("#reasoning-icon svg").getAttribute("data-level"), level);
+	}
 
 	// Stacks: live skills and tools with source inspection.
 	await page.locator("#stacks-tree > summary").click();
