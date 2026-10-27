@@ -1,7 +1,9 @@
+import { validateToolArguments } from "@porcupineai/ai";
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 import type { ToolDefinition } from "../extensions/types.ts";
 import { adaptiveIssue, adaptiveSchemas } from "./adaptive-schema.ts";
+import { prepareDiagramInput } from "./diagram-input.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 import { prepareVisualArguments } from "./visual-arguments.ts";
 
@@ -91,6 +93,7 @@ export function createVisualizeToolDefinition(): ToolDefinition<typeof schema, V
 			"Create an interactive workspace: form, editable table, simulation, linked graph, timeline, weighted comparison, flashcards, evidence, progress, code comparison, motion graphics, question, quiz, 2D diagram or chart. Supply declarative data; users send selections and edits back as session messages. Reuse componentId for updates. For spatial 3D use visualize_3d.",
 		promptSnippet: "Explain with 2D diagrams or data-backed charts, including units and uncertainty",
 		promptGuidelines: [
+			"For diagrams prefer canonical primitives: {type:'rectangle',position:[0,0],size:[4,2],color:'#4a90d9',label:'Function'}. Compact boxes with id,x,y,w,h,fill and arrows using node IDs are also accepted; x/y denote centers. Supply a concise title. Do not guess other renderer APIs.",
 			"Evidence URLs and confidence are supplied claims, not automatic source verification. Progress must reflect observed runtime evidence; never mark work verified without checks. Code Request apply sends a user request for normal tools and permission policy; the card itself does not write files. Flashcard review and all other workspace state become durable session history when the user presses Send to agent.",
 			"Interactive workspaces: form collects typed fields; table supports editing/filtering/selection; graph expands node details; timeline steps through explanations; comparison weights supplied scores; flashcards schedules review; evidence links claims to sources; progress displays evidence and decisions; code compares text; motion animates bounded keyframes. simulation supports linear (slope/intercept), projectile (speed/angle/gravity) and oscillator (amplitude/frequency). Use those exact parameter names. State units and assumptions. These are illustrative calculators, not general scientific solvers. Finish your turn for user interaction.",
 			"For a scored quiz use kind quiz with 1–6 questions. Each question needs options, zero-based correctAnswers and an explanation; hint is optional. Multiple correctAnswers enable multiple selection. Answers and explanations are shown only after submission; finish your turn to let the user respond.",
@@ -101,7 +104,25 @@ export function createVisualizeToolDefinition(): ToolDefinition<typeof schema, V
 			"No HTML, executable expressions, scripts, URLs, meshes or assets. Max 80 diagram objects, 8 chart series and 200 points per series. Existing visualize_3d handles spatial explanations.",
 		],
 		parameters: schema,
-		prepareArguments: (input) => prepareVisualArguments(input) as VisualParameters,
+		prepareArguments: (input) => {
+			const args = prepareDiagramInput(prepareVisualArguments(input));
+			if (args && typeof args === "object" && "kind" in args) {
+				const selected = schema.anyOf.find((member) => member.properties.kind.const === args.kind);
+				if (!selected)
+					throw new Error(
+						`visualize: unsupported kind. Choose ${schema.anyOf.map((member) => member.properties.kind.const).join(", ")}`,
+					);
+				return validateToolArguments(
+					{
+						name: `visualize ${String(args.kind)}`,
+						description: "Validate selected visual kind",
+						parameters: selected,
+					},
+					{ type: "toolCall", id: "visual-prepare", name: "visualize", arguments: args },
+				) as VisualParameters;
+			}
+			return args as VisualParameters;
+		},
 		async execute(_id, params) {
 			if (!Value.Check(schema, params)) throw new Error("Invalid or unsupported visualization");
 			if (

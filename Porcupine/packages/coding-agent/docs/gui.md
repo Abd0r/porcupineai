@@ -20,6 +20,8 @@ The interface uses an open conversation column, neutral surfaces, compact contro
 
 ## Visual explanations
 
+Diagram preparation accepts both canonical primitives and compact node notation. A compact box uses `id`, `type: "box"`, centre coordinates `x`/`y`, dimensions `w`/`h`, `label` and `fill`. Arrows can reference existing node IDs with `from`/`to`; preparation converts these to boundary coordinates and supplies a neutral line colour when omitted. A missing diagram title is derived from the description or defaults to "2D diagram". Duplicate IDs, unresolved connections, unknown fields and invalid bounds are rejected. Validation reports the selected visual kind, rather than errors for unrelated workspaces. Multiline labels render on separate lines; smaller screens can scroll the readable diagram viewport.
+
 ### Interactive workspaces
 
 The following `visualize` kinds extend the same component identity and session replay flow. Users can inspect and change a workspace locally, then press **Send to agent** to persist that state in conversation history and ask the agent to continue. Unsubmitted changes are not saved across reloads. Updating a component with changed content starts a new revision.

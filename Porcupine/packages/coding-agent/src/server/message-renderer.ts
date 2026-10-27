@@ -9,6 +9,9 @@
  */
 
 export const RICH_TEXT_STYLES = `
+.diagram-viewport { max-width: 100%; overflow: auto; border-radius: var(--r1); }
+.diagram-canvas { min-width: 640px; height: 480px !important; }
+.diagram-hint { color: var(--quiet); font-size: var(--small); }
 .interactive-visual > button, .interactive-visual form > button, .adaptive-body button { font: inherit; font-size: var(--small); border: 1px solid var(--line); border-radius: var(--r1); padding: var(--s2) var(--s3); background: var(--surface); color: var(--text); cursor: pointer; transition: background .15s ease; }
 .interactive-visual button:hover { background: var(--line-soft); }
 .interactive-visual button:disabled { opacity: .5; cursor: default; }

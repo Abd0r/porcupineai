@@ -5,6 +5,7 @@ import { chromium } from "playwright";
 import { createVisualizeToolDefinition, type VisualParameters } from "../src/core/tools/visualize.ts";
 import { createVisualize3DToolDefinition, type VisualizationParameters } from "../src/core/tools/visualize-3d.ts";
 import { startServeApi } from "../src/server/http-api.ts";
+import { calculusDiagram } from "./calculus-diagram-fixture.ts";
 
 // Run with tsx. Requires Playwright's Chromium; screenshots are opt-in to an existing directory.
 const screenshots = process.env.WORKBENCH_QA_SCREENSHOTS;
@@ -190,6 +191,21 @@ try {
 		console.log(
 			`PASS viewport ${width} no horizontal page overflow; five visual cards, full data tables and follow-up prompt`,
 		);
+	}
+	const tool = createVisualizeToolDefinition();
+	const prepared = tool.prepareArguments!(calculusDiagram);
+	const calculus = await tool.execute("calculus", prepared, undefined, undefined, undefined as never);
+	for (const listener of listeners)
+		listener({ type: "tool_execution_end", toolCallId: "calculus", toolName: "visualize", result: calculus });
+	const calculusCard = page.locator('[data-component-id="calculus"]');
+	await calculusCard.waitFor();
+	await calculusCard.getByText("Diagram contents", { exact: true }).click();
+	assert.equal(await calculusCard.locator("li").count(), 8);
+	for (const width of [1280, 390]) {
+		await page.setViewportSize({ width, height: 960 });
+		await calculusCard.scrollIntoViewIfNeeded();
+		assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+		await calculusCard.screenshot({ path: `/tmp/porcupine-calculus-${width}.png` });
 	}
 	assert.deepEqual(errors, []);
 	console.log("PASS browser diagnostics: no console errors, page errors or failed requests");
