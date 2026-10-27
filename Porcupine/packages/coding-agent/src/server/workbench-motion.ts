@@ -12,6 +12,19 @@ button, select, summary { transition: color var(--motion-fast) var(--motion-ease
 .message, .visualization-card, .permission { animation-delay: var(--enter-delay, 0ms); }
 @keyframes workbench-breathe { 0%, 100% { opacity: .45; transform: scale(.85); } 50% { opacity: 1; transform: scale(1.15); } }
 .message.assistant .label { color: var(--quiet); letter-spacing: .02em; }
+.brand-symbol path { stroke-dasharray: 80; stroke-dashoffset: 0; animation: workbench-ink 900ms var(--motion-ease) both; }
+.brand-symbol path + path { animation-delay: 120ms; transform-origin: 16px 16px; transition: transform 240ms var(--motion-ease); }
+.brand:hover .brand-symbol path + path { transform: translateY(-1px); }
+.activity-glyph { flex: 0 0 18px; display: inline-grid; place-items: center; color: var(--quiet); }
+.activity-glyph svg { width: 18px; height: 18px; overflow: visible; }
+.tool-activity[data-state="running"] .activity-glyph { color: var(--accent); }
+.tool-activity[data-state="running"] .motion-orbit { transform-origin: 12px 12px; animation: thinking-orbit 2.4s linear infinite; }
+.tool-activity[data-state="running"] .motion-core { transform-origin: 12px 12px; animation: thinking-core 1.8s ease-in-out infinite; }
+.tool-activity[data-state="running"] .motion-trace { stroke-dasharray: 12 28; animation: thinking-trace 1.8s ease-in-out infinite alternate; }
+.tool-activity[data-state="done"] .activity-glyph path { stroke-dasharray: 30; animation: workbench-ink 320ms var(--motion-ease) both; }
+.tool-activity[data-state="failed"] .activity-glyph { color: var(--danger); }
+.restored .activity-glyph * { animation: none !important; }
+@keyframes workbench-ink { from { stroke-dashoffset: 80; opacity: 0; } to { stroke-dashoffset: 0; opacity: 1; } }
 .settings-section h3 + p, .settings-note { text-wrap: pretty; }
 ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 @media (prefers-reduced-motion: reduce) {

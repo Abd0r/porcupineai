@@ -16,7 +16,9 @@ describe("surface-aware context", () => {
 		expect(block).toContain("browser workbench");
 		expect(block).toContain("visualize_3d");
 		expect(block).toContain("accessible data table");
-		expect(block).toContain("do not assume typeset LaTeX");
+		expect(block).toContain("MathML");
+		expect(block).toContain("chronological conversation");
+		expect(block).not.toContain("sidebar shows your tracked goal");
 		expect(block).toContain("None of these change your permissions");
 	});
 

@@ -48,7 +48,8 @@ export class WorkbenchProjectStore {
 		this.root = join(this.cwd, "Project");
 	}
 	private projectPath(name: string): string {
-		const directory = join(this.root, slug(name));
+		if (!SAFE_NAME.test(name)) throw new WorkbenchError(400, "Invalid project name");
+		const directory = join(this.root, name);
 		const parent = resolve(directory, "..");
 		if (parent !== this.root && !parent.startsWith(`${this.root}${sep}`))
 			throw new WorkbenchError(403, "Outside the Project workspace");
@@ -85,14 +86,14 @@ export class WorkbenchProjectStore {
 		let entries: string[];
 		try {
 			entries = readdirSync(this.root, { withFileTypes: true })
-				.filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && SLUG.test(entry.name))
+				.filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && SAFE_NAME.test(entry.name))
 				.map((entry) => entry.name);
 		} catch {
 			return [];
 		}
 		const projects: ProjectSummary[] = [];
 		for (const name of entries.sort()) {
-			const directory = join(this.root, name);
+			const directory = this.projectPath(name);
 			const files: ProjectFile[] = [];
 			this.walk(directory, files);
 			let state = "unknown";
@@ -154,6 +155,7 @@ export class WorkbenchProjectStore {
 		const directory = this.projectPath(name);
 		const target = resolve(directory, path);
 		if (!target.startsWith(`${directory}${sep}`)) throw new WorkbenchError(403, "Outside the project workspace");
+		if (realpathSync(target) !== target) throw new WorkbenchError(403, "Refusing an aliased project file");
 		const stat = lstatSync(target);
 		if (stat.isSymbolicLink() || !stat.isFile())
 			throw new WorkbenchError(403, "Only regular project files can be opened");
@@ -194,6 +196,7 @@ export class WorkbenchProjectStore {
 		const directory = this.projectPath(name);
 		const uploads = join(directory, "uploads");
 		mkdirSync(uploads, { recursive: true, mode: 0o700 });
+		if (realpathSync(uploads) !== uploads) throw new WorkbenchError(403, "Refusing an aliased upload directory");
 		const stem = trimmed.slice(0, -extension.length).slice(0, 80);
 		for (let copy = 1; copy < 100; copy += 1) {
 			const candidate = join(uploads, copy === 1 ? trimmed : `${stem}-${copy}${extension}`);

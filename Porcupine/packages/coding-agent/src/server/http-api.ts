@@ -80,7 +80,11 @@ export interface ServeApiOptions {
 	/** Pre-provisioned independent sessions (multi-session mode). */
 	sessions?: readonly ServeApiSession[];
 	/** Factory used by POST /session to mint a new session by optional id. */
-	createSession?: (id?: string) => ServeApiSession;
+	createSession?: (id?: string) => ServeApiSession | Promise<ServeApiSession>;
+	/** Discover persisted conversations without starting an agent for each one. */
+	listSessions?: () => Promise<Array<{ id: string; name?: string }>>;
+	/** Resume only a discovered id; never accept a client-supplied filesystem path. */
+	openSession?: (id: string) => Promise<ServeApiSession>;
 	port?: number;
 	host?: string;
 	/** Optional bearer token. When set, every request must carry it. */
@@ -166,6 +170,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 	const { session, sessions, createSession, token, version } = options;
 	const globalClients = new Set<ServerResponse>();
 	const allSessions = new Map<string, SessionEndpoint>();
+	const openingSessions = new Map<string, Promise<ServeApiSession>>();
 
 	const heartbeat = setInterval(() => {
 		const signal = `: ping\n\n`;
@@ -490,8 +495,10 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			}
 
 			if (method === "GET" && path === "/session") {
-				const list = Array.from(allSessions.values()).map((entry) => ({ id: entry.session.id }));
-				json(res, 200, { sessions: list });
+				const list = new Map(((await options.listSessions?.()) ?? []).map((item) => [item.id, item]));
+				for (const entry of allSessions.values())
+					if (!list.has(entry.session.id)) list.set(entry.session.id, { id: entry.session.id });
+				json(res, 200, { sessions: [...list.values()], currentSessionId: session?.id });
 				return;
 			}
 
@@ -515,9 +522,24 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					json(res, 200, { sessionId: requestedId });
 					return;
 				}
+				if (requestedId && options.openSession) {
+					let opening = openingSessions.get(requestedId);
+					if (!opening) {
+						opening = options.openSession(requestedId);
+						openingSessions.set(requestedId, opening);
+					}
+					try {
+						const resumed = await opening;
+						registerSession(resumed);
+						json(res, 200, { sessionId: resumed.id });
+					} finally {
+						openingSessions.delete(requestedId);
+					}
+					return;
+				}
 				let created: ServeApiSession | undefined;
 				if (createSession) {
-					created = createSession(requestedId ?? undefined);
+					created = await createSession(requestedId ?? undefined);
 				} else if (session && !requestedId) {
 					// Legacy single-session behavior.
 					created = session;

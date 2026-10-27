@@ -107,6 +107,7 @@ class FakeElement {
 		return this.canvasContext;
 	}
 	setPointerCapture(): void {}
+	close(): void {}
 }
 
 function loadRenderer(mockFetch?: typeof fetch): {

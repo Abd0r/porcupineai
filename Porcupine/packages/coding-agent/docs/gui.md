@@ -12,6 +12,8 @@ Open the local address in your browser and enter the token in the connection for
 
 The workbench supports session selection and creation, live message events, prompt submission, abort, explicit permission decisions, and model-requested visual explanations. Tool calls, results, goal changes, sub-agent activity, approvals, answers and visuals share one chronological conversation flow.
 
+The Conversations list discovers saved Porcupine sessions using the same session index as the terminal, retaining saved names and first-message titles. Selecting a saved conversation loads its runtime on demand; new conversations get independent runtimes. The initial selection remains the server's active conversation. Conversations and workspace Projects rescan when the browser regains focus. Existing Project folder names retain their spelling and spaces.
+
 The interface uses an open conversation column, neutral surfaces, compact controls, and a shared adaptive width for text, figures, and the composer. Its semantic tokens and layout patterns are adapted from the MIT-licensed DeepSeek Harness UI, not its branding or plugin runtime. See [source notes and license](./gui-third-party-notices.md).
 
 ## Visual explanations
@@ -42,7 +44,7 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 | Projects | Canonical `Project/<name>/` workspaces from the [project-hygiene](../../skills/meta/project-hygiene/SKILL.md) layout. Browse supported documents, preview text, and create a new project with README.md plus STATUS.md. | Local files; nothing is deleted |
 | Project uploads | PNG, JPEG, WebP, GIF, PDF, ZIP and text formats up to 12 MiB, written to `Project/<name>/uploads/` with `-2`, `-3` suffixes instead of overwriting. Filenames cannot contain directories. | Local files |
 | Settings · context files | Inspect and edit the allowlisted Markdown documents only: global `AGENTS.md`, `CLAUDE.md`, `USER.md`, `MEMORY.md`, `PERSONALITY.md`, `PROMPT.md`, `SYSTEM.md`, `APPEND_SYSTEM.md`, `APPEND_PROMPT.md`, plus workspace `AGENTS.md` and `CLAUDE.md`. Edits use a revision hash and are rejected if the agent changed the file in between. Symlinks are refused. | `~/.porcupine/agent/` and the workspace |
-| Thinking disclosure | Inline in the transcript, where the reasoning actually happened: a compact `Thinking…` row while the turn is live, then `Thought for N seconds`. A single SVG indicator animates only while live. Expanding shows model-supplied reasoning. Tool rows report the actual operation, arguments and supplied output separately. | Session events |
+| Thinking disclosure | Inline runtime activity with an SVG motion graphic while live. Completed activity with supplied reasoning can expand; activity without reasoning says `Worked for N seconds` and has no empty disclosure. Durations measure observed activity, not provider computation time. Tool rows report actual arguments, output and completion state. | Session events |
 | Tool activity | Inline expandable rows at the execution point, with real arguments, streaming output, and running/done/failed state. | Session events; tool calls and results replay on reconnect |
 | Context ring | Composer meter of the live context window. Hover or focus shows used / window, percent, the compaction threshold and the sub-agent concurrency limit. | Live session |
 | Session limits | Settings → Session limits writes the real global settings: compaction threshold as a percentage of the active model's window, and `subagent.maxConcurrent` (1-8). | `settings.json` |
@@ -63,7 +65,7 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 
 Settings is divided into Appearance, Models, Limits and Context tabs. The composer grows with the draft, preserves it on a failed send, and rejects duplicate submission while busy. Enter respects IME composition. Each conversation retains its draft for this tab. Token and draft text are not persisted to browser storage.
 
-The active agent session replays its messages, tool calls/results, visuals and sub-agent reports on connection. Pending approvals are restored and settled decisions remain inline. Goals and live sub-agent progress append at their event positions; the browser never invents a phase from prose. Older goal/progress snapshots are not a separate durable event log. Replayed content does not replay entrance animations. Scrolling upward suspends automatic following until **Latest message** is selected. A disconnected stream disables sending and exposes **Reconnect**.
+The active agent session replays its messages, tool calls/results, visuals and sub-agent reports on connection. Pending approvals are restored and settled decisions remain inline. Goals and live sub-agent progress append at their event positions; the browser never invents a phase from prose. Older goal/progress snapshots are not a separate durable event log. Replayed content does not replay entrance animations. Scrolling upward suspends automatic following until **Latest message** is selected. Reconnecting and switching conversations preserve the reading position. A disconnected stream disables sending and session controls and exposes **Reconnect**. Delayed model-picker and limit responses cannot overwrite another conversation's controls.
 
 ## Browser verification
 

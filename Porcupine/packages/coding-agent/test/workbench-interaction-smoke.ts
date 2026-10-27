@@ -58,7 +58,18 @@ const other: ServeApiSession = {
 	onEvent: () => () => {},
 	getTranscript: () => [{ role: "user", content: "A separate conversation" }],
 };
-const server = await startServeApi({ sessions: [session, other], token: "synthetic-local-token", port: 0 });
+const server = await startServeApi({
+	session,
+	sessions: [other],
+	token: "synthetic-local-token",
+	port: 0,
+	listSessions: async () => [{ id: "saved-session", name: "Saved Porcupine investigation" }],
+	openSession: async (id) => ({
+		...other,
+		id,
+		getTranscript: () => [{ role: "assistant", content: "Restored saved session" }],
+	}),
+});
 const browser = await chromium.launch({
 	headless: true,
 	executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
@@ -142,6 +153,33 @@ try {
 	await shot("workbench-agent-workspace.png");
 	await page.locator("#stop").click();
 	await page.waitForFunction(() => document.getElementById("status-text")?.textContent === "Ready");
+	assert.equal(
+		await page.locator(".thinking-head").first().isDisabled(),
+		true,
+		"Work without supplied reasoning must not expose an empty reasoning disclosure",
+	);
+	emit({ type: "agent_start" });
+	emit({
+		type: "message_update",
+		message: {
+			role: "assistant",
+			content: [{ type: "thinking", thinking: "Compare the evidence before answering." }],
+		},
+	});
+	emit({
+		type: "message_end",
+		message: {
+			role: "assistant",
+			content: [
+				{ type: "thinking", thinking: "Compare the evidence before answering." },
+				{ type: "text", text: "Evidence compared." },
+			],
+		},
+	});
+	emit({ type: "agent_end" });
+	await page.locator(".message-body").filter({ hasText: "Evidence compared." }).waitFor();
+	await page.locator(".thinking-head").last().click();
+	assert.equal(await page.locator(".thinking-body").last().innerText(), "Compare the evidence before answering.");
 	const beforeComposition = received;
 	await prompt.dispatchEvent("keydown", { key: "Enter", isComposing: true });
 	assert.equal(received, beforeComposition, "IME confirmation must not submit a message");
@@ -165,6 +203,24 @@ try {
 		await page.locator("#feed").evaluate((element) => element.scrollTop),
 		0,
 		"New output must not steal the reading position",
+	);
+	const reconnected = page.waitForResponse((response) => response.url().endsWith("/workspace-one/events"));
+	await page.locator("#reconnect").evaluate((button) => (button as HTMLButtonElement).click());
+	await reconnected;
+	await page.locator(".message.restored").last().waitFor({ state: "attached" });
+	assert.equal(
+		await page.locator("#feed").evaluate((element) => element.scrollTop),
+		0,
+		"Reconnecting must preserve the reading position",
+	);
+	await page.locator(".session[title='workspace-two']").click();
+	await page.locator(".message-body").filter({ hasText: "A separate conversation" }).waitFor();
+	await page.locator(".session[title='workspace-one']").click();
+	await page.locator(".message.restored").last().waitFor({ state: "attached" });
+	assert.equal(
+		await page.locator("#feed").evaluate((element) => element.scrollTop),
+		0,
+		"Returning to a conversation must preserve the reading position",
 	);
 	await page.locator("#jump-latest").click();
 	await page.waitForFunction(() => {
@@ -195,6 +251,100 @@ try {
 	assert.equal(await page.locator("#appearance-theme").isVisible(), false);
 	await page.getByRole("tab", { name: "Appearance", exact: true }).click();
 	await shot("workbench-settings.png");
+	await page.getByRole("button", { name: "Close settings" }).click();
+	let releaseLimits: (() => void) | undefined;
+	const limitsGate = new Promise<void>((resolve) => {
+		releaseLimits = resolve;
+	});
+	let limitsRequested = false;
+	await page.route("**/session/workspace-one/context", async (route) => {
+		if (route.request().method() !== "POST") {
+			await route.continue();
+			return;
+		}
+		limitsRequested = true;
+		await limitsGate;
+		await route.fulfill({
+			json: {
+				supported: true,
+				tokens: 1,
+				contextWindow: 1000,
+				percent: 0.1,
+				compactAtPercent: 91,
+				maxSubagents: 7,
+				reserveTokens: 90,
+			},
+		});
+	});
+	await page.getByRole("button", { name: "Settings", exact: true }).click();
+	await page.getByRole("tab", { name: "Limits", exact: true }).click();
+	const limitsRequest = page.waitForRequest(
+		(request) => request.method() === "POST" && request.url().endsWith("/context"),
+	);
+	await page.locator("#limits-apply").click();
+	await limitsRequest;
+	assert.ok(limitsRequested);
+	await page.getByRole("button", { name: "Close settings" }).click();
+	await page.locator(".session[title='workspace-two']").click();
+	await page.locator(".message-body").filter({ hasText: "A separate conversation" }).waitFor();
+	const limitsResponse = page.waitForResponse(
+		(response) => response.request().method() === "POST" && response.url().endsWith("/context"),
+	);
+	releaseLimits!();
+	await limitsResponse;
+	await page.waitForFunction(() => !(document.getElementById("limits-apply") as HTMLButtonElement).disabled);
+	assert.equal(
+		await page.locator("#context-ring").isHidden(),
+		true,
+		"An old settings response must not populate another session",
+	);
+	await page.getByRole("button", { name: "Saved Porcupine investigation", exact: true }).click();
+	await page.locator(".message-body").filter({ hasText: "Restored saved session" }).waitFor();
+	assert.equal(await page.locator(".session.active").getAttribute("title"), "saved-session");
+	let releaseModels: (() => void) | undefined;
+	const modelsGate = new Promise<void>((resolve) => {
+		releaseModels = resolve;
+	});
+	let modelLoads = 0;
+	await page.route("**/session/saved-session/models", async (route) => {
+		modelLoads++;
+		const first = modelLoads === 1;
+		if (first) await modelsGate;
+		await route.fulfill({
+			json: {
+				supported: true,
+				current: null,
+				subagentModel: null,
+				models: [
+					{
+						provider: "faux",
+						id: first ? "old" : "new",
+						name: first ? "Stale model list" : "Current model list",
+						contextWindow: 1000,
+						reasoning: true,
+					},
+				],
+			},
+		});
+	});
+	await page.getByRole("button", { name: "Settings", exact: true }).click();
+	await page.getByRole("tab", { name: "Models", exact: true }).click();
+	const firstModelsRequest = page.waitForRequest((request) => request.url().endsWith("/models"));
+	await page.locator("#model-default-open").click();
+	await firstModelsRequest;
+	await page.getByRole("button", { name: "Close model picker" }).click();
+	await page.locator("#model-subagent-open").click();
+	await page.locator(".model-name").filter({ hasText: "Current model list" }).waitFor();
+	const staleModelsResponse = page.waitForResponse((response) => response.url().endsWith("/models"));
+	releaseModels!();
+	await staleModelsResponse;
+	await page.evaluate(() => new Promise(requestAnimationFrame));
+	assert.equal(
+		await page.locator(".model-name").innerText(),
+		"Current model list",
+		"An older model request must not overwrite the current picker",
+	);
+	await page.getByRole("button", { name: "Close model picker" }).click();
 	await page.getByRole("button", { name: "Close settings" }).click();
 	for (const width of [1440, 1100, 700, 390]) {
 		await page.setViewportSize({ width, height: 900 });

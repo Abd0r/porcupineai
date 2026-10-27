@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -16,6 +16,23 @@ function fixture() {
 const pdf = Buffer.from("%PDF-1.7\nsynthetic test document\n");
 
 describe("workbench project workspaces", () => {
+	it("discovers existing projects with original names and rescans additions", () => {
+		const { cwd, store } = fixture();
+		expect(store.list()).toEqual([]);
+		mkdirSync(join(cwd, "Project", "Porcupine AI"), { recursive: true });
+		writeFileSync(join(cwd, "Project", "Porcupine AI", "README.md"), "# Existing work");
+		expect(store.list()).toContainEqual(expect.objectContaining({ name: "Porcupine AI", title: "Existing work" }));
+		expect(store.read("Porcupine AI", "README.md").content).toBe("# Existing work");
+	});
+	it("refuses symlink ancestors when reading project documents", () => {
+		const { cwd, store } = fixture();
+		store.create("safe");
+		const outside = mkdtempSync(join(tmpdir(), "project-outside-"));
+		roots.push(outside);
+		writeFileSync(join(outside, "secret.md"), "private");
+		symlinkSync(outside, join(cwd, "Project", "safe", "linked"));
+		expect(() => store.read("safe", "linked/secret.md")).toThrow();
+	});
 	it("creates canonical project documents and lists verified workspace state", () => {
 		const { cwd, store } = fixture();
 		expect(store.list()).toEqual([]);

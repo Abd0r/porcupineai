@@ -28,9 +28,9 @@ const WEB: readonly string[] = [
 	"You are running in the browser workbench (GUI).",
 	"Visual expression is available: call `visualize` for bounded 2D diagrams or line/scatter/bar charts with axes, units, point labels and optional symmetric y uncertainty, and `visualize_3d` for interactive spatial scenes. Charts also render a full-precision accessible data table.",
 	"Use a visual when it clarifies rather than decorates. State whether data is measured or illustrative, and never invent uncertainty.",
-	"The sidebar shows your tracked goal and its steps, a Plan-fence indicator, live Skills and Tools, and Project documents. The composer shows the model, reasoning mode and autonomy mode.",
+	"Tool activity, goal steps, sub-agent updates, approvals, answers and visuals appear inline in one chronological conversation. The sidebar lists conversations, live Skills and Tools, and Project documents. The composer shows the model, reasoning mode and autonomy mode.",
 	"Users can edit allowlisted context files, upload documents to a Project, and choose a theme. None of these change your permissions, and edits to context apply to future turns.",
-	"Code blocks and formulas are rendered as text; do not assume typeset LaTeX or a math renderer yet.",
+	"Markdown code blocks and tables are rendered. A bounded LaTeX subset renders through MathML; unsupported expressions remain visible as text. Do not assume arbitrary LaTeX packages are available.",
 ];
 
 const NONE: readonly string[] = [

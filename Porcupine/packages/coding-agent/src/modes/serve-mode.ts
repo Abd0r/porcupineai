@@ -21,8 +21,9 @@ import { randomUUID } from "node:crypto";
 import { VERSION } from "../config.ts";
 import type { AgentSession } from "../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../core/agent-session-runtime.ts";
+import { SessionManager } from "../core/session-manager.ts";
 import { type ServeApiSession, startServeApi } from "../server/http-api.ts";
-import { ContextFileStore } from "../server/workbench-context-files.ts";
+import { ContextFileStore, WorkbenchError } from "../server/workbench-context-files.ts";
 import { WorkbenchProjectStore } from "../server/workbench-projects.ts";
 import { createSessionSurfaces } from "../server/workbench-session-surfaces.ts";
 import { serializeWorkbenchTimeline } from "../server/workbench-transcript.ts";
@@ -70,6 +71,7 @@ export function adaptSessionToServeApi(session: AgentSession): ServeApiSession {
 	});
 	return {
 		...createSessionSurfaces(session),
+		setClientSurface: (surface) => session.setClientSurface(surface),
 		getGoalPlan: () => tracker(),
 		onGoalPlanChange: (listener) => {
 			goalPlanListeners.add(listener);
@@ -120,9 +122,35 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 	}
 
 	runtime.session.setClientSurface("none");
+	const additionalRuntimes = new Set<AgentSessionRuntime>();
+	const discover = async () => {
+		const [local, all] = await Promise.all([
+			SessionManager.list(runtime.cwd, runtime.session.sessionManager.getSessionDir()),
+			SessionManager.listAll(),
+		]);
+		return [...new Map([...all, ...local].map((item) => [item.id, item])).values()];
+	};
+	const attach = async (manager: SessionManager) => {
+		const sibling = await runtime.createSibling(manager);
+		sibling.session.setClientSurface("none");
+		additionalRuntimes.add(sibling);
+		return adaptSessionToServeApi(sibling.session);
+	};
 
 	const handle = await startServeApi({
 		session: adaptSessionToServeApi(runtime.session),
+		listSessions: async () =>
+			(await discover()).map((item) => ({
+				id: item.id,
+				name: item.name || item.firstMessage.slice(0, 80) || undefined,
+			})),
+		openSession: async (id) => {
+			const saved = (await discover()).find((item) => item.id === id);
+			if (!saved) throw new WorkbenchError(404, "Saved conversation not found");
+			return attach(SessionManager.open(saved.path));
+		},
+		createSession: async () =>
+			attach(SessionManager.create(runtime.cwd, runtime.session.sessionManager.getSessionDir())),
 		port: options.port,
 		host: options.host,
 		token: options.token,
@@ -152,6 +180,7 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 	});
 
 	await handle.close();
+	for (const sibling of additionalRuntimes) await sibling.dispose();
 	await runtime.dispose();
 	return 0;
 }

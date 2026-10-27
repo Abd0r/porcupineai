@@ -203,6 +203,16 @@ describe("serve HTTP API", () => {
 });
 
 describe("serve HTTP API with a real session", () => {
+	it("tells the real agent which client surface is attached", async () => {
+		const harness = await createHarness({ responses: ["unused"] });
+		cleanups.push(async () => harness.cleanup());
+		harness.session.setClientSurface("none");
+		const adapted = adaptSessionToServeApi(harness.session);
+		adapted.setClientSurface?.("web");
+		expect(harness.session.clientSurface).toBe("web");
+		adapted.setClientSurface?.("none");
+		expect(harness.session.clientSurface).toBe("none");
+	});
 	it("sends a message through the harness session and receives events", async () => {
 		const harness = await createHarness({ responses: ["server reply"] });
 		cleanups.push(async () => harness.cleanup());

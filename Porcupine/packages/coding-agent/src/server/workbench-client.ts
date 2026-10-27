@@ -7,20 +7,20 @@ const conversationViews=new Map(),sessionNames=new Map();
 function updateSend(){ui.send.disabled=streaming||!connected||!ui.prompt.value.trim();ui.prompt.setAttribute('aria-busy',String(streaming));}
 function resizeComposer(){ui.prompt.style.height='auto';ui.prompt.style.height=Math.min(ui.prompt.scrollHeight,Math.max(100,innerHeight*.25))+'px';updateSend();}
 function nearBottom(){return ui.feed.scrollHeight-ui.feed.scrollTop-ui.feed.clientHeight<100;}
-function scrollFeed(force=false){if(force||followOutput)ui.feed.scrollTop=ui.feed.scrollHeight;}
+function scrollFeed(force=false){if(!replaying&&(force||followOutput))ui.feed.scrollTop=ui.feed.scrollHeight;}
 let followOutput=true;
 ui.feed.addEventListener('scroll',()=>{followOutput=nearBottom();$('jump-latest').hidden=followOutput;});
 $('jump-latest').addEventListener('click',()=>{followOutput=true;scrollFeed(true);$('jump-latest').hidden=true;});
-function setConnection(value){connected=value;ui.status.textContent=value?(streaming?'Working':'Ready'):'Disconnected';ui.status.dataset.state=value?(streaming?'working':'ready'):'offline';$('reconnect').hidden=value;updateSend();}
-function rememberView(){if(!sessionId)return;conversationViews.set(sessionId,{nodes:[...ui.feed.children],draft:ui.prompt.value,scroll:ui.feed.scrollTop});}
+function setConnection(value){connected=value;ui.status.textContent=value?(streaming?'Working':'Ready'):'Disconnected';ui.status.dataset.state=value?(streaming?'working':'ready'):'offline';$('reconnect').hidden=value;ui.stop.disabled=!value;updateSend();updateControlDisabled();}
+function rememberView(){if(!sessionId)return;conversationViews.set(sessionId,{nodes:[...ui.feed.children],draft:ui.prompt.value,scroll:ui.feed.scrollTop,follow:followOutput});}
 function resetSessionView(id){
   flushAssistantRender();rememberView();
   if(liveThinking){stopThinking(liveThinking);liveThinking=null;}
   clearVisuals();toolRuns.clear();streamingAssistant=null;resetActivity();
-  lastContext=null;ringUi.fill.style.strokeDashoffset=String(RING_CIRCUMFERENCE);ringUi.tip.textContent='Context usage unavailable';
-  sessionId=id;const cached=conversationViews.get(id);ui.feed.replaceChildren(...(cached?cached.nodes:[]));ui.prompt.value=cached?cached.draft:'';
-  ui.welcome.hidden=ui.feed.children.length>0;ui.feed.scrollTop=cached?cached.scroll:0;followOutput=true;resizeComposer();
-  for(const button of ui.sessions.children)button.classList.toggle('active',button.title===id);
+  lastContext=null;ringUi.ring.hidden=true;ringUi.fill.style.strokeDashoffset=String(RING_CIRCUMFERENCE);ringUi.tip.textContent='Context usage unavailable';
+  limitsUi.status.textContent='';modelUi.dialog.close();modelEpoch++;stackInspection++;surfaceUi.dialog.close();sessionId=id;const cached=conversationViews.get(id);ui.feed.replaceChildren(...(cached?cached.nodes:[]));ui.prompt.value=cached?cached.draft:'';
+  ui.welcome.hidden=ui.feed.children.length>0;ui.feed.scrollTop=cached?cached.scroll:0;followOutput=cached?cached.follow:true;$('jump-latest').hidden=followOutput;resizeComposer();
+  for(const button of ui.sessions.children){button.classList.toggle('active',button.title===id);button.setAttribute('aria-current',button.title===id?'page':'false');}
   ui.title.textContent=sessionNames.get(id)||'Conversation '+id.slice(-8);
   setBusy(false);setError('');
 }
@@ -30,8 +30,10 @@ async function connectEvents(id){
   const controller=new AbortController();streamController=controller;
   if(sessionId!==id)resetSessionView(id);
   setConnection(false);ui.status.textContent='Connecting…';
-  void refreshSessionSurfaces(id);void refreshContext(id);
   try{
+    await json('/session',{method:'POST',body:JSON.stringify({id})});
+    if(epoch!==connectionEpoch)return;
+    void refreshSessionSurfaces(id);void refreshContext(id);
     const response=await api('/session/'+encodeURIComponent(id)+'/events',{signal:controller.signal});
     if(!response.ok)throw new Error('Could not open session events ('+response.status+')');
     if(!response.body)throw new Error('Streaming is unavailable in this browser.');
@@ -50,7 +52,7 @@ async function connectEvents(id){
       }
     }
     if(epoch===connectionEpoch)throw new Error('Connection closed. Reconnect to continue. Your draft is preserved.');
-  }catch(error){if(epoch===connectionEpoch&&error.name!=='AbortError'){setConnection(false);if(liveThinking){stopThinking(liveThinking);liveThinking=null;}setError(error.message)}}
+  }catch(error){if(epoch===connectionEpoch&&error.name!=='AbortError'){controller.abort();setConnection(false);if(liveThinking){stopThinking(liveThinking);liveThinking=null;}setError(error.message)}}
 }
 const toolRuns=new Map();
 function toolDescription(name,args){const input=args&&typeof args==='object'?args:{};const target=input.path||input.file_path||input.command||input.pattern||'';return toolWords(name)+(typeof target==='string'&&target?' · '+target.replace(/\s+/g,' ').slice(0,100):'');}
@@ -58,22 +60,23 @@ function showToolStart(event){
 	if(!replaying)setThinkingLabel(toolWords(String(event.toolName||'tool')));
   ui.welcome.hidden=true;
   const row=document.createElement('details');row.className='tool-activity';row.dataset.state='running';
-  const summary=document.createElement('summary'),name=document.createElement('span'),state=document.createElement('span');
-  name.textContent=toolDescription(String(event.toolName||'tool'),event.args);name.title=name.textContent;state.className='tool-state';state.textContent='Running';summary.append(name,state);
+  const summary=document.createElement('summary'),name=document.createElement('span'),state=document.createElement('span'),icon=document.createElement('span');
+  icon.className='activity-glyph';icon.setAttribute('aria-hidden','true');icon.append(thinkingGlyph());
+  name.textContent=toolDescription(String(event.toolName||'tool'),event.args);name.title=name.textContent;state.className='tool-state';state.textContent='Running';summary.append(icon,name,state);
   const output=document.createElement('pre');output.textContent=JSON.stringify(event.args||{},null,2);row.append(summary,output);ui.feed.append(row);
-  toolRuns.set(event.toolCallId||event.toolName,{row,state,output,args:output.textContent});scrollFeed();
+  toolRuns.set(event.toolCallId||event.toolName,{row,state,output,icon,args:output.textContent});scrollFeed();
 }
 function showToolUpdate(event){const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;const text=textOf(event.partialResult&&event.partialResult.content);if(text)run.output.textContent=run.args+'\n\n'+text.slice(-16000);scrollFeed();}
-function showToolEnd(event){if(liveThinking&&!replaying)setThinkingLabel('Reasoning');const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;run.row.dataset.state=event.isError?'failed':'done';run.state.textContent=event.isError?'Failed':'Done';const text=textOf(event.result&&event.result.content);if(text)run.output.textContent=run.args+'\n\n'+text.slice(0,16000)+(text.length>16000?'\n[Output preview truncated]':'');toolRuns.delete(event.toolCallId||event.toolName);}
+function showToolEnd(event){if(liveThinking&&!replaying)setThinkingLabel('Working');const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;run.row.dataset.state=event.isError?'failed':'done';run.state.textContent=event.isError?'Failed':'Done';const svg=document.createElementNS(MATH_NS,'svg'),path=document.createElementNS(MATH_NS,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');path.setAttribute('d',event.isError?'m7 7 10 10M17 7 7 17':'m5 12 4 4L19 6');svg.append(path);run.icon.replaceChildren(svg);const text=textOf(event.result&&event.result.content);if(text)run.output.textContent=run.args+'\n\n'+text.slice(0,16000)+(text.length>16000?'\n[Output preview truncated]':'');toolRuns.delete(event.toolCallId||event.toolName);}
 function filterSessions(){const query=$('session-search').value.trim().toLowerCase();for(const button of ui.sessions.children)button.hidden=query&&!button.textContent.toLowerCase().includes(query);}
 async function refreshSessions(selectFirst=false){
   const data=await json('/session');ui.sessions.replaceChildren();
-  for(const item of data.sessions||[]){const button=document.createElement('button');button.type='button';button.className='session'+(item.id===sessionId?' active':'');button.textContent=sessionNames.get(item.id)||'Conversation '+item.id.slice(-8);button.title=item.id;button.addEventListener('click',()=>{void connectEvents(item.id);if(window.matchMedia('(max-width: 700px)').matches)applySidebar(true);});ui.sessions.append(button)}
+  for(const item of data.sessions||[]){if(item.name)sessionNames.set(item.id,item.name);const button=document.createElement('button');button.type='button';button.className='session'+(item.id===sessionId?' active':'');button.setAttribute('aria-current',item.id===sessionId?'page':'false');button.textContent=sessionNames.get(item.id)||'Conversation '+item.id.slice(-8);button.title=item.id;button.addEventListener('click',()=>{void connectEvents(item.id);if(window.matchMedia('(max-width: 700px)').matches)applySidebar(true);});ui.sessions.append(button)}
   filterSessions();
-  if(selectFirst&&data.sessions&&data.sessions.length)void connectEvents(data.sessions[0].id);else if(selectFirst)await createSession();
+  if(selectFirst&&data.sessions&&data.sessions.length)void connectEvents(data.currentSessionId||data.sessions[0].id);else if(selectFirst)await createSession();
 }
 async function createSession(){ui.newSession.disabled=true;try{const data=await json('/session',{method:'POST',body:'{}'});await refreshSessions(false);void connectEvents(data.sessionId);}finally{ui.newSession.disabled=false;}}
-ui.authForm.addEventListener('submit',async event=>{event.preventDefault();token=ui.token.value.trim();setError('',true);const submit=ui.authForm.querySelector('button');submit.disabled=true;try{const [,capabilities]=await Promise.all([refreshSessions(true),json('/workbench')]);ui.newSession.hidden=capabilities.canCreateSessions===false;projectsUi.tree.hidden=capabilities.projects===false;ui.auth.hidden=true;ui.token.value='';ui.prompt.focus()}catch(error){token='';setError(error.message,true)}finally{submit.disabled=false}});
+ui.authForm.addEventListener('submit',async event=>{event.preventDefault();token=ui.token.value.trim();setError('',true);const submit=ui.authForm.querySelector('button');submit.disabled=true;try{const capabilities=await json('/workbench');await refreshSessions(true);ui.newSession.hidden=capabilities.canCreateSessions===false;projectsUi.tree.hidden=capabilities.projects===false;ui.auth.hidden=true;if(capabilities.projects)void refreshProjects();ui.token.value='';ui.prompt.focus()}catch(error){token='';setError(error.message,true)}finally{submit.disabled=false}});
 ui.newSession.addEventListener('click',async()=>{setError('');try{await createSession()}catch(error){setError(error.message)}});
 ui.form.addEventListener('submit',async event=>{
   event.preventDefault();const text=ui.prompt.value.trim();if(!text||!sessionId||streaming||!connected)return;
@@ -89,4 +92,5 @@ $('session-search').addEventListener('input',filterSessions);
 for(const button of document.querySelectorAll('[data-prompt]'))button.addEventListener('click',()=>{ui.prompt.value=button.dataset.prompt;resizeComposer();ui.prompt.focus()});
 window.addEventListener('keydown',event=>{if(event.key==='Escape'&&window.matchMedia('(max-width: 700px)').matches)applySidebar(true)});
 $('sidebar-dismiss').addEventListener('click',()=>{applySidebar(true);sidebarToggle.focus()});
+window.addEventListener('focus',()=>{if(!ui.auth.hidden)return;void refreshSessions(false).catch(error=>setError(error.message));if(!projectsUi.tree.hidden)void refreshProjects();});
 `;

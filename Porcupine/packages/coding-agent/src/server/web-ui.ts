@@ -42,23 +42,23 @@ ${WORKBENCH_LAYOUT_STYLES}
 <div class="shell">
 <button id="sidebar-dismiss" class="sidebar-dismiss" type="button" aria-label="Close navigation" tabindex="-1" hidden></button>
 <aside id="sidebar" class="sidebar" aria-label="Conversations">
-<div class="brand"><span class="brand-name"><svg viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m7 20-3-7 7 3-1-10 7 8 5-10 1 12 6-3-4 10H12Z"/><path d="M12 24h12M21 20h.01"/></svg>Porcupine</span><span class="edition">Workbench</span></div>
+<div class="brand"><span class="brand-name"><svg class="brand-symbol" viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 26V13a7 7 0 0 1 7-7h2a7 7 0 0 1 0 14h-4"/><path d="m5 13 4-4M5 21l4-4M13 6l3-3M21 6l3-3"/></svg>Porcupine</span><span class="edition">Workbench</span></div>
 <button class="new-session" id="new-session" type="button">＋ New conversation</button>
 ${STACKS_NAVIGATION}
 ${PROJECTS_NAVIGATION}
 <div class="session-section"><p class="caption">Conversations</p><input id="session-search" class="nav-search" type="search" aria-label="Search conversations" placeholder="Search conversations…" autocomplete="off"><nav class="sessions" id="sessions" aria-label="Recent sessions"></nav></div>
-<div class="side-foot">Runs locally · You stay in control</div>
+<div class="side-foot">Local workspace</div>
 </aside>
 <main class="main">
 <header class="topbar"><button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-expanded="true" title="Toggle sidebar (Ctrl/Cmd+B)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4v16"/></svg></button><strong id="session-title">Workbench</strong><div class="topbar-actions"><button class="quiet-button" id="reconnect" type="button" hidden>Reconnect</button><div class="status" aria-live="polite"><span id="status-text">Ready</span></div><button class="settings-trigger" id="settings-open" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></button></div></header>
 
 <section class="content" aria-label="Conversation">
-<div class="welcome" id="welcome"><div class="welcome-mark" aria-hidden="true">P<span>·</span></div><p class="eyebrow">Your local agent workspace</p><h1>From idea to done.</h1><p>Build, investigate, and work through the hard parts.</p><div class="starters"><button type="button" data-prompt="Inspect this workspace and explain its architecture. Identify the most useful next improvement with evidence."><span>Explore a codebase</span><small>Architecture, dependencies, next steps</small></button><button type="button" data-prompt="Help me debug an issue. Start by inspecting the workspace and ask for the failing behavior if it is not evident."><span>Fix something broken</span><small>Trace the cause, verify the repair</small></button><button type="button" data-prompt="Help me turn an idea into a working implementation. Ask me what I want to build, then inspect the available tools and workspace."><span>Build an idea</span><small>A useful result, step by step</small></button></div></div>
+<div class="welcome" id="welcome"><h1>What are we working on?</h1><div class="starters"><button type="button" data-prompt="Inspect this workspace and explain its architecture. Identify the most useful next improvement with evidence."><span>Explore a codebase</span></button><button type="button" data-prompt="Help me debug an issue. Start by inspecting the workspace and ask for the failing behavior if it is not evident."><span>Fix something broken</span></button><button type="button" data-prompt="Help me turn an idea into a working implementation. Ask me what I want to build, then inspect the available tools and workspace."><span>Build an idea</span></button></div></div>
 <div class="feed-stage"><div class="chat-backdrop" id="chat-backdrop" aria-hidden="true"></div><div class="feed" id="feed" aria-live="polite" aria-relevant="additions text"></div></div>
 <button id="jump-latest" class="jump-latest" type="button" hidden>↓ Latest message</button>
 <form class="composer-wrap" id="prompt-form"><textarea class="composer" id="prompt" rows="1" aria-label="Message Porcupine" placeholder="Message Porcupine…"></textarea><div class="compose-row"><div class="compose-options">${SESSION_COMPOSER_CONTROLS}<span class="hint">Enter to send · Shift + Enter for a new line</span></div><div class="actions"><button class="stop" id="stop" type="button" hidden>Stop</button><button class="send" id="send" type="submit" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 5-5"/></svg></button></div></div></form>
 <div class="error" id="error" role="alert" hidden></div>
-<div class="notice" id="history-notice">Local workspace · Review important changes before applying them.</div>
+<div class="notice" id="history-notice">Local workspace</div>
 </section>
 </main>
 </div>
@@ -106,8 +106,8 @@ function setThinkingLabel(label){
 function finalizeThinking(thinkingText,seconds,beforeNode){
   if(!liveThinking){if(!thinkingText)return;ensureThinkingRow();if(beforeNode&&beforeNode.parentNode===ui.feed)ui.feed.insertBefore(liveThinking.wrap,beforeNode);}
   const row=liveThinking;
-  stopThinking(row,seconds);
   if(thinkingText){row.body.textContent=thinkingText}
+  stopThinking(row,seconds);
   liveThinking=null;
 }
 const TOOL_WORDS={web_search:'Searching the web',web_extract:'Reading a page',read:'Reading',grep:'Searching files',find:'Searching files',ls:'Listing files',bash:'Running a command',edit:'Editing files',write:'Writing files',browser_navigate:'Browsing',browser_snapshot:'Inspecting a page',browser_screenshot:'Capturing a page',subagent:'Delegating',tasks:'Updating tasks',projects:'Opening a project',literature:'Checking literature',memory:'Updating memory',goal:'Updating the goal',plan:'Updating the plan',visualize:'Drawing a figure',visualize_3d:'Building a scene'};
@@ -122,6 +122,7 @@ function renderVisualization(scene){if(!validScene(scene))return;ui.welcome.hidd
 ${VISUAL_RENDERER_SCRIPT}
 function renderEvent(event){if(!event||typeof event!=='object')return;
 if(event.type==='server_connected'){
+  flushAssistantRender();const readingPosition=ui.feed.scrollTop,wasFollowing=followOutput;
   if(Array.isArray(event.timeline)||Array.isArray(event.messages)){
     if(liveThinking){stopThinking(liveThinking);liveThinking=null;}
     resetActivity();clearVisuals();toolRuns.clear();ui.feed.replaceChildren();streamingAssistant=null;replaying=true;
@@ -133,7 +134,7 @@ if(event.type==='server_connected'){
   for(const card of ui.feed.querySelectorAll('.permission'))card.remove();
   for(const permission of event.permissions||[])showPermission(permission);
   if(event.subagents)applySubagents(event.subagents);
-  setBusy(Boolean(event.streaming));if(event.streaming)ensureThinkingRow();void refreshTracker(sessionId);return;
+  setBusy(Boolean(event.streaming));if(event.streaming)ensureThinkingRow();ui.welcome.hidden=ui.feed.children.length>0;followOutput=wasFollowing;ui.feed.scrollTop=wasFollowing?ui.feed.scrollHeight:readingPosition;$('jump-latest').hidden=wasFollowing;void refreshTracker(sessionId);return;
 }
 if(event.type==='subagents'){applySubagents(event.runs||[]);return;}
 if(event.type==='permission_resolved'){settlePermission(event.permissionId,event.allow);return;}
