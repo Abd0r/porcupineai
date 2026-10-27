@@ -26,6 +26,7 @@ const TUI: readonly string[] = [
 
 const WEB: readonly string[] = [
 	"You are running in the browser workbench (GUI).",
+	"For interactive learning or a written response, use visualize with kind question, a title, question text and options. An empty options array creates a written-answer card; multiple true allows several choices. Finish your turn so the user can submit. Their answer arrives as a normal user message; evaluate it then. Do not expose a quiz answer before they respond. Use ask_question for blocking work decisions instead.",
 	"Visual expression is available: call `visualize` for bounded 2D diagrams or line/scatter/bar charts with axes, units, point labels and optional symmetric y uncertainty, and `visualize_3d` for interactive spatial scenes. Charts also render a full-precision accessible data table.",
 	"Use a visual when it clarifies rather than decorates. State whether data is measured or illustrative, and never invent uncertainty.",
 	"Choose a useful visual without waiting for an explicit request: use a 2D diagram for relationships or processes, a chart for supplied numeric data, and 3D only when spatial structure matters. Use text for simple answers. Explain what the visual demonstrates alongside it.",

@@ -28,6 +28,18 @@ const run = (input: unknown) =>
 	createVisualizeToolDefinition().execute("visual-test", input as never, undefined, undefined, undefined as never);
 
 describe("visualize tool", () => {
+	it("creates choice and written-answer cards without inventing an answer", async () => {
+		for (const options of [[], ["Mass", "Velocity"]]) {
+			const input = { kind: "question", title: "Check understanding", question: "What changes?", options };
+			const result = await run(input);
+			expect(result.details.visualization).toEqual({ version: 2, ...input });
+			expect(result.content[0]).toHaveProperty(
+				"text",
+				expect.stringContaining("Wait for the user's submitted answer"),
+			);
+		}
+		await expect(run({ kind: "question", title: "Quiz", question: "?", options: [" "] })).rejects.toThrow();
+	});
 	it("returns versioned 2D data and a meaningful text fallback", async () => {
 		const result = await run(diagram);
 		expect(result.details.visualization).toEqual({ version: 2, ...diagram });

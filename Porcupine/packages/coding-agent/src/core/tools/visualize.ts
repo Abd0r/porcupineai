@@ -33,6 +33,13 @@ const object = Type.Union([
 const number = Type.Number({ minimum: -1e12, maximum: 1e12 });
 const point = strict({ x: number, y: number, error: Type.Optional(Type.Number({ minimum: 0, maximum: 1e12 })), label });
 const schema = Type.Union([
+	strict({
+		...common,
+		kind: Type.Literal("question"),
+		question: text(2000),
+		options: Type.Array(text(200), { maxItems: 12 }),
+		multiple: Type.Optional(Type.Boolean()),
+	}),
 	strict({ ...common, kind: Type.Literal("diagram"), objects: Type.Array(object, { minItems: 1, maxItems: 80 }) }),
 	strict({
 		...common,
@@ -56,7 +63,7 @@ export function createVisualizeToolDefinition(): ToolDefinition<typeof schema, V
 		name: "visualize",
 		label: "Visual explanation",
 		description:
-			"Present a bounded 2D diagram or line/scatter/bar chart to teach, explain relationships, or communicate scientific data. Supply declarative data, never scripts or external assets. For spatial 3D scenes use visualize_3d.",
+			"Present an interactive question, bounded 2D diagram or line/scatter/bar chart. For question cards supply question and options (empty for a written answer); multiple allows several choices. The user submits their answer as a normal conversation message after your turn. Supply declarative data, never scripts or external assets. For spatial 3D scenes use visualize_3d.",
 		promptSnippet: "Explain with 2D diagrams or data-backed charts, including units and uncertainty",
 		promptGuidelines: [
 			"Use visuals when they clarify the conversation, especially teaching and science. Explain what the visual demonstrates in the description and accompanying answer.",
@@ -68,7 +75,12 @@ export function createVisualizeToolDefinition(): ToolDefinition<typeof schema, V
 		async execute(_id, params) {
 			if (!Value.Check(schema, params)) throw new Error("Invalid or unsupported visualization");
 			const lines = [params.title, params.description || ""];
-			if (params.kind === "chart") {
+			if (params.kind === "question") {
+				lines.push(params.question, ...params.options.map((option, index) => `${index + 1}. ${option}`));
+				lines.push(
+					"Wait for the user's submitted answer before evaluating it. Do not reveal quiz answers prematurely.",
+				);
+			} else if (params.kind === "chart") {
 				lines.push(`${params.chartType} chart: x = ${params.xLabel}; y = ${params.yLabel}.`);
 				for (const series of params.series) {
 					lines.push(

@@ -9,6 +9,12 @@
  */
 
 export const RICH_TEXT_STYLES = `
+.interactive-visual fieldset { display: grid; gap: var(--s2); border: 0; margin: var(--s3) 0; padding: 0; min-width: 0; }
+.interactive-visual legend { color: var(--muted); font-size: var(--small); margin-bottom: var(--s2); }
+.interactive-visual label { display: flex; align-items: center; gap: var(--s2); padding: var(--s3); border: 1px solid var(--line); border-radius: var(--r1); cursor: pointer; }
+.interactive-visual label:has(input:checked) { background: var(--surface); border-color: var(--text); }
+.interactive-visual input { flex: 0 0 auto; width: auto; accent-color: var(--text); }
+.interactive-visual textarea { width: 100%; min-height: 100px; padding: var(--s3); background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: var(--r1); resize: vertical; }
 .rich > *:first-child { margin-top: 0; }
 .rich > *:last-child { margin-bottom: 0; }
 .rich p { margin: 0 0 var(--s3); white-space: pre-wrap; overflow-wrap: anywhere; }

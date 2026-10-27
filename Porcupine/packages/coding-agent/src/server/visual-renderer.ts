@@ -1,5 +1,5 @@
 /** Browser-only declarative 2D/chart renderer. Embedded in the same-origin workbench script. */
-export const VISUAL_RENDERER_SCRIPT = `
+export const VISUAL_RENDERER_SCRIPT = String.raw`
 const visualObservers=new Map();
 function clearVisuals(){for(const item of visualObservers.values())if(item.observer)item.observer.disconnect();visualObservers.clear()}
 function observeVisual(canvas,draw){const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>{if(visualObservers.has(canvas))draw()}):null;visualObservers.set(canvas,{draw,observer});if(observer)observer.observe(canvas)}
@@ -12,6 +12,7 @@ function bounded(value,min,max){return typeof value==='number'&&Number.isFinite(
 function validPoint2(value){return Array.isArray(value)&&value.length===2&&value.every(n=>bounded(n,-20,20))}
 function validVisual(visual){
   if(!isRecord(visual)||visual.version!==2||!validText(visual.title,100)||!(visual.description===undefined||(typeof visual.description==='string'&&visual.description.length<=300)))return false;
+  if(visual.kind==='question')return hasOnlyKeys(visual,['version','kind','title','question','options'],['description','multiple'])&&validText(visual.question,2000)&&Array.isArray(visual.options)&&visual.options.length<=12&&visual.options.every(option=>validText(option,200))&&(visual.multiple===undefined||typeof visual.multiple==='boolean');
   if(visual.kind==='diagram'){
     if(!hasOnlyKeys(visual,['version','kind','title','objects'],['description'])||!Array.isArray(visual.objects)||visual.objects.length<1||visual.objects.length>80)return false;
     return visual.objects.every(o=>{
@@ -29,10 +30,24 @@ function validVisual(visual){
 function visualElement(tag,text){const node=document.createElement(tag);if(text!==undefined)node.textContent=String(text);return node}
 function renderVisual(visual){
   if(visual&&visual.version===1){renderVisualization(visual);return}
-  if(!validVisual(visual))return;
+  if(!validVisual(visual)){if(visual){const error=visualElement('p','This visual could not be displayed. Ask the agent to correct its data.');error.setAttribute('role','status');ui.feed.append(error)}return;}
   ui.welcome.hidden=true;
   const card=visualElement('section');card.className='visualization-card';
-  card.append(visualElement('h2',visual.title),visualElement('p',visual.description||(visual.kind==='diagram'?'2D conceptual diagram':'Data chart')));
+  card.append(visualElement('h2',visual.title),visualElement('div',visual.description||(visual.kind==='diagram'?'2D conceptual diagram':'Data chart')));
+  card.classList.add('interactive-visual');
+  if(visual.description)renderRichText(card.lastChild,visual.description);
+  if(visual.kind==='question'){
+    card.lastChild.remove();
+    if(visual.description){const description=visualElement('div');renderRichText(description,visual.description);card.append(description)}
+    const question=visualElement('div');renderRichText(question,visual.question);card.append(question);
+    const form=visualElement('form'),group=visualElement('fieldset'),legend=visualElement('legend',visual.multiple?'Choose all that apply':'Your answer');group.append(legend);
+    const inputs=[];
+    for(const option of visual.options){const label=visualElement('label'),input=visualElement('input');input.type=visual.multiple?'checkbox':'radio';input.name='answer';input.value=option;label.append(input,document.createTextNode(option));group.append(label);inputs.push(input)}
+    const written=visualElement('textarea');written.setAttribute('aria-label','Written answer');written.maxLength=4000;written.placeholder='Type your answer';if(!inputs.length)group.append(written);
+    const submit=visualElement('button','Send answer'),status=visualElement('p');submit.type='submit';status.setAttribute('role','status');form.append(group,submit,status);card.append(form);const owner=sessionId;
+    form.addEventListener('submit',async event=>{event.preventDefault();const answers=inputs.filter(input=>input.checked).map(input=>input.value);const answer=inputs.length?answers.join('; '):written.value.trim();if(!answer){status.textContent='Choose or write an answer first.';return}if(owner!==sessionId||streaming||!connected){status.textContent='Wait until the agent is ready and connected.';return}submit.disabled=true;setBusy(true);try{await json('/session/'+encodeURIComponent(owner)+'/message',{method:'POST',body:JSON.stringify({text:'Answer to '+visual.title+'\n'+visual.question+'\n\n'+answer})});group.disabled=true;status.textContent='Answer sent.'}catch(error){submit.disabled=false;setBusy(false);status.textContent=error.message}});
+    ui.feed.append(card);scrollFeed();return;
+  }
   const canvas=visualElement('canvas');canvas.className='scene-canvas';canvas.setAttribute('role','img');canvas.setAttribute('aria-label',visual.title+'. '+(visual.description||'')+' Full values and labels are available below.');card.append(canvas);
   const details=visualElement('details');details.className='scene-contents';details.append(visualElement('summary',visual.kind==='diagram'?'Diagram contents':'Data and uncertainty'));
   if(visual.kind==='diagram'){

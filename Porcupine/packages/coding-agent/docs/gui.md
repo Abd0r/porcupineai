@@ -18,6 +18,8 @@ The interface uses an open conversation column, neutral surfaces, compact contro
 
 ## Visual explanations
 
+`visualize` also supports `kind: "question"`: supply a title, question and options. Users can select one answer, select several with `multiple: true`, or write an answer when options is empty. Submission sends the question and answer as a normal session message for the agent to evaluate. The card locks after a successful send; failures allow retry. Answers persist in conversation history, while the card's selected controls currently reset on a full history reload. This is an initial question component, not automatic scoring or a complete quiz engine. Questions and visual descriptions support the same math rendering as chat.
+
 | View | Model tool | Supported content |
 | --- | --- | --- |
 | 2D diagram | `visualize` with `kind: "diagram"` | Rectangles, circles, arrows, lines, and plain-text labels. Useful for force diagrams, process flows, annotated geometry, and conceptual maps. |

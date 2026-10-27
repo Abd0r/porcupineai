@@ -532,7 +532,7 @@ describe("browser teaching visuals", () => {
 		}
 	});
 
-	it("rejects malformed new visuals before adding content", () => {
+	it("rejects malformed new visuals and explains why no figure appeared", () => {
 		const { render, feed } = loadRenderer();
 		for (const input of [
 			{ ...diagram, objects: [{ ...diagram.objects[0], script: "alert(1)" }] },
@@ -544,7 +544,9 @@ describe("browser teaching visuals", () => {
 			{ ...chart, source: "https://example.com" },
 		])
 			render(input);
-		expect(feed.children).toHaveLength(0);
+		expect(feed.children).toHaveLength(7);
+		expect(descendants(feed).some((node) => node.tagName === "canvas")).toBe(false);
+		expect(feed.textContent).toContain("could not be displayed");
 	});
 });
 
