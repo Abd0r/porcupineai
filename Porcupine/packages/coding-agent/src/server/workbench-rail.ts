@@ -1,7 +1,7 @@
 export const WORKBENCH_RAIL = `
 <aside class="work-rail" id="work-rail" aria-label="Task overview" hidden>
-  <section class="rail-card" id="todos-panel" aria-labelledby="todos-title" hidden><header><h2 id="todos-title">Todos</h2><span id="todos-count"></span></header><p id="todos-objective" class="rail-objective"></p><p id="todos-goal" class="rail-note" hidden></p><ol id="todos-list" class="todo-list"></ol></section>
-  <section class="rail-card" id="workers-panel" aria-labelledby="workers-title" hidden><header><h2 id="workers-title">Subagents</h2><span id="workers-count"></span></header><div id="workers-list" class="worker-list"></div></section>
+  <details class="rail-card" id="todos-panel" aria-labelledby="todos-title" open hidden><summary><h2 id="todos-title">Todos</h2><span id="todos-count"></span></summary><p id="todos-objective" class="rail-objective"></p><p id="todos-goal" class="rail-note" hidden></p><ol id="todos-list" class="todo-list"></ol></details>
+  <details class="rail-card" id="workers-panel" aria-labelledby="workers-title" open hidden><summary><h2 id="workers-title">Subagents</h2><span id="workers-count"></span></summary><div id="workers-list" class="worker-list"></div></details>
 </aside>`;
 
 export const WORKBENCH_RAIL_STYLES = `
@@ -9,9 +9,14 @@ export const WORKBENCH_RAIL_STYLES = `
 .work-rail { grid-column: 2; grid-row: 2; min-width: 0; overflow: auto; padding: 22px 18px 22px 0; scrollbar-width: thin; }
 .rail-card { padding: 16px 0; border-bottom: 1px solid var(--line-soft); }
 .rail-card:first-child { padding-top: 0; }
-.rail-card header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.rail-card > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.rail-card > summary::-webkit-details-marker { display: none; }
+.rail-card > summary::before { content: '›'; color: var(--quiet); transition: transform .18s ease; }
+.rail-card[open] > summary { margin-bottom: 12px; }
+.rail-card[open] > summary::before { transform: rotate(90deg); }
+.rail-card > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 3px; }
 .rail-card h2 { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; color: var(--quiet); font-weight: 550; margin: 0; }
-.rail-card header > span { margin-left: auto; font-size: 10px; color: var(--quiet); }
+.rail-card > summary > span { margin-left: auto; font-size: 10px; color: var(--quiet); }
 .rail-objective { font-size: 12px; line-height: 1.6; font-weight: 500; color: var(--text); margin: 0 0 14px; overflow-wrap: anywhere; }
 .rail-note { font-size: 11px; color: var(--quiet); line-height: 1.6; margin-bottom: 12px; }
 .todo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }

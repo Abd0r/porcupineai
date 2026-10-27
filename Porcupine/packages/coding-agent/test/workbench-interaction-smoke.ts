@@ -148,6 +148,17 @@ try {
 	assert.equal(await page.locator("#feed .worker").count(), 0);
 	assert.equal(await page.locator(".worker details").count(), 0);
 	if (await page.locator("#todos-panel").isHidden()) await page.locator("#rail-toggle").click();
+	await page.locator("#todos-panel > summary").click();
+	assert.equal(await page.locator("#todos-list").isVisible(), false);
+	assert.equal(await page.locator("#workers-list").isVisible(), true);
+	await page.locator("#workers-panel > summary").focus();
+	await page.keyboard.press("Enter");
+	assert.equal(await page.locator("#workers-list").isVisible(), false);
+	emit({ type: "subagents", runs: [{ id: "buck", name: "buck", task: "Still checking", status: "running" }] });
+	await page.waitForFunction(() => localStorage.getItem("porcupine.rail.workers-panel.collapsed") === "true");
+	assert.equal(await page.locator("#workers-list").isVisible(), false, "Updates must preserve collapse");
+	await page.locator("#todos-panel > summary").click();
+	await page.locator("#workers-panel > summary").click();
 
 	await shot("workbench-agent-workspace.png");
 	await page.locator("#stop").click();

@@ -2,6 +2,7 @@
 export const WORKBENCH_ACTIVITY_SCRIPT = `
 let trackedGoal=null,trackedPlan=null;
 const subagentRuns=new Map(),railUi={root:$('work-rail'),toggle:$('rail-toggle'),todos:$('todos-panel'),objective:$('todos-objective'),goal:$('todos-goal'),count:$('todos-count'),list:$('todos-list'),workers:$('workers-panel'),workerCount:$('workers-count'),workerList:$('workers-list')};
+for(const panel of [railUi.todos,railUi.workers]){const key='porcupine.rail.'+panel.id+'.collapsed';try{if(window.localStorage.getItem(key)==='true')panel.open=false}catch{}panel.addEventListener('toggle',()=>{try{window.localStorage.setItem(key,String(!panel.open))}catch{}});}
 function updateRail(){const available=!railUi.todos.hidden||!railUi.workers.hidden;railUi.root.hidden=!available;railUi.toggle.hidden=!available;if(!available){railUi.root.dataset.open='false';railUi.toggle.setAttribute('aria-expanded','false');}}
 railUi.toggle.addEventListener('click',()=>{const open=railUi.root.dataset.open!=='true';railUi.root.dataset.open=String(open);railUi.toggle.setAttribute('aria-expanded',String(open));});
 function renderTracker(view){
