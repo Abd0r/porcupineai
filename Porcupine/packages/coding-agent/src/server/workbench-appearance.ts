@@ -9,6 +9,7 @@ export const APPEARANCE_DIALOG = `
       <label>Theme<select id="appearance-theme"><option value="workbench">Workbench</option><option value="pixel">Pixel</option><option value="cyberpunk">Cyberpunk</option><option value="static">Static · monochrome</option><option value="tokyo-night">Tokyo Night</option></select></label>
       <label>Colour mode<select id="appearance-mode"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></label>
     </div>
+    <label class="reasoning-preference" for="appearance-reasoning"><span><strong>Always show reasoning</strong><small>Expand available reasoning in live and saved conversations.</small></span><input id="appearance-reasoning" type="checkbox" role="switch"></label>
     <div class="settings-divider"></div>
     <h3>Chat background</h3><p>Upload a PNG, JPEG, or WebP. It stays in this browser, never in the model prompt. Up to 6 MiB and 16 million pixels.</p>
     <label class="file-picker">Choose image<input id="appearance-image" type="file" accept="image/png,image/jpeg,image/webp"></label>
@@ -135,6 +136,14 @@ export const APPEARANCE_STYLES = `
 .settings-grid label { display: grid; gap: var(--s2); font-size: var(--small); color: var(--muted); }
 .settings-grid input[type="number"] { width: 100%; background: var(--surface); color: var(--text); border: var(--unit) solid var(--line); border-radius: var(--r1); padding: var(--s2); font: inherit; }
 .settings-grid select { width: 100%; background: var(--surface); color: var(--text); border: var(--unit) solid var(--line); border-radius: var(--r1); padding: var(--s2); }
+.reasoning-preference { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 22px; color: var(--text); cursor: pointer; }
+.reasoning-preference span { display: grid; gap: 5px; }
+.reasoning-preference strong { font-size: 12px; font-weight: 500; }
+.reasoning-preference small { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.reasoning-preference input { appearance: none; position: relative; flex: 0 0 auto; width: 34px; height: 20px; margin: 0; border: 1px solid var(--line); border-radius: 20px; background: var(--surface-hover); cursor: pointer; transition: background-color var(--motion-fast) var(--motion-ease); }
+.reasoning-preference input::before { content: ''; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--quiet); transition: transform var(--motion-fast) var(--motion-ease); }
+.reasoning-preference input:checked { background: var(--accent); border-color: var(--accent); }
+.reasoning-preference input:checked::before { transform: translateX(14px); background: var(--accent-ink); }
 .settings-divider { height: var(--unit); background: var(--line-soft); margin: var(--s6) 0; }
 .file-picker { display: inline-block; padding: var(--s2) var(--s3); border: var(--unit) solid var(--line); border-radius: var(--r1); cursor: pointer; font-size: var(--small); }
 .file-picker input { display: block; max-width: 100%; font-size: var(--small); margin-top: var(--s2); }
@@ -145,10 +154,10 @@ export const APPEARANCE_STYLES = `
 `;
 
 export const APPEARANCE_SCRIPT = `
-const appearance={dialog:$('settings-dialog'),open:$('settings-open'),theme:$('appearance-theme'),mode:$('appearance-mode'),image:$('appearance-image'),remove:$('appearance-remove'),opacity:$('appearance-opacity'),value:$('appearance-opacity-value'),error:$('appearance-error'),backdrop:$('chat-backdrop')};
+const appearance={dialog:$('settings-dialog'),open:$('settings-open'),theme:$('appearance-theme'),mode:$('appearance-mode'),reasoning:$('appearance-reasoning'),image:$('appearance-image'),remove:$('appearance-remove'),opacity:$('appearance-opacity'),value:$('appearance-opacity-value'),error:$('appearance-error'),backdrop:$('chat-backdrop')};
 const appearanceKey='porcupine.workbench.appearance.v1',appearanceThemes=['workbench','pixel','cyberpunk','static','tokyo-night'];
-let appearancePreferences={theme:'workbench',mode:'dark',opacity:15},backgroundUrl=null,backgroundRevision=0,backgroundWrites=Promise.resolve();
-try{const saved=JSON.parse(window.localStorage.getItem(appearanceKey)||'null');if(saved&&appearanceThemes.includes(saved.theme)&&['dark','light','system'].includes(saved.mode)&&Number.isFinite(saved.opacity)&&saved.opacity>=0&&saved.opacity<=100)appearancePreferences={theme:saved.theme,mode:saved.mode,opacity:saved.opacity}}catch{}
+let appearancePreferences={theme:'workbench',mode:'dark',opacity:15,showReasoning:false},backgroundUrl=null,backgroundRevision=0,backgroundWrites=Promise.resolve();
+try{const saved=JSON.parse(window.localStorage.getItem(appearanceKey)||'null');if(saved&&appearanceThemes.includes(saved.theme)&&['dark','light','system'].includes(saved.mode)&&Number.isFinite(saved.opacity)&&saved.opacity>=0&&saved.opacity<=100)appearancePreferences={theme:saved.theme,mode:saved.mode,opacity:saved.opacity,showReasoning:saved.showReasoning===true}}catch{}
 function appearanceError(message){appearance.error.textContent=message;appearance.error.hidden=!message}
 function applyAppearance(save=false){const preference=appearancePreferences,mode=preference.mode==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):preference.mode;document.documentElement.setAttribute('data-theme',preference.theme);document.documentElement.setAttribute('data-colour-mode',mode);document.documentElement.style.setProperty('--chat-image-opacity',String(preference.opacity/100));appearance.theme.value=preference.theme;appearance.mode.value=preference.mode;appearance.opacity.value=String(preference.opacity);appearance.value.textContent=preference.opacity+'%';window.dispatchEvent(new Event('porcupine-theme-change'));if(save)try{window.localStorage.setItem(appearanceKey,JSON.stringify(preference))}catch{appearanceError('Preferences work for this tab, but browser storage is unavailable.')}}
 function backgroundDatabase(){return new Promise((resolve,reject)=>{if(!window.indexedDB){reject(new Error('Image persistence is unavailable in this browser.'));return}const request=window.indexedDB.open('porcupine-workbench',1);request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains('appearance'))request.result.createObjectStore('appearance')};request.onerror=()=>reject(new Error('Could not open local background storage.'));request.onsuccess=()=>resolve(request.result)})}
@@ -163,6 +172,8 @@ for(const tab of settingsTabs){tab.addEventListener('click',()=>selectSettingsTa
 appearance.open.addEventListener('click',()=>{selectSettingsTab(settingsTab);appearance.dialog.showModal();void loadWorkbenchSettings()});
 appearance.theme.addEventListener('change',()=>{appearancePreferences.theme=appearance.theme.value;applyAppearance(true)});
 appearance.mode.addEventListener('change',()=>{appearancePreferences.mode=appearance.mode.value;applyAppearance(true)});
+appearance.reasoning.checked=appearancePreferences.showReasoning;
+appearance.reasoning.addEventListener('change',()=>{appearancePreferences.showReasoning=appearance.reasoning.checked;applyAppearance(true);for(const row of ui.feed.querySelectorAll('.thinking')){const head=row.querySelector('.thinking-head'),body=row.querySelector('.thinking-body');if(!head||!body||head.disabled)continue;head.setAttribute('aria-expanded',String(appearancePreferences.showReasoning));body.hidden=!appearancePreferences.showReasoning;}});
 appearance.opacity.addEventListener('input',()=>{appearancePreferences.opacity=Number(appearance.opacity.value);applyAppearance(true)});
 appearance.image.addEventListener('change',async()=>{const revision=++backgroundRevision,file=appearance.image.files&&appearance.image.files[0];if(!file)return;appearanceError('');try{const prepared=await prepareBackground(file);if(revision!==backgroundRevision){URL.revokeObjectURL(prepared.url);return}showBackground(prepared.url);try{await queueBackgroundWrite('set',prepared.blob)}catch(error){appearanceError(error.message+' The image is active for this tab only.')}}catch(error){appearanceError(error.message)}finally{appearance.image.value=''}});
 appearance.remove.addEventListener('click',async()=>{++backgroundRevision;showBackground(null);try{await queueBackgroundWrite('delete');appearanceError('')}catch(error){appearanceError(error.message)}});

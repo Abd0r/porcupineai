@@ -26,6 +26,10 @@ The interface uses an open conversation column, neutral surfaces, compact contro
 
 Each view has a title and optional explanation. Charts expose all supplied values in an accessible data table, retaining full precision even when canvas labels are abbreviated. Diagrams expose object positions and labels as text. The new 2D/chart cards include **Ask about this visual**, which prepares a follow-up prompt without sending it. The model also receives a text fallback from `visualize`, so the explanation remains usable in non-graphical clients.
 
+Attaching the browser activates the configured `visualize` and `visualize_3d` tools for future turns. Explicitly excluded tools remain unavailable. The agent is instructed to choose diagrams for relationships, charts for supplied data, and 3D for spatial structure when useful, without requiring a separate visualization request.
+
+Chat replies and reasoning use locally served KaTeX and fonts for math: `\(...\)` and `$...$` inline, `\[...\]` and `$$...$$` for display equations. Fractions, integrals, aligned equations, cases and matrices use standard KaTeX syntax. Table cells support math, including vertical bars inside expressions. Code fences remain literal. Incomplete or unsupported expressions remain visible; HTML and external-resource commands are untrusted. Canvas figure labels remain plain text.
+
 For example, ask: "Teach me Newton's second law with a labelled 2D force diagram" or "Plot these measurements against time with units and the uncertainty I supplied." Diagrams use positive y pointing upwards. Chart x values are numeric; use point labels for discrete category names. Line segments connect samples in the supplied order.
 
 ### Scientific integrity and bounds
@@ -48,7 +52,7 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 | Tool activity | Inline expandable rows at the execution point, with real arguments, streaming output, and running/done/failed state. | Session events; tool calls and results replay on reconnect |
 | Context ring | Composer meter of the live context window. Hover or focus shows used / window, percent, the compaction threshold and the sub-agent concurrency limit. | Live session |
 | Session limits | Settings → Session limits writes the real global settings: compaction threshold as a percentage of the active model's window, and `subagent.maxConcurrent` (1-8). | `settings.json` |
-| Sub-agent activity | Sub-agent messages and reports render as compact activity lines in the conversation, never as fake progress bars. | Session events |
+| Sub-agent activity | One compact row per delegated task shows its status, with final reports in the conversation. Internal tool names, arguments, logs and step chatter are not exposed in the GUI. | Session events |
 | Goal tracker | Inline goal updates at their event position, with collapsible steps and real statuses. Goals are declared by the agent with the `goal` tool; there is no `/goal` command on either surface. | Session entry shared with the terminal |
 | Reasoning and Autonomy | Composer selectors read and write the session's real reasoning mode and Ask/Normal/Auto interaction mode. They are disabled while a turn is running. The available reasoning modes come from the active model. | Session |
 | Appearance | Five themes (Workbench, Pixel, Cyberpunk, Static monochrome, Tokyo Night), dark/light/system colour mode, and a local chat background with opacity. Images stay in this browser (IndexedDB) and are never sent to the model. | Browser only |
@@ -65,6 +69,10 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 
 Settings is divided into Appearance, Models, Limits and Context tabs. The composer grows with the draft, preserves it on a failed send, and rejects duplicate submission while busy. Enter respects IME composition. Each conversation retains its draft for this tab. Token and draft text are not persisted to browser storage.
 
+**Settings → Appearance → Always show reasoning** remembers whether available reasoning should expand automatically. It applies to live and restored blocks; manually collapsing a block is respected during streaming. This is a display preference, separate from the model's reasoning effort. Providers that do not return reasoning text cannot supply a disclosure.
+
+Saved reasoning, code, tool arguments, tool output and edit diffs replay from the selected session branch, including work preceding model-context compaction. Provider signatures and redacted payloads are excluded. Large tool output initially shows a preview with **Show full output**. Historical reasoning has no invented elapsed time. Its SVG animation uses flowing threads only during live activity and respects reduced motion.
+
 The active agent session replays its messages, tool calls/results, visuals and sub-agent reports on connection. Pending approvals are restored and settled decisions remain inline. Goals and live sub-agent progress append at their event positions; the browser never invents a phase from prose. Older goal/progress snapshots are not a separate durable event log. Replayed content does not replay entrance animations. Scrolling upward suspends automatic following until **Latest message** is selected. Reconnecting and switching conversations preserve the reading position. A disconnected stream disables sending and session controls and exposes **Reconnect**. Delayed model-picker and limit responses cannot overwrite another conversation's controls.
 
 ## Browser verification
@@ -74,3 +82,5 @@ From the inner repository root, run `node --import tsx packages/coding-agent/tes
 Custom API sessions without replay support show an explicit live-only notice. The server serves the static page without exposing session data. All session API calls still require the configured bearer token, and the existing same-origin check applies. Keep the server bound to loopback for browser use. Do not send the bearer token over an untrusted network or expose the plain-HTTP server to the public internet.
 
 Run `node --import tsx packages/coding-agent/test/workbench-interaction-smoke.ts` for draft recovery, busy-state handling, chronological inline activity, session switching, transcript restoration, pending approval recovery, settings tabs and responsive navigation. `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select an installed Chromium binary. These tests use synthetic local fixtures.
+
+Run `node --import tsx packages/coding-agent/test/workbench-replay-smoke.ts` for disk-backed replay, full output and diffs, reasoning preferences, prompt ordering, live and reduced motion, chart/3D redraws, and desktop/mobile layout across all five themes in light, dark and system modes (both system preferences).

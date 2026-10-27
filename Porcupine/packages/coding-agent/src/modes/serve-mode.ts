@@ -26,7 +26,7 @@ import { type ServeApiSession, startServeApi } from "../server/http-api.ts";
 import { ContextFileStore, WorkbenchError } from "../server/workbench-context-files.ts";
 import { WorkbenchProjectStore } from "../server/workbench-projects.ts";
 import { createSessionSurfaces } from "../server/workbench-session-surfaces.ts";
-import { serializeWorkbenchTimeline } from "../server/workbench-transcript.ts";
+import { serializeWorkbenchHistory } from "../server/workbench-transcript.ts";
 
 export interface ServeModeOptions {
 	port?: number;
@@ -52,18 +52,22 @@ export function isLoopbackHost(host: string | undefined): boolean {
 }
 
 export function adaptSessionToServeApi(session: AgentSession): ServeApiSession {
+	const enableVisualTools = () => {
+		if (session.isStreaming || session.clientSurface !== "web") return;
+		const active = session.getActiveToolNames();
+		const visuals = ["visualize", "visualize_3d"].filter(
+			(name) => session.getToolDefinition(name) && !active.includes(name),
+		);
+		if (visuals.length) session.setActiveToolsByName([...active, ...visuals]);
+	};
 	const goalPlanListeners = new Set<(view: unknown) => void>();
 	const tracker = () => ({ goal: session.getGoal(), busy: session.isStreaming });
 	const subagentSnapshot = () =>
-		session.subagentState.runs.map(({ id, name, task, status, steps, lastTool, lastToolArgs, phase }) => ({
+		session.subagentState.runs.map(({ id, name, task, status }) => ({
 			id,
 			name,
 			task,
 			status,
-			steps,
-			lastTool,
-			lastToolArgs,
-			phase,
 		}));
 	session.subscribe((event) => {
 		if (event.type !== "goal_changed") return;
@@ -71,7 +75,10 @@ export function adaptSessionToServeApi(session: AgentSession): ServeApiSession {
 	});
 	return {
 		...createSessionSurfaces(session),
-		setClientSurface: (surface) => session.setClientSurface(surface),
+		setClientSurface: (surface) => {
+			session.setClientSurface(surface);
+			enableVisualTools();
+		},
 		getGoalPlan: () => tracker(),
 		onGoalPlanChange: (listener) => {
 			goalPlanListeners.add(listener);
@@ -79,17 +86,25 @@ export function adaptSessionToServeApi(session: AgentSession): ServeApiSession {
 		},
 		id: session.sessionId,
 		sendUserMessage: async (text) => {
+			enableVisualTools();
 			await session.sendUserMessage(text);
 		},
 		abort: async () => {
 			await session.abort();
 		},
 		isStreaming: () => session.isStreaming,
-		getTimeline: () => serializeWorkbenchTimeline(session.messages),
+		getTimeline: () => serializeWorkbenchHistory(session.sessionManager.getBranch()),
 		getSubagents: subagentSnapshot,
 		onEvent: (listener) => {
 			const events = session.subscribe((event) => listener(event));
-			const subagents = session.onSubagentEvent(() => listener({ type: "subagents", runs: subagentSnapshot() }));
+			let previous = JSON.stringify(subagentSnapshot());
+			const subagents = session.onSubagentEvent(() => {
+				const runs = subagentSnapshot(),
+					fingerprint = JSON.stringify(runs);
+				if (fingerprint === previous) return;
+				previous = fingerprint;
+				listener({ type: "subagents", runs });
+			});
 			return () => {
 				events();
 				subagents();

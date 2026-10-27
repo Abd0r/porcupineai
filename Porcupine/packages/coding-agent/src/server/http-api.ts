@@ -33,6 +33,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { stripAnsi } from "../utils/ansi.ts";
+import { serveMathAsset } from "./math-assets.ts";
 import { PORCUPINE_WEB_UI } from "./web-ui.ts";
 import type { ContextFileStore } from "./workbench-context-files.ts";
 import type { WorkbenchProjectStore } from "./workbench-projects.ts";
@@ -59,7 +60,7 @@ export interface ServeApiSession
 	/** Text transcript only. Never include provider signatures, tool arguments, or credentials. */
 	getTranscript?(): Array<{ role: "user" | "assistant"; content: string }>;
 	getTimeline?(): WorkbenchReplayEvent[];
-	getSubagents?(): Array<{ id: string; name: string; task: string; status: string; steps: number; lastTool?: string }>;
+	getSubagents?(): Array<{ id: string; name: string; task: string; status: string }>;
 	/** Subscribe to session events (agent messages, tool calls, ...). Returns an unsubscribe. */
 	onEvent(listener: (event: unknown) => void): () => void;
 	/**
@@ -352,7 +353,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					"content-length": Buffer.byteLength(PORCUPINE_WEB_UI),
 					"cache-control": "no-store",
 					"content-security-policy":
-						"default-src 'none'; img-src blob: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+						"default-src 'none'; img-src blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
 					"x-content-type-options": "nosniff",
 					"x-frame-options": "DENY",
 					"referrer-policy": "no-referrer",
@@ -361,6 +362,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				return;
 			}
 
+			if (method === "GET" && serveMathAsset(path, res)) return;
 			if (!requireAuth(req)) {
 				json(res, 401, { error: "unauthorized" });
 				return;

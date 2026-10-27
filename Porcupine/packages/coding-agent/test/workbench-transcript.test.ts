@@ -8,7 +8,7 @@ describe("workbench timeline replay", () => {
 			{
 				role: "assistant",
 				content: [
-					{ type: "thinking", thinking: "private provider reasoning", signature: "secret-signature" },
+					{ type: "thinking", thinking: "Supplied reasoning", signature: "secret-signature" },
 					{ type: "text", text: "Inspecting the source." },
 					{ type: "toolCall", id: "read-1", name: "read", arguments: { path: "AGENTS.md" } },
 				],
@@ -38,6 +38,37 @@ describe("workbench timeline replay", () => {
 			"message_end",
 		]);
 		expect(timeline[2]).toMatchObject({ toolCallId: "read-1", args: { path: "AGENTS.md" } });
-		expect(JSON.stringify(timeline)).not.toMatch(/secret-signature|private provider reasoning|not public/);
+		expect(JSON.stringify(timeline)).toContain("Supplied reasoning");
+		expect(JSON.stringify(timeline)).not.toMatch(/secret-signature|not public/);
+	});
+	it("preserves reasoning-only messages and interleaved code and tool blocks in their original order", () => {
+		const timeline = serializeWorkbenchTimeline([
+			{
+				role: "assistant",
+				content: [
+					{ type: "thinking", thinking: "Inspect first", signature: "opaque" },
+					{ type: "toolCall", id: "read", name: "read", arguments: { path: "main.ts" } },
+					{ type: "text", text: "```ts\nconst answer = 42;\n```" },
+					{ type: "thinking", thinking: "Now verify" },
+					{ type: "toolCall", id: "verify", name: "bash", arguments: { command: "node verify.js" } },
+				],
+			},
+		]);
+		expect(timeline.map((event) => event.type)).toEqual([
+			"message_end",
+			"tool_execution_start",
+			"message_end",
+			"tool_execution_start",
+		]);
+		expect(timeline[0]).toMatchObject({ message: { content: [{ type: "thinking", thinking: "Inspect first" }] } });
+		expect(timeline[2]).toMatchObject({
+			message: {
+				content: [
+					{ type: "text", text: "```ts\nconst answer = 42;\n```" },
+					{ type: "thinking", thinking: "Now verify" },
+				],
+			},
+		});
+		expect(JSON.stringify(timeline)).not.toContain("opaque");
 	});
 });

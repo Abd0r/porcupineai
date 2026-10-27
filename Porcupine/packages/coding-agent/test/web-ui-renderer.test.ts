@@ -56,7 +56,14 @@ class FakeElement {
 	};
 	readonly style = { setProperty: (_name: string, _value: string) => {} };
 	className = "";
-	textContent = "";
+	private text = "";
+	get textContent(): string {
+		return this.text + this.children.map((child) => child.textContent).join("");
+	}
+	set textContent(value: string) {
+		this.text = value;
+		this.children.splice(0);
+	}
 	hidden = false;
 	tabIndex = -1;
 	width = 0;
@@ -118,8 +125,10 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	rich(node: FakeElement, text: string): FakeElement;
 	connect(id: string): Promise<void>;
 	text(value: unknown): string;
+	mathCalls: Array<{ source: string; displayMode: boolean; trust: boolean }>;
 } {
 	const canvasContext = new FakeCanvasContext();
+	const mathCalls: Array<{ source: string; displayMode: boolean; trust: boolean }> = [];
 	const elements = new Map<string, FakeElement>();
 	for (const id of [
 		"auth",
@@ -203,6 +212,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"settings-open",
 		"appearance-theme",
 		"appearance-mode",
+		"appearance-reasoning",
 		"appearance-image",
 		"appearance-remove",
 		"appearance-opacity",
@@ -262,6 +272,15 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		setTimeout: () => 0,
 		document,
 		window: {
+			katex: {
+				render(source: string, node: FakeElement, options: { displayMode: boolean; trust: boolean }) {
+					if (source.includes("notacommand")) throw new Error("Unsupported math");
+					mathCalls.push({ source, displayMode: options.displayMode, trust: options.trust });
+					const math = document.createElement("math");
+					math.textContent = source;
+					node.append(math);
+				},
+			},
 			devicePixelRatio: 1,
 			addEventListener() {},
 			getComputedStyle: () => ({ getPropertyValue: () => "#a0a0a0" }),
@@ -293,10 +312,30 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	};
 	const connect = runInNewContext("globalThis.__connect", sandbox) as (id: string) => Promise<void>;
 	const text = runInNewContext("globalThis.__text", sandbox) as (value: unknown) => string;
-	return { render, event, rich, feed, canvasContext, connect, text };
+	return { render, event, rich, feed, canvasContext, connect, text, mathCalls };
 }
 
 describe("workbench transport regressions", () => {
+	it("keeps sub-agent tools internal and updates one task row without tool chatter", () => {
+		const { event, feed } = loadRenderer();
+		const run = {
+			id: "worker",
+			name: "buck",
+			task: "Verify the change",
+			status: "running",
+			steps: 1,
+			lastTool: "bash",
+			lastToolArgs: { command: "internal-command-marker" },
+		};
+		event({ type: "subagents", runs: [run] });
+		event({
+			type: "subagents",
+			runs: [{ ...run, steps: 2, lastTool: "read", lastToolArgs: { path: "internal-file-marker" } }],
+		});
+		expect(feed.children.filter((node) => node.className === "subagent-activity")).toHaveLength(1);
+		expect(feed.textContent).toContain("Verify the change");
+		expect(feed.textContent).not.toMatch(/internal-command-marker|internal-file-marker|Running a command|Reading/);
+	});
 	it("keeps tools, goals, sub-agents and the answer in the conversation event order", () => {
 		const { event, feed } = loadRenderer();
 		event({ type: "message_end", message: { role: "user", content: "Fix this" } });
@@ -539,19 +578,20 @@ describe("rich message rendering", () => {
 		).toEqual(["warm", "0.4"]);
 	});
 
-	it("renders LaTeX as MathML for fractions, roots, scripts and Greek", () => {
-		const { rich } = loadRenderer();
+	it("delegates complete LaTeX expressions to the trusted renderer with untrusted-input options", () => {
+		const { rich, mathCalls } = loadRenderer();
 		const node = rich(
 			new FakeElement("div", new FakeCanvasContext()),
 			"Inline $\\frac{a}{b}$ and $x^2 + \\sqrt{y}$ then $$\\sum_{i=1}^{n} \\alpha_i$$",
 		);
 		const tags = descendants(node).map((child) => child.tagName);
 		expect(tags).toContain("math");
-		expect(tags).toContain("mfrac");
-		expect(tags).toContain("msup");
-		expect(tags).toContain("msqrt");
-		expect(tags.some((tag) => tag === "msub" || tag === "munderover")).toBe(true);
-		expect(descendants(node).some((child) => child.textContent === "α")).toBe(true);
+		expect(mathCalls.map((call) => call.source)).toEqual([
+			"\\frac{a}{b}",
+			"x^2 + \\sqrt{y}",
+			"\\sum_{i=1}^{n} \\alpha_i",
+		]);
+		expect(mathCalls.every((call) => call.trust === false)).toBe(true);
 		const display = rich(new FakeElement("div", new FakeCanvasContext()), "$$\\int_0^1 f(x)\\,dx$$");
 		expect(descendants(display).some((child) => child.className === "math-display")).toBe(true);
 		expect(descendants(display).some((child) => child.tagName === "math")).toBe(true);
@@ -599,11 +639,13 @@ describe("inline thinking state", () => {
 	it("starts a live row, names real tool activity, and settles with the chain of thought", () => {
 		const { event, feed } = loadRenderer();
 		event({ type: "agent_start" });
-		expect(feed.children).toHaveLength(1);
-		const row = feed.children[0];
+		expect(feed.children).toHaveLength(0);
+		event({ type: "message_end", message: { role: "user", content: "Explain this" } });
+		expect(feed.children).toHaveLength(2);
+		const row = feed.children[1];
 		if (!row) throw new Error("thinking row missing");
 		const label = () => descendants(row).find((child) => child.className === "thinking-label")?.textContent;
-		expect(label()).toBe("Thinking…");
+		expect(label()).toBe("Working…");
 
 		event({ type: "tool_execution_start", toolName: "web_search" });
 		expect(label()).toBe("Searching the web");

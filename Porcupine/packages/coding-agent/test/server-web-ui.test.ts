@@ -36,6 +36,23 @@ function observableSession(): { session: ServeApiSession; emit(event: unknown): 
 }
 
 describe("serve web UI", () => {
+	it("serves only local math assets without exposing session data", async () => {
+		const handle = await startServeApi({ session: session(), token: "secret", port: 0 });
+		handles.push(handle);
+		const base = `http://127.0.0.1:${handle.port()}`;
+		for (const [path, type] of [
+			["katex.min.js", "text/javascript"],
+			["katex.min.css", "text/css"],
+			["fonts/KaTeX_Main-Regular.woff2", "font/woff2"],
+		]) {
+			const response = await fetch(`${base}/workbench/math/${path}`);
+			expect(response.status).toBe(200);
+			expect(response.headers.get("content-type")).toBe(type);
+			expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(100);
+		}
+		expect((await fetch(`${base}/workbench/math/unknown.js`)).status).toBe(404);
+		expect((await fetch(`${base}/session`)).status).toBe(401);
+	});
 	it("restores transcript and busy state atomically on SSE attachment", async () => {
 		const messages = [{ role: "user" as const, content: "Earlier request" }];
 		const handle = await startServeApi({

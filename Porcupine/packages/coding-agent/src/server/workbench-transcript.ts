@@ -1,3 +1,5 @@
+import type { SessionEntry } from "../core/session-manager.ts";
+
 /** Public replay data, deliberately excluding provider signatures and arbitrary metadata. */
 interface SourceMessage {
 	role: string;
@@ -8,17 +10,26 @@ interface SourceMessage {
 	customType?: string;
 	details?: unknown;
 }
+type ReplayContent = { type: "text"; text: string } | { type: "thinking"; thinking: string };
 export type WorkbenchReplayEvent =
 	| {
 			type: "message_end";
-			message: { role: string; content: string; customType?: string; details?: Record<string, unknown> };
+			message: {
+				role: string;
+				content: string | ReplayContent[];
+				customType?: string;
+				details?: Record<string, unknown>;
+			};
 	  }
 	| { type: "tool_execution_start"; toolCallId: string; toolName: string; args: unknown }
 	| {
 			type: "tool_execution_end";
 			toolCallId: string;
 			toolName: string;
-			result: { content: Array<{ type: "text"; text: string }>; details?: { visualization: unknown } };
+			result: {
+				content: Array<{ type: "text"; text: string }>;
+				details?: { visualization?: unknown; diff?: string; patch?: string; firstChangedLine?: number };
+			};
 			isError: boolean;
 	  };
 
@@ -33,37 +44,71 @@ function textOf(content: unknown): string {
 		.map((part) => part.text as string)
 		.join("\n");
 }
+/** GUI history follows the selected branch, independently of the model's compacted context. */
+export function serializeWorkbenchHistory(entries: readonly SessionEntry[]): WorkbenchReplayEvent[] {
+	const messages: SourceMessage[] = [];
+	for (const entry of entries) {
+		if (entry.type === "message") messages.push(entry.message);
+		if (entry.type === "custom_message")
+			messages.push({
+				role: "custom",
+				customType: entry.customType,
+				content: entry.content,
+				details: entry.details,
+			});
+	}
+	return serializeWorkbenchTimeline(messages);
+}
 export function serializeWorkbenchTimeline(messages: readonly SourceMessage[]): WorkbenchReplayEvent[] {
 	const events: WorkbenchReplayEvent[] = [];
 	for (const message of messages) {
 		const content = textOf(message.content);
 		if (message.role === "user" || message.role === "assistant") {
-			if (content) events.push({ type: "message_end", message: { role: message.role, content } });
 			if (message.role === "assistant" && Array.isArray(message.content)) {
+				let blocks: ReplayContent[] = [];
+				const flush = () => {
+					if (blocks.length) events.push({ type: "message_end", message: { role: "assistant", content: blocks } });
+					blocks = [];
+				};
 				for (const part of message.content) {
+					if (!record(part)) continue;
+					if (part.type === "text" && typeof part.text === "string" && part.text)
+						blocks.push({ type: "text", text: part.text });
+					if (part.type === "thinking" && typeof part.thinking === "string" && part.thinking && !part.redacted)
+						blocks.push({ type: "thinking", thinking: part.thinking });
 					if (
 						record(part) &&
 						part.type === "toolCall" &&
 						typeof part.id === "string" &&
 						typeof part.name === "string"
-					)
+					) {
+						flush();
 						events.push({
 							type: "tool_execution_start",
 							toolCallId: part.id,
 							toolName: part.name,
 							args: part.arguments,
 						});
+					}
 				}
-			}
+				flush();
+			} else if (content) events.push({ type: "message_end", message: { role: message.role, content } });
 		} else if (message.role === "toolResult" && message.toolCallId && message.toolName) {
-			const visualization = record(message.details) ? message.details.visualization : undefined;
+			const details: { visualization?: unknown; diff?: string; patch?: string; firstChangedLine?: number } = {};
+			if (record(message.details)) {
+				if (message.details.visualization) details.visualization = message.details.visualization;
+				if (typeof message.details.diff === "string") details.diff = message.details.diff;
+				if (typeof message.details.patch === "string") details.patch = message.details.patch;
+				if (Number.isInteger(message.details.firstChangedLine) && Number(message.details.firstChangedLine) > 0)
+					details.firstChangedLine = Number(message.details.firstChangedLine);
+			}
 			events.push({
 				type: "tool_execution_end",
 				toolCallId: message.toolCallId,
 				toolName: message.toolName,
 				result: {
 					content: [{ type: "text", text: content }],
-					...(visualization ? { details: { visualization } } : {}),
+					...(Object.keys(details).length ? { details } : {}),
 				},
 				isError: Boolean(message.isError),
 			});

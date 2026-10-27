@@ -56,6 +56,8 @@ async function connectEvents(id){
 }
 const toolRuns=new Map();
 function toolDescription(name,args){const input=args&&typeof args==='object'?args:{};const target=input.path||input.file_path||input.command||input.pattern||'';return toolWords(name)+(typeof target==='string'&&target?' · '+target.replace(/\s+/g,' ').slice(0,100):'');}
+function toolResultText(result){const text=textOf(result&&result.content),details=result&&result.details;const diff=details&&(typeof details.diff==='string'?details.diff:typeof details.patch==='string'?details.patch:'');return text+(diff?'\n\nChanges\n'+diff:'');}
+function setToolOutput(run,text,tail=false){run.resultText=text;run.tail=tail;const full=run.args+(text?'\n\n'+text:'');run.more.hidden=text.length<=16000;run.more.textContent=run.expanded?'Show preview':'Show full output';run.more.setAttribute('aria-expanded',String(run.expanded));run.output.textContent=run.expanded||text.length<=16000?full:run.args+'\n\n'+(tail?text.slice(-16000):text.slice(0,16000))+'\n[Preview · expand for full saved output]';}
 function showToolStart(event){
 	if(!replaying)setThinkingLabel(toolWords(String(event.toolName||'tool')));
   ui.welcome.hidden=true;
@@ -64,10 +66,12 @@ function showToolStart(event){
   icon.className='activity-glyph';icon.setAttribute('aria-hidden','true');icon.append(thinkingGlyph());
   name.textContent=toolDescription(String(event.toolName||'tool'),event.args);name.title=name.textContent;state.className='tool-state';state.textContent='Running';summary.append(icon,name,state);
   const output=document.createElement('pre');output.textContent=JSON.stringify(event.args||{},null,2);row.append(summary,output);ui.feed.append(row);
-  toolRuns.set(event.toolCallId||event.toolName,{row,state,output,icon,args:output.textContent});scrollFeed();
+  const more=document.createElement('button');more.type='button';more.className='quiet-button tool-output-more';more.hidden=true;row.append(more);
+  const run={row,state,output,icon,more,args:output.textContent,resultText:'',expanded:false,tail:false};more.addEventListener('click',()=>{run.expanded=!run.expanded;setToolOutput(run,run.resultText,run.tail)});
+  toolRuns.set(event.toolCallId||event.toolName,run);scrollFeed();
 }
-function showToolUpdate(event){const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;const text=textOf(event.partialResult&&event.partialResult.content);if(text)run.output.textContent=run.args+'\n\n'+text.slice(-16000);scrollFeed();}
-function showToolEnd(event){if(liveThinking&&!replaying)setThinkingLabel('Working');const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;run.row.dataset.state=event.isError?'failed':'done';run.state.textContent=event.isError?'Failed':'Done';const svg=document.createElementNS(MATH_NS,'svg'),path=document.createElementNS(MATH_NS,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');path.setAttribute('d',event.isError?'m7 7 10 10M17 7 7 17':'m5 12 4 4L19 6');svg.append(path);run.icon.replaceChildren(svg);const text=textOf(event.result&&event.result.content);if(text)run.output.textContent=run.args+'\n\n'+text.slice(0,16000)+(text.length>16000?'\n[Output preview truncated]':'');toolRuns.delete(event.toolCallId||event.toolName);}
+function showToolUpdate(event){const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;setToolOutput(run,toolResultText(event.partialResult),true);scrollFeed();}
+function showToolEnd(event){if(liveThinking&&!replaying)setThinkingLabel('Working');const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;run.row.dataset.state=event.isError?'failed':'done';run.state.textContent=event.isError?'Failed':'Done';const svg=document.createElementNS(MATH_NS,'svg'),path=document.createElementNS(MATH_NS,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');path.setAttribute('d',event.isError?'m7 7 10 10M17 7 7 17':'m5 12 4 4L19 6');svg.append(path);run.icon.replaceChildren(svg);setToolOutput(run,toolResultText(event.result));toolRuns.delete(event.toolCallId||event.toolName);}
 function filterSessions(){const query=$('session-search').value.trim().toLowerCase();for(const button of ui.sessions.children)button.hidden=query&&!button.textContent.toLowerCase().includes(query);}
 async function refreshSessions(selectFirst=false){
   const data=await json('/session');ui.sessions.replaceChildren();

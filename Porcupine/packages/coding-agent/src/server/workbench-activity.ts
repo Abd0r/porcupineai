@@ -20,9 +20,10 @@ function renderTracker(view){
 }
 async function refreshTracker(id=sessionId){const epoch=++trackerEpoch;if(!id)return;try{const view=await json('/session/'+encodeURIComponent(id)+'/goal-plan');if(epoch===trackerEpoch&&id===sessionId)renderTracker(view.supported===false?null:view)}catch{}}
 function applySubagents(runs){
-  for(const run of runs){const fingerprint=JSON.stringify(run);if(subagentRuns.get(run.id)===fingerprint)continue;subagentRuns.set(run.id,fingerprint);
-    const label='@'+run.name+' · '+(run.lastTool?toolWords(run.lastTool):run.phase==='compacting'?'Compacting context':run.task||'Sub-agent');
-    const row=activityRow('subagent-activity',label,run.status);const body=document.createElement('div');body.className='activity-detail';body.textContent=run.task+(Number.isFinite(run.steps)?' · '+run.steps+' step'+(run.steps===1?'':'s'):'');if(run.lastToolArgs){const args=document.createElement('pre');args.textContent=JSON.stringify(run.lastToolArgs,null,2);body.append(args)}row.append(body);scrollFeed();
+  for(const run of runs){const fingerprint=JSON.stringify([run.name,run.task,run.status]),previous=subagentRuns.get(run.id);if(previous&&previous.fingerprint===fingerprint)continue;
+    if(previous){previous.row.dataset.state=run.status;previous.status.textContent=run.status;previous.label.textContent='@'+run.name;previous.body.textContent=run.task||'Delegated task';previous.fingerprint=fingerprint;continue;}
+    const row=activityRow('subagent-activity','@'+run.name,run.status),body=document.createElement('div');body.className='activity-detail';body.textContent=run.task||'Delegated task';row.append(body);
+    subagentRuns.set(run.id,{fingerprint,row,label:row.children[0].children[0],status:row.children[0].children[1],body});scrollFeed();
   }
 }
 function noteSubagent(message){const info=message.details||{};const report=String(message.customType||'').includes('report');const id=info.from||info.id||info.agentTag||info.subagentId||'agent';const row=activityRow('subagent-activity',(report?'Sub-agent report':'Sub-agent message')+' · '+id,report?(info.ok===false?'failed':'done'):'message');const body=document.createElement('div');body.className='activity-detail';body.textContent=textOf(message.content);row.append(body);scrollFeed();}

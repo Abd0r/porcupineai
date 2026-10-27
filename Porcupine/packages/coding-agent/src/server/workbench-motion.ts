@@ -18,9 +18,6 @@ button, select, summary { transition: color var(--motion-fast) var(--motion-ease
 .activity-glyph { flex: 0 0 18px; display: inline-grid; place-items: center; color: var(--quiet); }
 .activity-glyph svg { width: 18px; height: 18px; overflow: visible; }
 .tool-activity[data-state="running"] .activity-glyph { color: var(--accent); }
-.tool-activity[data-state="running"] .motion-orbit { transform-origin: 12px 12px; animation: thinking-orbit 2.4s linear infinite; }
-.tool-activity[data-state="running"] .motion-core { transform-origin: 12px 12px; animation: thinking-core 1.8s ease-in-out infinite; }
-.tool-activity[data-state="running"] .motion-trace { stroke-dasharray: 12 28; animation: thinking-trace 1.8s ease-in-out infinite alternate; }
 .tool-activity[data-state="done"] .activity-glyph path { stroke-dasharray: 30; animation: workbench-ink 320ms var(--motion-ease) both; }
 .tool-activity[data-state="failed"] .activity-glyph { color: var(--danger); }
 .restored .activity-glyph * { animation: none !important; }

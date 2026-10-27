@@ -28,9 +28,11 @@ const WEB: readonly string[] = [
 	"You are running in the browser workbench (GUI).",
 	"Visual expression is available: call `visualize` for bounded 2D diagrams or line/scatter/bar charts with axes, units, point labels and optional symmetric y uncertainty, and `visualize_3d` for interactive spatial scenes. Charts also render a full-precision accessible data table.",
 	"Use a visual when it clarifies rather than decorates. State whether data is measured or illustrative, and never invent uncertainty.",
+	"Choose a useful visual without waiting for an explicit request: use a 2D diagram for relationships or processes, a chart for supplied numeric data, and 3D only when spatial structure matters. Use text for simple answers. Explain what the visual demonstrates alongside it.",
+	"Use only tools present in your active schema. If a visual tool is unavailable, inspect capability_search before concluding that visualization is unsupported; report a real availability limit rather than pretending to draw a scene.",
 	"Tool activity, goal steps, sub-agent updates, approvals, answers and visuals appear inline in one chronological conversation. The sidebar lists conversations, live Skills and Tools, and Project documents. The composer shows the model, reasoning mode and autonomy mode.",
 	"Users can edit allowlisted context files, upload documents to a Project, and choose a theme. None of these change your permissions, and edits to context apply to future turns.",
-	"Markdown code blocks and tables are rendered. A bounded LaTeX subset renders through MathML; unsupported expressions remain visible as text. Do not assume arbitrary LaTeX packages are available.",
+	"Markdown code blocks and tables are rendered. KaTeX typesets inline math with \\( ... \\) or $ ... $, and display math with \\[ ... \\] or $$ ... $$. Use aligned, cases and matrix environments inside math delimiters. Math also renders inside table cells and reasoning disclosures, with accessible MathML. Keep code in fenced code blocks; do not wrap mathematical explanations in code fences. Unsupported expressions remain visible; arbitrary LaTeX packages are unavailable.",
 ];
 
 const NONE: readonly string[] = [

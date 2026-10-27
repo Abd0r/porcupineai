@@ -203,6 +203,24 @@ describe("serve HTTP API", () => {
 });
 
 describe("serve HTTP API with a real session", () => {
+	it("retains older work in GUI replay after model context compaction", async () => {
+		const harness = await createHarness({
+			responses: [{ thinking: "Saved reasoning before compaction", text: "Original verified code" }],
+		});
+		cleanups.push(() => harness.cleanup());
+		await harness.session.prompt("Original request");
+		const kept = harness.session.sessionManager.appendMessage({
+			role: "user",
+			content: "Later request",
+			timestamp: Date.now(),
+		});
+		harness.session.sessionManager.appendCompaction("Compact summary", kept, 1000);
+		harness.agent.state.messages = harness.session.sessionManager.buildSessionContext().messages;
+		expect(JSON.stringify(harness.session.messages)).not.toContain("Saved reasoning before compaction");
+		const timeline = adaptSessionToServeApi(harness.session).getTimeline!();
+		expect(JSON.stringify(timeline)).toContain("Saved reasoning before compaction");
+		expect(JSON.stringify(timeline)).toContain("Original verified code");
+	});
 	it("tells the real agent which client surface is attached", async () => {
 		const harness = await createHarness({ responses: ["unused"] });
 		cleanups.push(async () => harness.cleanup());
