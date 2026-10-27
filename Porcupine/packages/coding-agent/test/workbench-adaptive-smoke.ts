@@ -113,11 +113,23 @@ try {
 	assert.match(received.at(-1) || "", /request_apply/);
 	await card("motion").getByRole("button", { name: "Play", exact: true }).click();
 	await card("motion").getByRole("button", { name: "Pause", exact: true }).click();
-	await card("simulation").getByLabel("Slope", { exact: true }).fill("2");
+	await card("simulation").getByLabel("Slope", { exact: true }).fill("0");
+	await card("simulation").getByRole("button", { name: "Send to agent", exact: true }).click();
+	await card("simulation").getByText("Sent to agent.", { exact: true }).waitFor();
 	await page.reload();
 	await login();
 	assert.equal(await card("form").getByLabel("Name", { exact: true }).inputValue(), "Abdur");
+	assert.equal(
+		(await page.locator("#session-title").innerText()).includes("[Adaptive UI response]"),
+		false,
+		"Internal response envelopes must not become the visible conversation title",
+	);
 	assert.equal(await card("table").getByLabel("Value row 1", { exact: true }).inputValue(), "7");
+	assert.equal(
+		await card("simulation").getByLabel("Slope", { exact: true }).inputValue(),
+		"0",
+		"A saved zero must not revert to the nonzero default",
+	);
 	await card("flashcards")
 		.getByText(/Next review:/)
 		.waitFor();
@@ -134,6 +146,22 @@ try {
 		}
 	}
 	assert.deepEqual(errors, []);
+	await page.locator("#appearance-theme").selectOption("pixel", { force: true });
+	for (const mode of ["dark", "light"]) {
+		await page.locator("#appearance-mode").selectOption(mode, { force: true });
+		for (const width of [1280, 390]) {
+			await page.setViewportSize({ width, height: 960 });
+			await card("form").scrollIntoViewIfNeeded();
+			assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+			assert.equal(
+				await card("form")
+					.getByRole("button", { name: "Send to agent" })
+					.evaluate((node) => getComputedStyle(node).borderRadius),
+				"0px",
+			);
+			await page.screenshot({ path: `/tmp/porcupine-pixel-${mode}-${width}.png` });
+		}
+	}
 	await card("form").screenshot({ path: "/tmp/porcupine-adaptive-form.png" });
 	await card("motion").screenshot({ path: "/tmp/porcupine-adaptive-motion.png" });
 	console.log("PASS 11 adaptive workspaces, interaction, persistence, math and responsive layouts");

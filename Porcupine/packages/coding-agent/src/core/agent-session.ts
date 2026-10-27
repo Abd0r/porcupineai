@@ -2222,6 +2222,22 @@ export class AgentSession {
 		return this._followUpMessages;
 	}
 
+	/** Remove a still-pending follow-up without dropping steering messages or images. */
+	removeFollowUp(index: number, expected: string): boolean {
+		if (!Number.isInteger(index) || index < 0 || this._followUpMessages[index] !== expected) return false;
+		const queued = this.agent.drainFollowUpMessages();
+		if (queued.length !== this._followUpMessages.length) {
+			for (const message of queued) this.agent.followUp(message);
+			return false;
+		}
+		queued.forEach((message, position) => {
+			if (position !== index) this.agent.followUp(message);
+		});
+		this._followUpMessages.splice(index, 1);
+		this._emitQueueUpdate();
+		return true;
+	}
+
 	get resourceLoader(): ResourceLoader {
 		return this._resourceLoader;
 	}

@@ -103,6 +103,12 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 
 ## Interaction and recovery
 
+Clipboard file items and clipboard file lists can be pasted into the composer, with image previews and removable attachments. Mixed file/text pastes retain the text at the cursor. Plain text paste keeps native editor behavior. Native file clipboard availability depends on the browser and OS; the file picker and drag/drop use the same attachment pipeline.
+
+Repeated math expressions reuse a bounded render cache, and unchanged reasoning text skips redundant rendering. The Pixel theme uses sharper controls, neutral selection, stronger focus indicators and improved text contrast; photos retain normal image rendering.
+
+While the agent works, the composer changes **Send** to **Queue follow-up**. Text and file/photo prompts enter the runtime's follow-up queue and run after the current work; slash commands retain their command behavior. A compact list above the composer shows pending prompts and lets users remove an item before it starts. Queue order and images are preserved, and reconnecting reads the live runtime queue. A stale removal is rejected rather than deleting another prompt. Up to 20 prompts may wait. Pending prompts are held in runtime memory, so restarting the server does not restore unsent queued work; delivered prompts enter normal session history.
+
 Settings is divided into Appearance, Models, Limits and Context tabs. The composer grows with the draft, preserves it on a failed send, and rejects duplicate submission while busy. Enter respects IME composition. Each conversation retains its draft for this tab. Token and draft text are not persisted to browser storage.
 
 **Settings → Appearance → Always show reasoning** remembers whether available reasoning should expand automatically. It applies to live and restored blocks; manually collapsing a block is respected during streaming. This is a display preference, separate from the model's reasoning effort. Providers that do not return reasoning text cannot supply a disclosure.

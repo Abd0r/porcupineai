@@ -56,7 +56,7 @@ export const APPEARANCE_STYLES = `
 :root[data-theme="pixel"][data-colour-mode="dark"] {
   --bg: #0f1020; --sidebar: #191b32; --surface: #222543; --surface-hover: #2d3157;
   --canvas: #12142a; --line: #4a4f86; --line-soft: #2b2f52;
-  --text: #e8ecff; --muted: #aab2e0; --quiet: #8089bd;
+  --text: #e8ecff; --muted: #b9c1e8; --quiet: #9ba4d0;
   --accent: #7bf1a8; --accent-ink: #0f1020; --danger: #ff8a8a;
   --plot-text: #e8ecff; --plot-label: #b8c0ea; --plot-grid: #2b2f52; --plot-axis: #6d76a8;
 }
@@ -68,7 +68,7 @@ export const APPEARANCE_STYLES = `
   --plot-text: #1a1a1a; --plot-label: #444; --plot-grid: #cdc6b4; --plot-axis: #6a6455;
 }
 :root[data-theme="pixel"] body {
-  background-image: repeating-linear-gradient(0deg, transparent 0 31px, var(--line-soft) 31px 32px), repeating-linear-gradient(90deg, transparent 0 31px, var(--line-soft) 31px 32px);
+  background-image: repeating-linear-gradient(0deg, transparent 0 31px, color-mix(in srgb,var(--line-soft) 20%,transparent) 31px 32px), repeating-linear-gradient(90deg, transparent 0 31px, color-mix(in srgb,var(--line-soft) 20%,transparent) 31px 32px);
   background-size: 32px 32px;
 }
 :root[data-theme="pixel"] .sidebar { border-right: var(--unit) solid var(--line); }
@@ -86,15 +86,30 @@ export const APPEARANCE_STYLES = `
 :root[data-theme="pixel"] *, :root[data-theme="pixel"] *::before, :root[data-theme="pixel"] *::after {
   border-radius: 0 !important;
   backdrop-filter: none !important;
-  transition-timing-function: steps(3, end) !important;
-  animation-timing-function: steps(6, end) !important;
 }
+:root[data-theme="pixel"] :is(.dream-thread,.dream-spark,.activity-glyph svg *) { animation-timing-function: steps(8,end); }
+:root[data-theme="pixel"] .sidebar { background: var(--sidebar); }
+:root[data-theme="pixel"] .session.active { background: rgb(128 128 128 / 18%); border-left: 2px solid var(--quiet); }
+:root[data-theme="pixel"] :is(.new-session,.send,.interactive-visual > button,.followup-queue) { border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--line-soft); }
+:root[data-theme="pixel"] .interactive-visual > button:active { box-shadow: 1px 1px 0 var(--line-soft); transform: translate(1px,1px); }
+:root[data-theme="pixel"] :is(button,input,select,textarea,summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+:root[data-theme="pixel"] .scene-controls { gap: 8px; }
+:root[data-theme="pixel"] .scene-controls :is(button,label) { border: 1px solid var(--line); background: var(--surface); }
+:root[data-theme="pixel"] .adaptive-body :is(th,td) { border: 1px solid var(--line-soft); }
+:root[data-theme="pixel"] .adaptive-body th { background: var(--surface); }
+:root[data-theme="pixel"] .adaptive-body :is(label,td) { background: var(--bg); }
+:root[data-theme="pixel"] .adaptive-body td:first-child { min-width: 72px; }
+:root[data-theme="pixel"] .adaptive-body td label { padding: 4px; white-space: nowrap; }
+:root[data-theme="pixel"] .interactive-visual .scene-controls input:not([type="range"]) { background: var(--surface); color: var(--text); border: 1px solid var(--line); padding: 5px; min-width: 0; }
+:root[data-theme="pixel"] .adaptive-body form label { border-left: 3px solid var(--line); }
+:root[data-theme="pixel"] .followup-queue h3 { color: var(--accent); }
+:root[data-theme="pixel"] .rail-card { padding: 14px 8px; margin-bottom: 12px; border: 1px solid var(--line); background: var(--bg); }
+:root[data-theme="pixel"] :is(.tool-state,.worker-state,.todos-count) { font-variant-numeric: tabular-nums; letter-spacing: .03em; }
+:root[data-theme="pixel"] .message-photo { image-rendering: auto; border: 1px solid var(--line); }
 :root[data-theme="pixel"] .rail-card,
 :root[data-theme="pixel"] .settings-dialog,
 :root[data-theme="pixel"] .composer-wrap { box-shadow: 4px 4px 0 var(--line-soft) !important; }
-:root[data-theme="pixel"] .scene-canvas,
-:root[data-theme="pixel"] canvas,
-:root[data-theme="pixel"] img { image-rendering: pixelated; }
+:root[data-theme="pixel"] .scene-canvas { border-width: 2px; }
 :root[data-theme="pixel"] .ring-fill { stroke-linecap: butt; }
 :root[data-theme="pixel"] .dot,
 :root[data-theme="pixel"] .goal-dot,

@@ -1,10 +1,12 @@
+import { FOLLOWUP_SCRIPT } from "./workbench-followups.ts";
 /** Session transport and interaction state for the bundled, same-origin workbench. */
 export const WORKBENCH_CLIENT_SCRIPT = String.raw`
 let connected=false,connectionEpoch=0,replaying=false,pendingAssistantRender=null,renderFrame=0;
 function queueAssistantRender(node,text){pendingAssistantRender={node,text};if(!renderFrame)renderFrame=requestAnimationFrame(flushAssistantRender);}
 function flushAssistantRender(){if(renderFrame)cancelAnimationFrame(renderFrame);renderFrame=0;if(!pendingAssistantRender)return;const {node,text}=pendingAssistantRender;pendingAssistantRender=null;renderRichText(node.lastChild,text);scrollFeed();}
 const conversationViews=new Map(),sessionNames=new Map();
-function updateSend(){ui.send.disabled=commandBusy||(streaming&&!/^\/kill(?:\s|$)/.test(ui.prompt.value.trim()))||!connected||attachmentReading.has(sessionId)||(!ui.prompt.value.trim()&&!chatAttachments().length);ui.prompt.setAttribute('aria-busy',String(streaming));}
+${FOLLOWUP_SCRIPT}
+function updateSend(){ui.send.disabled=queueSubmitting||commandBusy||(streaming&&!canQueueFollowUps&&!/^\/kill(?:\s|$)/.test(ui.prompt.value.trim()))||!connected||attachmentReading.has(sessionId)||(!ui.prompt.value.trim()&&!chatAttachments().length);ui.prompt.setAttribute('aria-busy',String(streaming));ui.send.setAttribute('aria-label',streaming&&canQueueFollowUps?'Queue follow-up':'Send message');ui.send.title=streaming&&canQueueFollowUps?'Queue follow-up after current work':'Send message';}
 function resizeComposer(){ui.prompt.style.height='auto';ui.prompt.style.height=Math.min(ui.prompt.scrollHeight,Math.max(100,innerHeight*.25))+'px';updateSend();}
 function nearBottom(){return ui.feed.scrollHeight-ui.feed.scrollTop-ui.feed.clientHeight<100;}
 function scrollFeed(force=false){if(!replaying&&(force||followOutput))ui.feed.scrollTop=ui.feed.scrollHeight;}
@@ -16,7 +18,7 @@ function rememberView(){if(!sessionId)return;conversationViews.set(sessionId,{no
 function resetSessionView(id){
   flushAssistantRender();rememberView();
   if(liveThinking){stopThinking(liveThinking);liveThinking=null;}
-  clearVisuals();toolRuns.clear();streamingAssistant=null;resetActivity();
+  renderFollowUps();canQueueFollowUps=false;clearVisuals();toolRuns.clear();streamingAssistant=null;resetActivity();
   lastContext=null;ringUi.ring.hidden=true;ringUi.fill.style.strokeDashoffset=String(RING_CIRCUMFERENCE);ringUi.tip.textContent='Context usage unavailable';
   limitsUi.status.textContent='';hideCommandMenu();modelUi.dialog.close();modelEpoch++;stackInspection++;surfaceUi.dialog.close();sessionId=id;const cached=conversationViews.get(id);ui.feed.replaceChildren(...(cached?cached.nodes:[]));ui.prompt.value=cached?cached.draft:'';
   ui.welcome.hidden=ui.feed.children.length>0;ui.feed.scrollTop=cached?cached.scroll:0;followOutput=cached?cached.follow:true;$('jump-latest').hidden=followOutput;renderAttachments();resizeComposer();
@@ -75,7 +77,7 @@ function showToolEnd(event){if(liveThinking&&!replaying)setThinkingLabel('Workin
 function filterSessions(){const query=$('session-search').value.trim().toLowerCase();for(const button of document.querySelectorAll('.session'))button.parentNode.hidden=Boolean(query&&!button.textContent.toLowerCase().includes(query));}
 async function refreshSessions(selectFirst=false){
   const data=await json('/session');sessionCatalog=data.sessions||[];
-  for(const item of sessionCatalog)if(item.name)sessionNames.set(item.id,item.name);
+  for(const item of sessionCatalog)if(item.name)sessionNames.set(item.id,item.name.startsWith("[Adaptive UI response]")?"Interactive session":item.name);
   renderSessionNavigation();if(sessionNames.has(sessionId))ui.title.textContent=sessionNames.get(sessionId);
   if(selectFirst&&sessionCatalog.length)void connectEvents(data.currentSessionId||sessionCatalog[0].id);else if(selectFirst)await createSession();
 }
@@ -83,8 +85,10 @@ async function createSession(project=null){ui.newSession.disabled=true;try{const
 ui.authForm.addEventListener('submit',async event=>{event.preventDefault();token=ui.token.value.trim();setError('',true);const submit=ui.authForm.querySelector('button');submit.disabled=true;try{const capabilities=await json('/workbench');canAssignProjects=capabilities.canAssignProjects===true;canDeleteSessions=capabilities.canDeleteSessions===true;await refreshSessions(true);ui.newSession.hidden=capabilities.canCreateSessions===false;projectsUi.tree.hidden=capabilities.projects===false;ui.auth.hidden=true;if(capabilities.projects)void refreshProjects();ui.token.value='';ui.prompt.focus()}catch(error){token='';setError(error.message,true)}finally{submit.disabled=false}});
 ui.newSession.addEventListener('click',async()=>{setError('');try{await createSession()}catch(error){setError(error.message)}});
 ui.form.addEventListener('submit',async event=>{
-  event.preventDefault();const text=ui.prompt.value.trim();if((!text&&!chatAttachments().length)||!sessionId||(streaming&&!/^\/kill(?:\s|$)/.test(text))||!connected||attachmentReading.has(sessionId))return;
+  event.preventDefault();const text=ui.prompt.value.trim();if((!text&&!chatAttachments().length)||!sessionId||(streaming&&!canQueueFollowUps&&!/^\/kill(?:\s|$)/.test(text))||!connected||attachmentReading.has(sessionId))return;
+  if(queueSubmitting)return;
   if(text.startsWith('/')&&await submitSlashCommand(text))return;
+  if(streaming&&canQueueFollowUps){await submitFollowUp(text);return;}
   const id=sessionId,attachments=chatAttachments();attachmentDrafts.delete(id);renderAttachments();setError('');ui.prompt.value='';resizeComposer();setBusy(true);
   try{await json('/session/'+encodeURIComponent(id)+'/message',{method:'POST',body:JSON.stringify({text,attachments:attachments.map(({name,data})=>({name,data}))})});}
   catch(error){attachmentDrafts.set(id,[...attachments,...chatAttachments(id)]);if(id===sessionId){renderAttachments();setBusy(false);if(!ui.prompt.value)ui.prompt.value=text;else ui.prompt.value=text+'\n\n'+ui.prompt.value;resizeComposer();setError(error.message);ui.prompt.focus()}else{const view=conversationViews.get(id);if(view)view.draft=text+(view.draft?'\n\n'+view.draft:'');}}

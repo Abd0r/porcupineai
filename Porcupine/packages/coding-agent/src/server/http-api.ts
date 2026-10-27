@@ -59,6 +59,9 @@ export interface ServeApiSession
 	getCommands?(): WorkbenchCommand[];
 	runCommand?(text: string): Promise<WorkbenchCommandResult>;
 	sendUserMessage(text: string, attachments?: WorkbenchAttachment[]): Promise<void>;
+	queueFollowUp?(text: string, attachments?: WorkbenchAttachment[]): Promise<void>;
+	getFollowUps?(): readonly string[];
+	removeFollowUp?(index: number, expected: string): boolean;
 	abort(): Promise<void>;
 	isStreaming(): boolean;
 	/** Text transcript only. Never include provider signatures, tool arguments, or credentials. */
@@ -602,7 +605,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				res.writeHead(200, sseHeaders());
 				writeSse(
 					res,
-					`data: ${JSON.stringify({ type: "server_connected", sessionId: entry.session.id, streaming: entry.session.isStreaming(), timeline: entry.session.getTimeline?.(), messages: entry.session.getTimeline ? undefined : entry.session.getTranscript?.(), subagents: entry.session.getSubagents?.(), permissions: [...entry.permissionRequests.values()] })}\n\n`,
+					`data: ${JSON.stringify({ type: "server_connected", sessionId: entry.session.id, streaming: entry.session.isStreaming(), canQueueFollowUps: Boolean(entry.session.queueFollowUp), followUp: entry.session.getFollowUps?.() || [], timeline: entry.session.getTimeline?.(), messages: entry.session.getTimeline ? undefined : entry.session.getTranscript?.(), subagents: entry.session.getSubagents?.(), permissions: [...entry.permissionRequests.values()] })}\n\n`,
 					entry.sseClients,
 				);
 				entry.sseClients.add(res);
@@ -691,7 +694,36 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				return;
 			}
 
-			const messageMatch = /^\/session\/([^/]+)\/message$/.exec(path);
+			const cancelFollowUp = /^\/session\/([^/]+)\/follow-up\/(\d+)$/.exec(path);
+			if (method === "DELETE" && cancelFollowUp) {
+				const entry = resolveEntry(cancelFollowUp[1]!, querySessionId);
+				if (!entry?.session.removeFollowUp) {
+					json(res, 404, { error: "Follow-up queue unavailable" });
+					return;
+				}
+				let body: { expected?: unknown };
+				try {
+					body = JSON.parse((await readRawBody(req, MAX_BODY_BYTES)).toString("utf8"));
+				} catch {
+					json(res, 400, { error: "Invalid queue removal body" });
+					return;
+				}
+				if (!body || typeof body !== "object") {
+					json(res, 400, { error: "Expected prompt text is required" });
+					return;
+				}
+				if (typeof body.expected !== "string") {
+					json(res, 400, { error: "Expected prompt text is required" });
+					return;
+				}
+				if (!entry.session.removeFollowUp(Number(cancelFollowUp[2]), body.expected)) {
+					json(res, 409, { error: "The queue changed; refresh before removing this prompt" });
+					return;
+				}
+				json(res, 200, { followUp: entry.session.getFollowUps?.() || [] });
+				return;
+			}
+			const messageMatch = /^\/session\/([^/]+)\/(message|follow-up)$/.exec(path);
 			if (method === "POST" && messageMatch) {
 				const entry = resolveEntry(messageMatch[1]!, querySessionId);
 				if (!entry) {
@@ -719,7 +751,14 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					return;
 				}
 				const messageText = text;
-				await mutateSession(entry.session.id, () => entry.session.sendUserMessage(messageText, attachments));
+				if (messageMatch[2] === "follow-up") {
+					if (!entry.session.queueFollowUp) {
+						json(res, 501, { error: "Follow-up queue unavailable" });
+						return;
+					}
+					if (entry.session.isStreaming()) await entry.session.queueFollowUp(messageText, attachments);
+					else await mutateSession(entry.session.id, () => entry.session.queueFollowUp!(messageText, attachments));
+				} else await mutateSession(entry.session.id, () => entry.session.sendUserMessage(messageText, attachments));
 				json(res, 202, { ok: true });
 				return;
 			}

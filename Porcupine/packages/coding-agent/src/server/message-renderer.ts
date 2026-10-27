@@ -56,11 +56,13 @@ export const RICH_TEXT_STYLES = `
 .rich a { color: var(--accent); text-underline-offset: 2px; }
 `;
 export const MESSAGE_RENDERER_SCRIPT = `
+const mathRenderCache=new Map(),richTextSources=new WeakMap();
 function mathFallback(tex,display){const span=document.createElement('code');span.className='math-fallback';span.textContent=(display?'\\\\[':'\\\\(')+tex+(display?'\\\\]':'\\\\)');return span}
 function renderMathSafe(tex,display){
   if(!window.katex||tex.length>20000)return mathFallback(tex,display);
   const span=document.createElement('span');span.className='math-expression';
-  try{window.katex.render(tex,span,{displayMode:display,output:'htmlAndMathml',trust:false,throwOnError:true,strict:'ignore',maxExpand:1000,maxSize:20,macros:{}});return span}catch{return mathFallback(tex,display)}
+  const cacheKey=String(display)+':'+tex,cached=mathRenderCache.get(cacheKey);if(cached)return cached.cloneNode(true);
+  try{window.katex.render(tex,span,{displayMode:display,output:'htmlAndMathml',trust:false,throwOnError:true,strict:'ignore',maxExpand:1000,maxSize:20,macros:{}});if(tex.length<=2000&&typeof span.cloneNode==='function'){if(mathRenderCache.size>=64)mathRenderCache.delete(mathRenderCache.keys().next().value);mathRenderCache.set(cacheKey,span.cloneNode(true));}return span}catch{return mathFallback(tex,display)}
 }
 function inlineNodes(text){const nodes=[];let rest=text;
   while(rest){const match=/\\\\\\[[\\s\\S]*?\\\\\\]|\\\\\\([\\s\\S]*?\\\\\\)|\\$\\$[\\s\\S]*?\\$\\$|(?<![\\\\\\d])\\$(?!\\s)(?:\\\\.|[^$\\\\\\n])+(?<!\\s)\\$|\\*\\*[^*]+\\*\\*|\\*[^*\\n]+\\*|\`[^\`\\n]+\`|\\[[^\\]]+]\\([^)\\s]+\\)/.exec(rest);
@@ -92,6 +94,7 @@ function renderTable(lines){const table=document.createElement("div");table.clas
   const head=document.createElement("thead");const headRow=document.createElement("tr");for(const cell of rows[0]||[]){const th=document.createElement("th");th.scope="col";for(const node of inlineNodes(cell))th.append(node);headRow.append(th)}head.append(headRow);element.append(head);
   const body=document.createElement("tbody");for(const row of rows.slice(1)){const tr=document.createElement("tr");for(const cell of row){const td=document.createElement("td");for(const node of inlineNodes(cell))td.append(node);tr.append(td)}body.append(tr)}element.append(body);table.append(element);return table}
 function renderRichText(container,text){
+  if(richTextSources.get(container)===text)return container;richTextSources.set(container,text);
   container.replaceChildren();container.classList.add("rich");
   const lines=String(text).split("\\n");let index=0;
   while(index<lines.length){const line=lines[index];

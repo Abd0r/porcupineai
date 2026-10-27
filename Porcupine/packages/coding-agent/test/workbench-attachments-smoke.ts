@@ -99,6 +99,40 @@ try {
 	await page.locator("#auth-form").evaluate((form) => (form as HTMLFormElement).requestSubmit());
 	await page.locator(".message-photo").waitFor();
 	assert.equal(await page.locator(".message.user").count(), 2);
+	await page.locator("#prompt").fill("Draft: ");
+	await page.locator("#prompt").evaluate((node) => {
+		const input = node as HTMLTextAreaElement;
+		input.setSelectionRange(input.value.length, input.value.length);
+		const data = new DataTransfer();
+		data.items.add(new File(["clipboard document"], "clipboard.txt", { type: "text/plain" }));
+		data.setData("text/plain", "pasted caption");
+		input.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+	});
+	await page.waitForFunction(() => document.querySelectorAll(".attachment-chip").length === 1);
+	assert.equal(
+		await page.locator("#prompt").inputValue(),
+		"Draft: pasted caption",
+		"Mixed clipboard text must survive attaching a file",
+	);
+	await page.locator("#prompt").evaluate((node, base64) => {
+		const data = new DataTransfer();
+		data.items.add(
+			new File([Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))], "clipboard.png", {
+				type: "image/png",
+			}),
+		);
+		const event = new Event("paste", { bubbles: true, cancelable: true });
+		Object.defineProperty(event, "clipboardData", {
+			value: { items: [], files: data.files, getData: data.getData.bind(data) },
+		});
+		node.dispatchEvent(event);
+	}, png.toString("base64"));
+	await page.waitForFunction(() => document.querySelectorAll(".attachment-chip").length === 2);
+	assert.equal(
+		await page.locator(".attachment-chip img").count(),
+		1,
+		"Clipboard files fallback must preview a pasted photo",
+	);
 	for (const width of [1440, 390]) {
 		await page.setViewportSize({ width, height: 900 });
 		assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
