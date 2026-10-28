@@ -36,7 +36,7 @@ jobs:
 
       - name: Build
         working-directory: Porcupine
-        run: npm run build
+        run: npm run build:offline
 
       - name: Check
         working-directory: Porcupine
