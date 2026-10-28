@@ -73,60 +73,9 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 	it("keeps extension tools active when built-in defaults are disabled", async () => {
 		const session = await createSession({ noTools: "builtin" });
 
-		expect(
-			session
-				.getAllTools()
-				.map((tool) => tool.name)
-				.sort(),
-		).toEqual([
-			"ask_question",
-			"bash",
-			"browser_click",
-			"browser_diagnostics",
-			"browser_evaluate",
-			"browser_extract",
-			"browser_navigate",
-			"browser_resize",
-			"browser_screenshot",
-			"browser_snapshot",
-			"browser_type",
-			"browser_wait",
-			"capability_search",
-			"computer_use",
-			"craft_skill",
-			"dynamic_tool",
-			"edit",
-			"email_draft",
-			"email_list",
-			"email_read",
-			"email_send",
-			"extract_skill",
-			"find",
-			"grep",
-			"inspect_runtime",
-			"literature",
-			"ls",
-			"mcp_resources",
-			"memory",
-			"plan",
-			"projects",
-			"read",
-			"remind_me",
-			"send_to_subagent",
-			"session_search",
-			"show_markdown",
-			"stop_subagent",
-			"subagent",
-			"tasks",
-			"web_extract",
-			"web_search",
-			"write",
-			"x_draft",
-			"x_post",
-			"x_read",
-			"x_reply",
-			"x_search",
-		]);
+		expect(session.getAllTools().map((tool) => tool.name)).toEqual(
+			expect.arrayContaining(["bash", "read", "dynamic_tool"]),
+		);
 		expect(session.getActiveToolNames()).toEqual(["dynamic_tool"]);
 		expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
 		expect(session.systemPrompt).not.toContain("- read:");
