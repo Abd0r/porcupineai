@@ -112,6 +112,19 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 		return { runtimeHost, faux };
 	}
 
+	it("creates an independent browser conversation without invalidating the original runtime", async () => {
+		const { runtimeHost } = await createRuntimeHost(() => {});
+		const original = runtimeHost.session;
+		const sibling = await runtimeHost.createSibling(SessionManager.inMemory(runtimeHost.cwd));
+		cleanups.push(() => sibling.dispose());
+		expect(runtimeHost.session).toBe(original);
+		expect(sibling.session).not.toBe(original);
+		expect(sibling.cwd).toBe(runtimeHost.cwd);
+		await sibling.session.prompt("Work in the second conversation");
+		expect(sibling.session.messages.some((message) => message.role === "assistant")).toBe(true);
+		expect(original.messages.some((message) => message.role === "assistant")).toBe(false);
+	});
+
 	it("emits session_before_switch and session_start for new and resume flows", async () => {
 		const events: RecordedSessionEvent[] = [];
 		const { runtimeHost } = await createRuntimeHost((pi) => {

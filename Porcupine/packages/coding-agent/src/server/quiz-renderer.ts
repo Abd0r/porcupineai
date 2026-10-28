@@ -1,0 +1,21 @@
+export const QUIZ_RENDERER_SCRIPT = String.raw`
+function validQuiz(visual){return hasOnlyKeys(visual,['version','kind','title','questions'],['description','componentId'])&&Array.isArray(visual.questions)&&visual.questions.length>=1&&visual.questions.length<=6&&visual.questions.every(q=>isRecord(q)&&hasOnlyKeys(q,['question','options','correctAnswers','explanation'],['hint'])&&validText(q.question,300)&&validText(q.explanation,1000)&&(q.hint===undefined||validText(q.hint,300))&&Array.isArray(q.options)&&q.options.length>=2&&q.options.length<=6&&q.options.every(o=>validText(o,120))&&new Set(q.options).size===q.options.length&&Array.isArray(q.correctAnswers)&&q.correctAnswers.length>=1&&new Set(q.correctAnswers).size===q.correctAnswers.length&&q.correctAnswers.every(i=>Number.isInteger(i)&&i>=0&&i<q.options.length))}
+function renderQuiz(card,visual,identity,mount){
+  const owner=sessionId,revision=JSON.stringify(visual.questions.map(q=>[q.question,q.options,q.correctAnswers]));
+  const form=visualElement('form'),groups=[],reviews=[],inputs=[];
+  for(const [index,q] of visual.questions.entries()){
+    const group=visualElement('fieldset'),legend=visualElement('legend');renderRichText(legend,(index+1)+'. '+q.question);group.append(legend);
+    const choices=[];
+    for(const [i,option] of q.options.entries()){const label=visualElement('label'),input=visualElement('input'),text=visualElement('span');input.type=q.correctAnswers.length>1?'checkbox':'radio';input.name='quiz-'+index;input.value=String(i);renderRichText(text,option);label.append(input,text);group.append(label);choices.push(input)}
+    if(q.hint){const hint=visualElement('details'),summary=visualElement('summary','Hint'),body=visualElement('div');renderRichText(body,q.hint);hint.append(summary,body);group.append(hint)}
+    const review=visualElement('div');review.hidden=true;form.append(group,review);groups.push(group);reviews.push(review);inputs.push(choices);
+  }
+  const submit=visualElement('button','Check answers'),status=visualElement('p');submit.type='submit';status.setAttribute('role','status');form.append(submit,status);card.append(form);
+  function restore(answer){if(answer.revision!==revision||answer.answers.length!==visual.questions.length)return;let selected;try{selected=answer.answers.map(JSON.parse)}catch{return}if(!selected.every((row,i)=>Array.isArray(row)&&row.length>=1&&row.every(value=>Number.isInteger(value)&&value>=0&&value<inputs[i].length)))return;
+    let score=0;for(let i=0;i<groups.length;i++){const q=visual.questions[i],values=selected[i];for(let j=0;j<inputs[i].length;j++)inputs[i][j].checked=values.includes(j);const correct=new Set(values).size===q.correctAnswers.length&&q.correctAnswers.every(value=>values.includes(value));if(correct)score++;groups[i].disabled=true;reviews[i].hidden=false;renderRichText(reviews[i],(correct?'Correct.':'Review this answer.')+'\n\nAnswer: '+q.correctAnswers.map(j=>q.options[j]).join('; ')+'\n\n'+q.explanation)}submit.disabled=true;status.textContent='Score: '+score+' / '+groups.length;
+  }
+  if(identity){componentCards.set(identity,{card,restore});const saved=componentAnswers.get(identity);if(saved)restore(saved)}
+  form.addEventListener('submit',async event=>{event.preventDefault();if(submit.disabled)return;const selected=inputs.map(row=>row.flatMap((input,i)=>input.checked?[i]:[]));if(selected.some(row=>!row.length)){status.textContent='Answer each question first.';return}if(owner!==sessionId||streaming||!connected){status.textContent='Wait until the agent is ready and connected.';return}const response={componentId:identity,revision,title:visual.title,kind:'quiz',questions:visual.questions.map(q=>({question:q.question,options:q.options})),answers:selected.map(row=>JSON.stringify(row))};submit.disabled=true;setBusy(true);try{await json('/session/'+encodeURIComponent(owner)+'/message',{method:'POST',body:JSON.stringify({text:'[Adaptive UI response]\n'+JSON.stringify(response)})});componentAnswers.set(identity,response);restore(response)}catch(error){submit.disabled=false;setBusy(false);status.textContent=error.message}});
+  mount();scrollFeed();
+}
+`;

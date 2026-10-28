@@ -1,7 +1,6 @@
 import { CapabilityTree } from "@porcupineai/agent-core";
 import { describe, expect, it } from "vitest";
 import {
-	buildGoalContinuation,
 	buildPlanPrompt,
 	classifyPlanSettle,
 	filterOutGoalPlanQueue,
@@ -92,17 +91,12 @@ describe("honest turn outcome (T1.2)", () => {
 		expect(classifyPlanSettle({ planExists: true, hasMarkdown: true, interrupted: false })).toBe("save");
 	});
 
-	it("drops queued goal and plan entries when leaving a session", () => {
-		const goal = buildGoalContinuation({
-			text: "finish",
-			status: "active",
-			turnsUsed: 0,
-			maxTurns: 20,
-			createdAt: "t",
-			updatedAt: "t",
-		});
+	it("drops queued plan drafts when leaving a session", () => {
 		const plan = buildPlanPrompt("do work", ".porcupine/plans/x.md");
-		expect(filterOutGoalPlanQueue([goal, plan, "hello"])).toEqual(["hello"]);
+		expect(filterOutGoalPlanQueue(["[Continuing toward your standing goal] old draft", plan, "hello"])).toEqual([
+			"[Continuing toward your standing goal] old draft",
+			"hello",
+		]);
 		expect(filterOutGoalPlanQueue([])).toEqual([]);
 	});
 

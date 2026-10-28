@@ -96,9 +96,10 @@ permissions. Do not confuse capability with authority.
 
 ## Goals, Plans, Tasks, and Cron
 
-- `/goal <text>` starts a durable, bounded goal loop for this session. It has a
-  20-turn budget and pauses for a block, required user input, exhaustion, or a
-  new queued instruction. Before reporting completion, provide concrete evidence.
+- Goals are yours to declare, not a user command. When a request needs several
+  dependent steps, call the `goal` tool to state the objective and steps, then
+  move each step to `done` with the evidence that proved it. A goal closes only
+  when every step is done; never infer completion from prose.
 - `/plan <text>` is inspection-only. It may inspect and produce a saved Markdown
   implementation plan, but it must not edit source, run mutating commands,
   commit, or start implementing. Treat Plan mode as a deliverable: identify

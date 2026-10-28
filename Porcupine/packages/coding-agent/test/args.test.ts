@@ -1,6 +1,19 @@
 import { describe, expect, test } from "vitest";
 import { parseArgs } from "../src/cli/args.ts";
 
+describe("GUI launch flag", () => {
+	test("opens the GUI only when explicitly requested", () => {
+		expect(parseArgs([]).serve).toBeUndefined();
+		expect(parseArgs([]).gui).toBeUndefined();
+		for (const flag of ["-gui", "--gui"]) {
+			const parsed = parseArgs([flag]);
+			expect(parsed.gui).toBe(true);
+			expect(parsed.serve).toBe(true);
+			expect(parsed.diagnostics).toEqual([]);
+		}
+	});
+});
+
 describe("parseArgs", () => {
 	describe("--version flag", () => {
 		test("parses --version flag", () => {

@@ -119,19 +119,12 @@ import { getPorcupineBlockWordmark, PORCUPINE_BLOCK_WORDMARK_COLOR } from "../..
 import { drainConsoleGuard, installConsoleGuard, uninstallConsoleGuard } from "../../porcupine/console-guard.ts";
 import { loadAgentEnvFile } from "../../porcupine/env-file.ts";
 import {
-	buildGoalContinuation,
 	buildPlanPrompt,
-	DEFAULT_GOAL_MAX_TURNS,
 	filterOutGoalPlanQueue,
-	formatGoalStatus,
 	formatPlanStatus,
 	GOAL_PLAN_SESSION_ENTRY,
 	type GoalPlanState,
-	isGoalContinuation,
 	isGoalPlanState,
-	isPlanPrompt,
-	judgeGoalResponse,
-	parseGoalCommand,
 	parsePlanCommand,
 	shouldPreservePlanGraphForTurn,
 } from "../../porcupine/goal-plan-state.ts";
@@ -636,7 +629,6 @@ export class InteractiveMode {
 	/** CC-style cron is live only while this interactive session is open. */
 	private cronTimer: ReturnType<typeof setInterval> | undefined;
 	/** True only while the just-finished turn was part of a goal loop. */
-	private goalTurnInFlight = false;
 	/** True only while the just-finished turn is producing a /plan artifact. */
 	private planTurnInFlight = false;
 	/** Set when the current turn was interrupted or will retry; consumed at settle. */
@@ -2268,7 +2260,10 @@ export class InteractiveMode {
 				}
 			},
 			getGuide: (arg) => formatGuideCommandOutput(arg ? `/guide ${arg}` : "/guide"),
-			getGoalStatus: () => formatGoalStatus(this.goalPlanState.goal),
+			getGoalStatus: () =>
+				this.session.getGoal()
+					? "A goal is tracked. Inspect it with the goal tool status action."
+					: "No goal tracked.",
 			getPlanStatus: () => formatPlanStatus(this.goalPlanState.plan),
 			setReasoning: (arg) => this.remoteSetReasoning(arg),
 			setAdaptive: (arg) => this.remoteSetAdaptive(arg),
@@ -4060,12 +4055,6 @@ export class InteractiveMode {
 				this.handleRemindCommand(remindCommand);
 				return;
 			}
-			const goalCommand = parseGoalCommand(text);
-			if (goalCommand) {
-				this.editor.setText("");
-				this.handleGoalCommand(goalCommand);
-				return;
-			}
 			const planCommand = parsePlanCommand(text);
 			if (planCommand) {
 				this.editor.setText("");
@@ -4857,32 +4846,13 @@ export class InteractiveMode {
 	private async promptWithPorcupine(text: string, options?: Parameters<AgentSession["prompt"]>[1]): Promise<void> {
 		const trimmed = text.trim();
 		if (trimmed && !trimmed.startsWith("/") && options?.streamingBehavior === undefined) {
-			if (!isGoalContinuation(trimmed)) this.learningUserText = text;
+			this.learningUserText = text;
 		}
 		const skip = trimmed.startsWith("/") || this.session.isStreaming || options?.streamingBehavior !== undefined;
-
-		if (this.goalPlanState.goal?.status === "active" && !skip && !isPlanPrompt(trimmed)) {
-			this.goalTurnInFlight = true;
-		}
 
 		if (skip) {
 			await this.session.prompt(text, options);
 			return;
-		}
-
-		if (this.goalPlanState.goal?.status === "active" && !isGoalContinuation(trimmed)) {
-			await this.session.sendCustomMessage(
-				{
-					customType: "porcupine.standing-goal",
-					content: [
-						"[Porcupine standing goal]",
-						this.goalPlanState.goal.text,
-						"Keep this objective in view while answering the user's current request. Do not claim completion without verification.",
-					].join("\n"),
-					display: false,
-				},
-				{ deliverAs: "nextTurn" },
-			);
 		}
 
 		// Soft activity only — never force skill search or planning.
@@ -5266,7 +5236,6 @@ export class InteractiveMode {
 
 			case "agent_settled":
 				await this.processSettledTurnLearning();
-				await this.processSettledGoalTurn();
 				this.processSettledPlanTurn();
 				await this.checkShutdownRequested();
 				break;
@@ -6483,7 +6452,6 @@ export class InteractiveMode {
 	private resetGoalPlanTransientState(): void {
 		this.session.setPlanFenceActive(false);
 		this.goalPlanState = {};
-		this.goalTurnInFlight = false;
 		this.planTurnInFlight = false;
 		this.lastTurnInterrupted = false;
 		this.pendingUserInputs = filterOutGoalPlanQueue(this.pendingUserInputs);
@@ -6492,7 +6460,6 @@ export class InteractiveMode {
 	/** Re-sync goal/plan intents after the active session object changed. */
 	private syncGoalPlanStateAfterRebind(): void {
 		this.session.setPlanFenceActive(false);
-		this.goalTurnInFlight = false;
 		this.planTurnInFlight = false;
 		this.lastTurnInterrupted = false;
 		this.restoreGoalPlanState();
@@ -6500,115 +6467,6 @@ export class InteractiveMode {
 
 	private persistGoalPlanState(): void {
 		this.sessionManager.appendCustomEntry(GOAL_PLAN_SESSION_ENTRY, this.goalPlanState);
-	}
-
-	/** Queue goal continuations only after a settled turn; never re-enter AgentSession from an event callback. */
-	private async processSettledGoalTurn(): Promise<void> {
-		if (!this.goalTurnInFlight) return;
-		this.goalTurnInFlight = false;
-		const goal = this.goalPlanState.goal;
-		if (!goal || goal.status !== "active") {
-			this.lastTurnInterrupted = false;
-			return;
-		}
-		if (this.lastTurnInterrupted) {
-			this.lastTurnInterrupted = false;
-			const now = new Date().toISOString();
-			this.goalPlanState = {
-				...this.goalPlanState,
-				goal: {
-					...goal,
-					status: "paused",
-					updatedAt: now,
-					lastVerdict: "blocked",
-					lastReason: "Interrupted by user; goal paused.",
-				},
-			};
-			this.persistGoalPlanState();
-			this.showStatus("Standing goal paused (interrupted). Use /goal resume to continue.");
-			return;
-		}
-
-		const now = new Date().toISOString();
-		if (this.pendingUserInputs.some((input) => !isGoalContinuation(input))) {
-			this.goalPlanState = {
-				...this.goalPlanState,
-				goal: {
-					...goal,
-					status: "paused",
-					updatedAt: now,
-					lastVerdict: "blocked",
-					lastReason: "Paused because a new user message is waiting.",
-				},
-			};
-			this.persistGoalPlanState();
-			this.showStatus("Standing goal paused for your new instruction.");
-			return;
-		}
-
-		const verdict = await judgeGoalResponse({
-			modelRuntime: this.session.modelRuntime,
-			model: this.session.model,
-			goal,
-			response: this.session.getLastAssistantText() ?? "",
-		});
-		const updatedGoal = {
-			...goal,
-			turnsUsed: goal.turnsUsed + 1,
-			updatedAt: now,
-		};
-		if (verdict.kind === "done") {
-			this.goalPlanState = {
-				...this.goalPlanState,
-				goal: {
-					...updatedGoal,
-					status: "done",
-					lastVerdict: "done",
-					lastReason: verdict.reason,
-				},
-			};
-			this.persistGoalPlanState();
-			this.showStatus(
-				`Standing goal completed after ${updatedGoal.turnsUsed} turn${updatedGoal.turnsUsed === 1 ? "" : "s"}.`,
-			);
-			return;
-		}
-		if (verdict.kind === "blocked") {
-			this.goalPlanState = {
-				...this.goalPlanState,
-				goal: {
-					...updatedGoal,
-					status: "paused",
-					lastVerdict: "blocked",
-					lastReason: verdict.reason,
-				},
-			};
-			this.persistGoalPlanState();
-			this.showWarning("Standing goal paused: the agent reported a block or needs input.");
-			return;
-		}
-		if (updatedGoal.turnsUsed >= updatedGoal.maxTurns) {
-			this.goalPlanState = {
-				...this.goalPlanState,
-				goal: {
-					...updatedGoal,
-					status: "paused",
-					lastVerdict: "budget-exhausted",
-					lastReason: `Reached the ${updatedGoal.maxTurns}-turn safety budget.`,
-				},
-			};
-			this.persistGoalPlanState();
-			this.showWarning(`Standing goal paused at its ${updatedGoal.maxTurns}-turn budget.`);
-			return;
-		}
-		const continuingGoal = {
-			...updatedGoal,
-			lastVerdict: "continue" as const,
-			lastReason: verdict.reason,
-		};
-		this.goalPlanState = { ...this.goalPlanState, goal: continuingGoal };
-		this.persistGoalPlanState();
-		this.pendingUserInputs.push(buildGoalContinuation(continuingGoal));
 	}
 
 	/** Persist the final /plan response in the active workspace, never source code. */
@@ -6720,75 +6578,6 @@ export class InteractiveMode {
 		this.showStatus(
 			reminder ? `Reminder set. It fires while this session is open and idle.` : "Could not schedule the reminder.",
 		);
-	}
-
-	private handleGoalCommand(command: NonNullable<ReturnType<typeof parseGoalCommand>>): void {
-		if (command.kind === "invalid") {
-			this.showWarning(command.message);
-			return;
-		}
-		if (command.kind === "status") {
-			this.showStatus(formatGoalStatus(this.goalPlanState.goal));
-			return;
-		}
-		if (command.kind === "clear") {
-			const { goal: _goal, ...remaining } = this.goalPlanState;
-			this.goalPlanState = remaining;
-			this.pendingUserInputs = this.pendingUserInputs.filter((input) => !isGoalContinuation(input));
-			this.persistGoalPlanState();
-			this.showStatus("Standing goal cleared.");
-			return;
-		}
-
-		const current = this.goalPlanState.goal;
-		if (command.kind === "remind") {
-			const nudge = this.reminderEngine?.scheduleGoalNudge({
-				durationMs: command.durationMs,
-				goal: {
-					text: current?.text ?? "(no standing goal)",
-					status: current?.status ?? "no-goal",
-					...(current?.lastVerdict ? { lastVerdict: current.lastVerdict } : {}),
-				},
-			});
-			this.showStatus(
-				nudge
-					? `Goal nudge scheduled. It fires while this session is open and idle.`
-					: "Could not schedule the goal nudge.",
-			);
-			return;
-		}
-		if (command.kind === "pause" || command.kind === "resume") {
-			if (!current) {
-				this.showWarning("No standing goal to update. Use /goal <text> first.");
-				return;
-			}
-			const goal = {
-				...current,
-				status: command.kind === "pause" ? ("paused" as const) : ("active" as const),
-				updatedAt: new Date().toISOString(),
-			};
-			this.goalPlanState = { ...this.goalPlanState, goal };
-			this.pendingUserInputs = this.pendingUserInputs.filter((input) => !isGoalContinuation(input));
-			if (command.kind === "resume") this.pendingUserInputs.push(buildGoalContinuation(goal));
-			this.persistGoalPlanState();
-			this.showStatus(`Standing goal ${command.kind === "pause" ? "paused" : "resumed"}.`);
-			return;
-		}
-
-		const now = new Date().toISOString();
-		const goal = {
-			text: command.text,
-			status: "active" as const,
-			turnsUsed: 0,
-			maxTurns: DEFAULT_GOAL_MAX_TURNS,
-			createdAt: now,
-			updatedAt: now,
-		};
-		this.goalPlanState = { ...this.goalPlanState, goal };
-		this.pendingUserInputs = this.pendingUserInputs.filter((input) => !isGoalContinuation(input));
-		this.pendingUserInputs.push(buildGoalContinuation(goal));
-		this.persistGoalPlanState();
-		this.showStatus(`Standing goal started (0/${goal.maxTurns} turns): ${goal.text}`);
 	}
 
 	private async handlePlanCommand(command: NonNullable<ReturnType<typeof parsePlanCommand>>): Promise<void> {

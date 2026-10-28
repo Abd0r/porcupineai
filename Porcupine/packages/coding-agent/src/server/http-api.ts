@@ -33,13 +33,47 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { stripAnsi } from "../utils/ansi.ts";
+import { serveMathAsset } from "./math-assets.ts";
+import { PORCUPINE_WEB_UI } from "./web-ui.ts";
+import { validateWorkbenchAttachments, type WorkbenchAttachment } from "./workbench-attachments.ts";
+import type { WorkbenchCommand, WorkbenchCommandResult } from "./workbench-commands.ts";
+import { type ContextFileStore, WorkbenchError } from "./workbench-context-files.ts";
+import type { WorkbenchProjectStore } from "./workbench-projects.ts";
+import { handleProjectRequest, readRawBody } from "./workbench-projects-api.ts";
+import { handleSessionSurfaceRequest } from "./workbench-session-api.ts";
+import type {
+	ContextSurfaces,
+	GoalPlanSurfaces,
+	SessionSurfaces,
+	SurfaceControl,
+} from "./workbench-session-surfaces.ts";
+import type { WorkbenchReplayEvent } from "./workbench-transcript.ts";
 
 /** Minimal session surface the HTTP API drives. */
-export interface ServeApiSession {
+export interface ServeApiSession
+	extends Partial<SessionSurfaces>,
+		Partial<GoalPlanSurfaces>,
+		Partial<SurfaceControl>,
+		Partial<ContextSurfaces> {
 	readonly id: string;
-	sendUserMessage(text: string): Promise<void>;
+	getCommands?(): WorkbenchCommand[];
+	runCommand?(text: string): Promise<WorkbenchCommandResult>;
+	sendUserMessage(text: string, attachments?: WorkbenchAttachment[]): Promise<void>;
+	queueFollowUp?(text: string, attachments?: WorkbenchAttachment[]): Promise<void>;
+	getFollowUps?(): readonly string[];
+	removeFollowUp?(index: number, expected: string): boolean;
 	abort(): Promise<void>;
 	isStreaming(): boolean;
+	/** Text transcript only. Never include provider signatures, tool arguments, or credentials. */
+	getTranscript?(): Array<{ role: "user" | "assistant"; content: string }>;
+	getTimeline?(): WorkbenchReplayEvent[];
+	getSubagents?(): Array<{
+		id: string;
+		name: string;
+		task: string;
+		status: string;
+		activity?: { kind: string; summary: string };
+	}>;
 	/** Subscribe to session events (agent messages, tool calls, ...). Returns an unsubscribe. */
 	onEvent(listener: (event: unknown) => void): () => void;
 	/**
@@ -60,12 +94,23 @@ export interface ServeApiOptions {
 	/** Pre-provisioned independent sessions (multi-session mode). */
 	sessions?: readonly ServeApiSession[];
 	/** Factory used by POST /session to mint a new session by optional id. */
-	createSession?: (id?: string) => ServeApiSession;
+	createSession?: (id?: string) => ServeApiSession | Promise<ServeApiSession>;
+	/** Discover persisted conversations without starting an agent for each one. */
+	listSessions?: () => Promise<Array<{ id: string; name?: string; project?: string | null }>>;
+	/** Resume only a discovered id; never accept a client-supplied filesystem path. */
+	openSession?: (id: string) => Promise<ServeApiSession>;
+	assignProject?: (id: string, name: string | null) => Promise<void>;
+	deleteSession?: (id: string) => Promise<void>;
+	deleteProject?: (name: string) => Promise<void>;
 	port?: number;
 	host?: string;
 	/** Optional bearer token. When set, every request must carry it. */
 	token?: string;
 	version?: string;
+	/** Explicitly configured, allowlisted context documents for local Settings. */
+	contextFiles?: ContextFileStore;
+	/** Local Project/<name>/ workspaces for the browser sidebar. */
+	projects?: WorkbenchProjectStore;
 }
 
 export interface ServeApiHandle {
@@ -87,6 +132,7 @@ function json(res: ServerResponse, status: number, body: unknown): void {
 	res.writeHead(status, {
 		"content-type": "application/json; charset=utf-8",
 		"content-length": Buffer.byteLength(payload),
+		"cache-control": "no-store",
 	});
 	res.end(payload);
 }
@@ -125,16 +171,34 @@ interface SessionEndpoint {
 	session: ServeApiSession;
 	sseClients: Set<ServerResponse>;
 	permissionResponders: Map<string, (allow: boolean) => void>;
+	permissionRequests: Map<
+		string,
+		{ type: "permission_request"; permissionId: string; title: string; message: string }
+	>;
 	/** Internal bounce listeners re-emitting every session event to `emit`. */
 	eventListeners: Set<(event: unknown) => void>;
 	unsubscribeConfirm: () => void;
 	unsubscribeEvents: () => void;
+	unsubscribeGoalPlan: () => void;
+	webAttached: number;
 }
 
 export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 	const { session, sessions, createSession, token, version } = options;
 	const globalClients = new Set<ServerResponse>();
 	const allSessions = new Map<string, SessionEndpoint>();
+	const openingSessions = new Map<string, Promise<ServeApiSession>>();
+	const mutatingSessions = new Set<string>();
+	async function mutateSession<T>(id: string, action: () => Promise<T>): Promise<T> {
+		if (mutatingSessions.has(id))
+			throw new WorkbenchError(409, "This conversation is busy. Wait for its current action to finish.");
+		mutatingSessions.add(id);
+		try {
+			return await action();
+		} finally {
+			mutatingSessions.delete(id);
+		}
+	}
 
 	const heartbeat = setInterval(() => {
 		const signal = `: ping\n\n`;
@@ -187,28 +251,36 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			session: sessionToRegister,
 			sseClients: new Set<ServerResponse>(),
 			permissionResponders: new Map<string, (allow: boolean) => void>(),
+			permissionRequests: new Map(),
 			eventListeners: new Set<(event: unknown) => void>(),
 			unsubscribeConfirm: () => {},
 			unsubscribeEvents: () => {},
+			unsubscribeGoalPlan: () => {},
+			webAttached: 0,
 		};
 
 		endpoint.unsubscribeConfirm = sessionToRegister.onConfirm((permission, respond) => {
 			const responder: (allow: boolean) => void = (allow) => {
 				endpoint.permissionResponders.delete(permission.id);
+				endpoint.permissionRequests.delete(permission.id);
+				const settled = `data: ${JSON.stringify({ type: "permission_resolved", permissionId: permission.id, allow })}\n\n`;
+				for (const client of endpoint.sseClients) writeSse(client, settled, endpoint.sseClients);
 				respond(allow);
 			};
 			endpoint.permissionResponders.set(permission.id, responder);
-			const serialized = JSON.stringify({
-				type: "permission_request",
+			const request = {
+				type: "permission_request" as const,
 				permissionId: permission.id,
 				title: stripAnsi(permission.title),
 				message: stripAnsi(permission.message),
-			});
+			};
+			endpoint.permissionRequests.set(permission.id, request);
+			const serialized = JSON.stringify(request);
 			for (const client of Array.from(endpoint.sseClients)) {
 				writeSse(client, `data: ${serialized}\n\n`, endpoint.sseClients);
 			}
 			setTimeout(() => {
-				if (endpoint.permissionResponders.delete(permission.id)) respond(false);
+				if (endpoint.permissionResponders.has(permission.id)) responder(false);
 			}, PERMISSION_TIMEOUT_MS).unref();
 		});
 
@@ -219,6 +291,14 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				writeSse(client, `data: ${serialized}\n\n`, endpoint.sseClients);
 			}
 		});
+
+		endpoint.unsubscribeGoalPlan =
+			sessionToRegister.onGoalPlanChange?.((view) => {
+				const serialized = JSON.stringify({ type: "goal_plan", status: view });
+				for (const client of Array.from(endpoint.sseClients)) {
+					writeSse(client, `data: ${serialized}\n\n`, endpoint.sseClients);
+				}
+			}) ?? (() => {});
 
 		allSessions.set(sessionToRegister.id, endpoint);
 		return endpoint;
@@ -282,10 +362,6 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 
 	const server = createServer(async (req, res) => {
 		try {
-			if (!requireAuth(req)) {
-				json(res, 401, { error: "unauthorized" });
-				return;
-			}
 			const origin = req.headers.origin;
 			if (origin !== undefined && !isOriginAllowed(req, origin)) {
 				json(res, 403, { error: "cross-origin request denied" });
@@ -295,6 +371,217 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			const path = url.pathname;
 			const method = (req.method ?? "GET").toUpperCase();
 			const querySessionId = url.searchParams.get("session");
+
+			// The static workbench shell contains no session data. API requests made
+			// by the page remain behind the same bearer-token check as every client.
+			if (method === "GET" && path === "/") {
+				res.writeHead(200, {
+					"content-type": "text/html; charset=utf-8",
+					"content-length": Buffer.byteLength(PORCUPINE_WEB_UI),
+					"cache-control": "no-store",
+					"content-security-policy":
+						"default-src 'none'; img-src blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+					"x-content-type-options": "nosniff",
+					"x-frame-options": "DENY",
+					"referrer-policy": "no-referrer",
+				});
+				res.end(PORCUPINE_WEB_UI);
+				return;
+			}
+
+			if (method === "GET" && serveMathAsset(path, res)) return;
+			if (!requireAuth(req)) {
+				json(res, 401, { error: "unauthorized" });
+				return;
+			}
+
+			if (method === "GET" && path === "/workbench") {
+				json(res, 200, {
+					contextFiles: Boolean(options.contextFiles),
+					projects: Boolean(options.projects),
+					canCreateSessions: Boolean(createSession),
+					canDeleteSessions: Boolean(options.deleteSession),
+					canAssignProjects: Boolean(options.assignProject),
+				});
+				return;
+			}
+			if (path === "/workbench/context" || path.startsWith("/workbench/context/")) {
+				if (!options.contextFiles) {
+					json(res, 501, { error: "Context editing is not configured by this server" });
+					return;
+				}
+				if (path === "/workbench/context" && method === "GET") {
+					json(res, 200, { files: options.contextFiles.list() });
+					return;
+				}
+				const match = /^\/workbench\/context\/([^/]+)$/.exec(path);
+				if (!match) {
+					json(res, 404, { error: "Unknown context document" });
+					return;
+				}
+				let id: string;
+				try {
+					id = decodeURIComponent(match[1]!);
+				} catch {
+					json(res, 400, { error: "Malformed context id" });
+					return;
+				}
+				if (method === "GET") {
+					json(res, 200, options.contextFiles.read(id));
+					return;
+				}
+				if (method === "PUT") {
+					let input: unknown;
+					try {
+						input = JSON.parse(await readBody(req));
+					} catch (error) {
+						if (error instanceof Error && "statusCode" in error) throw error;
+						json(res, 400, { error: "Expected JSON with content and revision" });
+						return;
+					}
+					if (
+						!input ||
+						typeof input !== "object" ||
+						Array.isArray(input) ||
+						!("content" in input) ||
+						!("revision" in input) ||
+						typeof input.content !== "string" ||
+						typeof input.revision !== "string" ||
+						Object.keys(input).some((key) => key !== "content" && key !== "revision")
+					) {
+						json(res, 400, { error: "Expected only content and revision strings" });
+						return;
+					}
+					json(res, 200, options.contextFiles.write(id, input.content, input.revision));
+					return;
+				}
+				res.setHeader("allow", path === "/workbench/context" ? "GET" : "GET, PUT");
+				json(res, 405, { error: "Method not allowed" });
+				return;
+			}
+
+			if (
+				options.projects &&
+				(await handleProjectRequest(req, res, url, method, {
+					readBody,
+					json,
+					projects: options.projects,
+					deleteProject: options.deleteProject,
+				}))
+			)
+				return;
+
+			if (
+				await handleSessionSurfaceRequest(req, res, url, method, {
+					readBody,
+					json,
+					getSession: (id) => resolveEntry(id, querySessionId)?.session,
+					publishControls: (id, controls) => {
+						const entry = allSessions.get(id);
+						if (!entry) return;
+						const data = `data: ${JSON.stringify({ type: "session_controls", controls })}\n\n`;
+						for (const client of Array.from(entry.sseClients)) writeSse(client, data, entry.sseClients);
+					},
+				})
+			)
+				return;
+
+			const commandMatch = /^\/session\/([^/]+)\/(commands|command)$/.exec(path);
+			if (commandMatch) {
+				const entry = allSessions.get(commandMatch[1]!);
+				if (!entry) {
+					json(res, 404, { error: "No such session" });
+					return;
+				}
+				if (commandMatch[2] === "commands" && method === "GET") {
+					json(res, 200, { commands: entry.session.getCommands?.() || [] });
+					return;
+				}
+				if (commandMatch[2] === "command" && method === "POST") {
+					if (!entry.session.runCommand) {
+						json(res, 501, { error: "Slash commands are unavailable for this session" });
+						return;
+					}
+					let input: unknown;
+					try {
+						input = JSON.parse(await readBody(req));
+					} catch {
+						json(res, 400, { error: "Expected command text" });
+						return;
+					}
+					if (!input || typeof input !== "object" || !("text" in input) || typeof input.text !== "string") {
+						json(res, 400, { error: "Expected command text" });
+						return;
+					}
+					const command = input.text;
+					const result = /^\/kill(?:\s|$)/.test(command)
+						? await entry.session.runCommand(command)
+						: await mutateSession(entry.session.id, () => entry.session.runCommand!(command));
+					const data = `data: ${JSON.stringify({ type: "command_result", ...result })}\n\n`;
+					for (const client of entry.sseClients) writeSse(client, data, entry.sseClients);
+					json(res, 200, result);
+					return;
+				}
+				json(res, 405, { error: "Method not allowed" });
+				return;
+			}
+
+			const projectMatch = /^\/session\/([^/]+)\/project$/.exec(path);
+			if (method === "PUT" && projectMatch) {
+				if (!options.assignProject) {
+					json(res, 501, { error: "Project organization is unavailable" });
+					return;
+				}
+				let input: unknown;
+				try {
+					input = JSON.parse(await readBody(req));
+				} catch {
+					json(res, 400, { error: "Expected a project name or null" });
+					return;
+				}
+				if (
+					!input ||
+					typeof input !== "object" ||
+					!("name" in input) ||
+					(input.name !== null && typeof input.name !== "string")
+				) {
+					json(res, 400, { error: "Expected a project name or null" });
+					return;
+				}
+				const id = decodeURIComponent(projectMatch[1]!),
+					name = input.name;
+				await mutateSession(id, () => options.assignProject!(id, name));
+				json(res, 200, { ok: true });
+				return;
+			}
+			const deleteMatch = /^\/session\/([^/]+)$/.exec(path);
+			if (method === "DELETE" && deleteMatch) {
+				if (!options.deleteSession) {
+					json(res, 501, { error: "Session deletion is unavailable" });
+					return;
+				}
+				const id = decodeURIComponent(deleteMatch[1]!);
+				await mutateSession(id, () => options.deleteSession!(id));
+				const entry = allSessions.get(id);
+				if (entry) {
+					for (const respond of entry.permissionResponders.values()) respond(false);
+					entry.unsubscribeConfirm();
+					entry.unsubscribeEvents();
+					entry.unsubscribeGoalPlan();
+					for (const client of entry.sseClients) {
+						writeSse(
+							client,
+							`data: ${JSON.stringify({ type: "session_deleted", sessionId: id })}\n\n`,
+							entry.sseClients,
+						);
+						client.end();
+					}
+					allSessions.delete(id);
+				}
+				broadcastGlobal({ type: "session_closed", sessionId: id });
+				json(res, 200, { ok: true });
+				return;
+			}
 
 			// Global session-lifecycle stream. Must hijack the response.
 			if (method === "GET" && path === "/events") {
@@ -318,11 +605,18 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				res.writeHead(200, sseHeaders());
 				writeSse(
 					res,
-					`data: ${JSON.stringify({ type: "server_connected", sessionId: entry.session.id })}\n\n`,
+					`data: ${JSON.stringify({ type: "server_connected", sessionId: entry.session.id, streaming: entry.session.isStreaming(), canQueueFollowUps: Boolean(entry.session.queueFollowUp), followUp: entry.session.getFollowUps?.() || [], timeline: entry.session.getTimeline?.(), messages: entry.session.getTimeline ? undefined : entry.session.getTranscript?.(), subagents: entry.session.getSubagents?.(), permissions: [...entry.permissionRequests.values()] })}\n\n`,
 					entry.sseClients,
 				);
 				entry.sseClients.add(res);
-				const onClose = () => entry.sseClients.delete(res);
+				if (entry.webAttached++ === 0) entry.session.setClientSurface?.("web");
+				let closed = false;
+				const onClose = () => {
+					if (closed) return;
+					closed = true;
+					entry.sseClients.delete(res);
+					if (entry.webAttached > 0 && --entry.webAttached === 0) entry.session.setClientSurface?.("none");
+				};
 				req.on("close", onClose);
 				res.on("close", onClose);
 				return;
@@ -334,8 +628,13 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			}
 
 			if (method === "GET" && path === "/session") {
-				const list = Array.from(allSessions.values()).map((entry) => ({ id: entry.session.id }));
-				json(res, 200, { sessions: list });
+				const list = new Map(((await options.listSessions?.()) ?? []).map((item) => [item.id, item]));
+				for (const entry of allSessions.values())
+					if (!list.has(entry.session.id)) list.set(entry.session.id, { id: entry.session.id });
+				json(res, 200, {
+					sessions: [...list.values()],
+					currentSessionId: session && allSessions.has(session.id) ? session.id : undefined,
+				});
 				return;
 			}
 
@@ -359,9 +658,24 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					json(res, 200, { sessionId: requestedId });
 					return;
 				}
+				if (requestedId && options.openSession) {
+					let opening = openingSessions.get(requestedId);
+					if (!opening) {
+						opening = options.openSession(requestedId);
+						openingSessions.set(requestedId, opening);
+					}
+					try {
+						const resumed = await opening;
+						registerSession(resumed);
+						json(res, 200, { sessionId: resumed.id });
+					} finally {
+						openingSessions.delete(requestedId);
+					}
+					return;
+				}
 				let created: ServeApiSession | undefined;
 				if (createSession) {
-					created = createSession(requestedId ?? undefined);
+					created = await createSession(requestedId ?? undefined);
 				} else if (session && !requestedId) {
 					// Legacy single-session behavior.
 					created = session;
@@ -380,26 +694,71 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				return;
 			}
 
-			const messageMatch = /^\/session\/([^/]+)\/message$/.exec(path);
+			const cancelFollowUp = /^\/session\/([^/]+)\/follow-up\/(\d+)$/.exec(path);
+			if (method === "DELETE" && cancelFollowUp) {
+				const entry = resolveEntry(cancelFollowUp[1]!, querySessionId);
+				if (!entry?.session.removeFollowUp) {
+					json(res, 404, { error: "Follow-up queue unavailable" });
+					return;
+				}
+				let body: { expected?: unknown };
+				try {
+					body = JSON.parse((await readRawBody(req, MAX_BODY_BYTES)).toString("utf8"));
+				} catch {
+					json(res, 400, { error: "Invalid queue removal body" });
+					return;
+				}
+				if (!body || typeof body !== "object") {
+					json(res, 400, { error: "Expected prompt text is required" });
+					return;
+				}
+				if (typeof body.expected !== "string") {
+					json(res, 400, { error: "Expected prompt text is required" });
+					return;
+				}
+				if (!entry.session.removeFollowUp(Number(cancelFollowUp[2]), body.expected)) {
+					json(res, 409, { error: "The queue changed; refresh before removing this prompt" });
+					return;
+				}
+				json(res, 200, { followUp: entry.session.getFollowUps?.() || [] });
+				return;
+			}
+			const messageMatch = /^\/session\/([^/]+)\/(message|follow-up)$/.exec(path);
 			if (method === "POST" && messageMatch) {
 				const entry = resolveEntry(messageMatch[1]!, querySessionId);
 				if (!entry) {
 					json(res, 404, { error: `no such session: ${messageMatch[1]}` });
 					return;
 				}
-				const raw = await readBody(req);
+				const raw = (await readRawBody(req, 18 * 1024 * 1024)).toString("utf8");
 				let text: unknown;
+				let attachments: WorkbenchAttachment[];
 				try {
-					text = JSON.parse(raw).text;
-				} catch {
-					json(res, 400, { error: "invalid JSON body, expected { text: string }" });
+					const input = JSON.parse(raw);
+					text = input.text;
+					attachments = validateWorkbenchAttachments(input.attachments);
+				} catch (error) {
+					if (error instanceof Error && "statusCode" in error) throw error;
+					json(res, 400, { error: "invalid JSON body, expected { text: string, attachments?: [] }" });
 					return;
 				}
-				if (typeof text !== "string" || text.trim().length === 0) {
+				if (typeof text !== "string" || (text.trim().length === 0 && attachments.length === 0)) {
 					json(res, 400, { error: "text must be a non-empty string" });
 					return;
 				}
-				await entry.session.sendUserMessage(text);
+				if (Buffer.byteLength(text) > MAX_BODY_BYTES) {
+					json(res, 413, { error: "Message text exceeds the 1 MiB limit" });
+					return;
+				}
+				const messageText = text;
+				if (messageMatch[2] === "follow-up") {
+					if (!entry.session.queueFollowUp) {
+						json(res, 501, { error: "Follow-up queue unavailable" });
+						return;
+					}
+					if (entry.session.isStreaming()) await entry.session.queueFollowUp(messageText, attachments);
+					else await mutateSession(entry.session.id, () => entry.session.queueFollowUp!(messageText, attachments));
+				} else await mutateSession(entry.session.id, () => entry.session.sendUserMessage(messageText, attachments));
 				json(res, 202, { ok: true });
 				return;
 			}
@@ -524,6 +883,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			for (const entry of allSessions.values()) {
 				entry.unsubscribeConfirm();
 				entry.unsubscribeEvents();
+				entry.unsubscribeGoalPlan();
 			}
 			for (const entry of allSessions.values()) {
 				for (const client of entry.sseClients) client.end();

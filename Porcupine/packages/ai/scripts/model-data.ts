@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import type { Api, Model } from "../src/types.ts";
 
 export const MODEL_DATA_SCHEMA_VERSION = 3;
 export const MODEL_DATA_MANIFEST_FILE = ".manifest.json";
@@ -270,4 +271,19 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
 export function validateGeneratedModelData(packageRoot: string): void {
 	const structure = readModelDataStructure(packageRoot);
 	validateModelDataDirectory(structure, join(packageRoot, "src", "providers", "data"));
+}
+
+/** A transient discovery omission must not remove a statically imported provider. */
+export function retainMissingProviderModels(models: Model<Api>[], packageRoot: string): Model<Api>[] {
+	const discovered = new Set(models.map((model) => model.provider));
+	const missing = readModelDataProviderIds(packageRoot).filter((provider) => !discovered.has(provider));
+	if (missing.length === 0) return models;
+	// Validate the entire committed snapshot, including hashes, before reusing any values.
+	validateGeneratedModelData(packageRoot);
+	const retained: Model<Api>[] = [];
+	for (const provider of missing) {
+		const groups = JSON.parse(readFileSync(join(packageRoot, "src/providers/data", `${provider}.json`), "utf8")) as Record<string, Record<string, Model<Api>>>;
+		for (const group of Object.values(groups)) retained.push(...Object.values(group));
+	}
+	return [...models, ...retained];
 }

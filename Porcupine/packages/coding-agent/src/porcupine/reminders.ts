@@ -2,7 +2,7 @@
  * Attended, session-local reminders for Porcupine.
  *
  * A reminder is scheduled by the user (`/remind <duration> <text>`), by the
- * model (`remind_me` tool), or as a goal nudge (`/goal remind <duration>`),
+ * model (`remind_me` tool),
  * and fires while the interactive session is open and idle. Delivery reuses
  * the existing task-completion chat-bridge notification path — the same fan-out
  * a finished task run uses — so nothing here claims to be a daemon or to run
@@ -43,7 +43,6 @@ export type RemindCommand = { kind: "set"; durationMs: number; text: string } | 
 export type GoalRemindCommand = { kind: "set"; durationMs: number } | { kind: "invalid"; message: string };
 
 const USAGE = "Usage: /remind <duration> <text>  (e.g. /remind 5m circle back on the blocker)";
-const GOAL_USAGE = "Usage: /goal remind <duration>  (e.g. /goal remind 10m)";
 
 /** Notify object shaped like a task run result, delivered over the bridge fan-out. */
 export interface ReminderNotification {
@@ -95,14 +94,6 @@ export function parseRemindCommand(text: string): RemindCommand | null {
 	if (!reminderText) return { kind: "invalid", message: USAGE };
 	return { kind: "set", durationMs, text: reminderText };
 }
-export function parseGoalRemindCommand(text: string): GoalRemindCommand | null {
-	const argument = /^\/goal\s+remind\s+(.+)$/i.exec(text.trim())?.[1]?.trim();
-	if (argument === undefined) return null;
-	const durationMs = parseDuration(argument);
-	if (durationMs === undefined) return { kind: "invalid", message: GOAL_USAGE };
-	return { kind: "set", durationMs };
-}
-
 export interface ReminderEngineOptions {
 	/** Current wall-clock provider; defaults to Date.now(). Overridable for tests. */
 	now?: () => number;

@@ -114,6 +114,16 @@ export class AgentSessionRuntime {
 		return this._modelFallbackMessage;
 	}
 
+	/** Bootstrap another conversation with the same host policy and fresh cwd-bound services. */
+	async createSibling(sessionManager: SessionManager): Promise<AgentSessionRuntime> {
+		return createAgentSessionRuntime(this.createRuntime, {
+			cwd: sessionManager.getCwd(),
+			agentDir: this.services.agentDir,
+			sessionManager,
+			sessionStartEvent: { type: "session_start", reason: "resume" },
+		});
+	}
+
 	setRebindSession(rebindSession?: (session: AgentSession) => Promise<void>): void {
 		this.rebindSession = rebindSession;
 	}
