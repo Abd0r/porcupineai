@@ -11,7 +11,7 @@
  * leaving reads and execution untouched.
  */
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { constants, realpathSync } from "node:fs";
 import { access as fsAccess } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
@@ -94,10 +94,47 @@ export function isSeatbeltSupported(): boolean {
  * profile. Falls back to the ordinary local shell when sandboxing is off or the
  * host is not macOS.
  */
+let fenceUsable: boolean | undefined;
+let fenceWarned = false;
+
+/**
+ * Some hosts ship `sandbox-exec` but refuse to apply any profile
+ * (`sandbox_apply: Operation not permitted`). Probe once and remember the
+ * answer, so a denied fence falls back to the native shell instead of failing
+ * every command. Returns true only when a trivial profile actually applies.
+ */
+export function probeSeatbeltFence(): boolean {
+	if (fenceUsable !== undefined) return fenceUsable;
+	try {
+		const probe = spawnSync("sandbox-exec", ["-p", "(version 1) (allow default)", "/usr/bin/true"], {
+			stdio: "ignore",
+			timeout: 5000,
+		});
+		fenceUsable = probe.status === 0;
+	} catch {
+		fenceUsable = false;
+	}
+	if (!fenceUsable && !fenceWarned) {
+		fenceWarned = true;
+		process.stderr.write(
+			"Warning: this host refuses to apply the Seatbelt write-fence; Auto Mode runs bash natively instead.\n",
+		);
+	}
+	return fenceUsable;
+}
+
+/** Test seam: reset the cached probe result. */
+export function resetSeatbeltFenceProbe(): void {
+	fenceUsable = undefined;
+	fenceWarned = false;
+}
+
 export function createSeatbeltBashOperations(options?: {
 	mode?: SandboxWriteMode;
 	workspace?: string;
 	shellPath?: string;
+	/** Override the availability probe (tests, or an operator forcing native execution). */
+	fenceUsable?: () => boolean;
 }): BashOperations {
 	const mode = options?.mode ?? "off";
 	const profile = buildSeatbeltProfile(
@@ -121,7 +158,8 @@ export function createSeatbeltBashOperations(options?: {
 
 			const commandFromStdin = shellConfig.commandTransport === "stdin";
 			const shellArgs = commandFromStdin ? shellConfig.args : [...shellConfig.args, command];
-			const sandboxed = profile !== null && isSeatbeltSupported();
+			const fenceCheck = options?.fenceUsable ?? probeSeatbeltFence;
+			const sandboxed = profile !== null && isSeatbeltSupported() && fenceCheck();
 			const child = sandboxed
 				? spawn("sandbox-exec", ["-p", profile, shellConfig.shell, ...shellArgs], {
 						cwd,
