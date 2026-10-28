@@ -238,13 +238,16 @@ task title and prompt remain unambiguous:
 ### Structured plan checklist (plan tool)
 
 For multi-step work the agent can keep a structured TODO list with the `plan`
-tool: `create` starts a plan from an objective and steps, `start` begins a
-ready step, `verify` attaches evidence refs, and `complete` finishes a step
-only after evidence was attached — direct completion without evidence is
-rejected. `status` shows the checklist, `export` renders it as Markdown, and
-`block` / `fail` / `skip` / `cancel` / `clear` manage step outcomes. Unlike the
-live task graph (which follows tool calls), the plan checklist tracks outcome
-milestones with dependencies and verification.
+tool. `create` requires a distinct **Goal** (the desired end-state), an
+**Objective** (the bounded work), and newline-separated steps. The Goal is shown
+in status and Markdown exports; the Objective names the work those milestones
+serve. This checklist Goal is separate from the bounded `/goal` session loop.
+`start` begins a ready step, `verify` attaches evidence refs, and
+`complete` finishes a step only after evidence was attached — direct completion
+without evidence is rejected. `status` shows the checklist, `export` renders it
+as Markdown, and `block` / `fail` / `skip` / `cancel` / `clear` manage step
+outcomes. Unlike the live task graph (which follows tool calls), the plan
+checklist tracks outcome milestones with dependencies and verification.
 
 `/cron` attaches a standard five-field UTC Cron expression to a stored task:
 

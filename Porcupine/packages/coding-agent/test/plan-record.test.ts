@@ -26,9 +26,22 @@ describe("plan record (T2.1)", () => {
 		expect(record.revision).toBe(1);
 	});
 
+	it("stores an explicit goal and keeps old callers compatible", () => {
+		const record = createPlanRecord(
+			"Add visualization support",
+			["Build renderer"],
+			"Users can inspect spatial concepts interactively",
+		);
+		expect(record.goal).toBe("Users can inspect spatial concepts interactively");
+		expect(createPlanRecord("Legacy objective", ["step"]).goal).toBe("Legacy objective");
+	});
+
 	it("rejects empty objectives, duplicate ids, unknown deps, and cycles", () => {
-		expect(() => createPlanRecord("  ", ["a"])).toThrow(/non-empty/);
+		expect(() => createPlanRecord("  ", ["a"])).toThrow(/objective/);
 		const record = createPlanRecord("Work", ["a", "b"]);
+		record.goal = " ";
+		expect(() => validatePlanRecord(record)).toThrow(/goal/);
+		record.goal = "Work";
 		record.steps[1]!.id = record.steps[0]!.id;
 		expect(() => validatePlanRecord(record)).toThrow(/Duplicate/);
 		record.steps[1]!.id = "b-2";
@@ -99,9 +112,12 @@ describe("plan record (T2.1)", () => {
 		record = completePlanStep(record, record.steps[0]!.id);
 		const markdown = formatPlanRecordMarkdown(record);
 		expect(markdown).toContain("# Plan (revision 4): Ship");
+		expect(markdown).toContain("## Goal\n\nShip");
 		expect(markdown).toContain("[x] [done]");
 		expect(markdown).toContain("evidence: tool:bash-1");
+		expect(summarizePlanRecordForGoal(record)).toContain("Goal: Ship.");
 		expect(summarizePlanRecordForGoal(record)).toContain("1/2 done");
+		expect(projectPlanRecordSummary(record)).toContain("Goal: Ship");
 		expect(projectPlanRecordSummary(record)).toContain("Done: 1/2.");
 		expect(projectPlanRecordSummary(record)).not.toContain("[done]");
 	});
@@ -127,6 +143,7 @@ describe("plan record (T2.1)", () => {
 		const record = createPlanRecord("Work", ["a", "b"]);
 		const restored = JSON.parse(JSON.stringify(record)) as typeof record;
 		expect(() => validatePlanRecord(restored)).not.toThrow();
+		expect(restored.goal).toBe(record.goal);
 		expect(restored.objective).toBe(record.objective);
 	});
 });
