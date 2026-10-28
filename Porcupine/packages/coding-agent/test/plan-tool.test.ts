@@ -15,12 +15,19 @@ describe("plan tool (T2.2)", () => {
 		let result = await run(def, { action: "status" });
 		expect(textOf(result)).toContain("No active plan");
 
-		result = await run(def, { action: "create", objective: "Ship fix", steps: "Reproduce\nFix\nVerify" });
+		result = await run(def, {
+			action: "create",
+			goal: "Deliver a verified fix for users.",
+			objective: "Ship fix",
+			steps: "Reproduce\nFix\nVerify",
+		});
 		expect(textOf(result)).toContain("Plan created (3 steps)");
 		expect(result.details?.plan).toMatchObject({
 			objective: "Ship fix",
 			steps: [{ status: "pending" }, { status: "pending" }, { status: "pending" }],
 		});
+		expect(textOf(result)).toContain("Goal: Deliver a verified fix for users.");
+		expect(textOf(result)).toContain("Plan (revision 1): Ship fix");
 
 		const stepId = "reproduce-1";
 		result = await run(def, { action: "complete", stepId });
@@ -48,9 +55,24 @@ describe("plan tool (T2.2)", () => {
 		expect(textOf(result)).toContain("[done]");
 	});
 
+	it("requires an explicit goal when creating a plan", async () => {
+		const def = createPlanToolDefinition();
+		const result = await run(def, { action: "create", objective: "Ship fix", steps: "Reproduce\nFix\nVerify" });
+
+		expect(textOf(result)).toContain("requires goal");
+		const blankGoal = await run(def, {
+			action: "create",
+			goal: "   ",
+			objective: "Ship fix",
+			steps: "Reproduce\nFix\nVerify",
+		});
+		expect(textOf(blankGoal)).toContain("requires goal");
+		expect(textOf(await run(def, { action: "status" }))).toContain("No active plan");
+	});
+
 	it("rejects unknown steps and clears cleanly", async () => {
 		const def = createPlanToolDefinition();
-		await run(def, { action: "create", objective: "Work", steps: "first\nsecond" });
+		await run(def, { action: "create", goal: "Finish the work.", objective: "Work", steps: "first\nsecond" });
 		const unknown = await run(def, { action: "start", stepId: "missing-9" });
 		expect(textOf(unknown)).toContain("Unknown plan step");
 		// Created steps are independent unless add-step declares dependencies.
@@ -58,6 +80,7 @@ describe("plan tool (T2.2)", () => {
 		expect(textOf(started)).toContain("Step started: second-2");
 		const exported = await run(def, { action: "export" });
 		expect(textOf(exported)).toContain("# Plan (revision 2): Work");
+		expect(textOf(exported)).toContain("## Goal\n\nFinish the work.");
 		expect(textOf(exported)).toContain("[active] second (second-2)");
 		const cleared = await run(def, { action: "clear" });
 		expect(textOf(cleared)).toContain("cleared");

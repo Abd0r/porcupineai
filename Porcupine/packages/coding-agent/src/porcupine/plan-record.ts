@@ -1,5 +1,5 @@
 /**
- * PlanRecord: one durable, model-authored TODO record per active objective.
+ * PlanRecord: one durable, model-authored TODO record with an explicit goal and objective.
  *
  * Outcome milestones with dependencies, expected outputs, verification,
  * evidence refs, ownership, and attempt history. The Markdown plan and the
@@ -31,6 +31,7 @@ export interface PlanRecordStep {
 
 export interface PlanRecord {
 	id: string;
+	goal: string;
 	objective: string;
 	scope: string[];
 	successCriteria: string[];
@@ -69,10 +70,12 @@ export function createPlanRecordStep(
 	};
 }
 
-export function createPlanRecord(objective: string, stepObjectives: string[]): PlanRecord {
+export function createPlanRecord(objective: string, stepObjectives: string[], goal = objective): PlanRecord {
 	if (!objective.trim()) throw new Error("PlanRecord requires a non-empty objective.");
+	if (!goal.trim()) throw new Error("PlanRecord requires a non-empty goal.");
 	return {
 		id: `plan-${Date.now().toString(36)}`,
+		goal: goal.trim().slice(0, 240),
 		objective: objective.trim().slice(0, 240),
 		scope: [],
 		successCriteria: [],
@@ -84,6 +87,7 @@ export function createPlanRecord(objective: string, stepObjectives: string[]): P
 
 /** Throw on duplicate ids, unknown dependencies, cycles, or empty objectives. */
 export function validatePlanRecord(record: PlanRecord): void {
+	if (!record.goal.trim()) throw new Error("PlanRecord goal must not be empty.");
 	if (!record.objective.trim()) throw new Error("PlanRecord objective must not be empty.");
 	const ids = new Set<string>();
 	for (const step of record.steps) {
@@ -220,7 +224,15 @@ export function planStepToGraphStatus(
 
 /** Deterministic Markdown rendering of a record: the artifact view of the same data. */
 export function formatPlanRecordMarkdown(record: PlanRecord): string {
-	const lines = [`# Plan (revision ${record.revision}): ${record.objective}`, "", `Updated: ${record.updatedAt}`];
+	const lines = [
+		`# Plan (revision ${record.revision}): ${record.objective}`,
+		"",
+		"## Goal",
+		"",
+		record.goal,
+		"",
+		`Updated: ${record.updatedAt}`,
+	];
 	if (record.successCriteria.length > 0) {
 		lines.push("", "## Success criteria");
 		for (const criterion of record.successCriteria) lines.push(`- [ ] ${criterion}`);
@@ -243,13 +255,13 @@ export function summarizePlanRecordForGoal(record: PlanRecord): string {
 	const blocked = record.steps
 		.filter((step) => step.status === "blocked" || step.status === "failed")
 		.map((step) => step.id);
-	const base = `Plan "${record.objective}" rev ${record.revision}: ${done}/${record.steps.length} done.`;
+	const base = `Goal: ${record.goal}. Plan "${record.objective}" rev ${record.revision}: ${done}/${record.steps.length} done.`;
 	return blocked.length > 0 ? `${base} Blocked: ${blocked.join(", ")}.` : base;
 }
 
 /** Compact current-plan view for compaction summaries and resume. */
 export function projectPlanRecordSummary(record: PlanRecord): string {
-	const lines = [`Plan: ${record.objective} (rev ${record.revision})`];
+	const lines = [`Goal: ${record.goal}`, `Plan: ${record.objective} (rev ${record.revision})`];
 	for (const step of record.steps) {
 		if (step.status === "done" || step.status === "skipped" || step.status === "cancelled") continue;
 		lines.push(`- [${step.status}] ${step.objective} (${step.id})`);
