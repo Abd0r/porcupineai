@@ -49,7 +49,12 @@ const planSchema = Type.Object({
 				"status | create | add-step | start | verify | complete | block | fail | skip | cancel | clear | export",
 		},
 	),
-	objective: Type.Optional(Type.String({ description: "Plan objective (action=create)" })),
+	goal: Type.Optional(
+		Type.String({ maxLength: 240, description: "Plan's desired end-state (required for action=create)" }),
+	),
+	objective: Type.Optional(
+		Type.String({ description: "Plan objective/scope (action=create); step text (action=add-step)" }),
+	),
 	steps: Type.Optional(Type.String({ description: "Newline-separated step objectives (action=create)" })),
 	stepId: Type.Optional(Type.String({ description: "Step id (start/verify/complete/block/fail/skip/cancel)" })),
 	evidence: Type.Optional(Type.String({ description: "Newline-separated evidence refs (action=verify)" })),
@@ -60,6 +65,11 @@ const planSchema = Type.Object({
 export type PlanToolInput = Static<typeof planSchema>;
 
 export interface PlanToolDetails {
+	plan?: {
+		objective: string;
+		revision: number;
+		steps: Array<{ id: string; objective: string; status: PlanRecordStepStatus; owner?: string }>;
+	} | null;
 	action: string;
 	stepId?: string;
 	revision?: number;
@@ -99,8 +109,12 @@ function stepLine(step: { id: string; objective: string; status: PlanRecordStepS
 
 function formatPlanStatus(store: PlanStore): string {
 	const record = store.active;
-	if (!record) return "No active plan. Use action=create with an objective and newline-separated steps.";
-	const lines = [`Plan (revision ${record.revision}): ${record.objective}`, ...record.steps.map(stepLine)];
+	if (!record) return "No active plan. Use action=create with a goal, objective, and newline-separated steps.";
+	const lines = [
+		`Goal: ${record.goal}`,
+		`Plan (revision ${record.revision}): ${record.objective}`,
+		...record.steps.map(stepLine),
+	];
 	return lines.join("\n");
 }
 
@@ -120,9 +134,10 @@ export function createPlanToolDefinition(
 		name: "plan",
 		label: "plan",
 		description:
-			"Invoke by the exact tool name `plan` (no namespace prefix). Structured TODO list for multi-step work. action=status shows the active plan; action=create starts one (objective + newline-separated steps); action=start begins a ready step; action=verify attaches evidence and moves it to verifying; action=complete finishes a verifying step (evidence required — direct completion is rejected); action=block|fail|skip|cancel marks a step. Tool calls never complete a step by themselves.",
+			"Invoke by the exact tool name `plan` (no namespace prefix). Structured TODO list for multi-step work. action=status shows the active plan; action=create requires a distinct desired end-state goal, a bounded objective, and newline-separated steps; action=start begins a ready step; action=verify attaches evidence and moves it to verifying; action=complete finishes a verifying step (evidence required — direct completion is rejected); action=block|fail|skip|cancel marks a step. Tool calls never complete a step by themselves.",
 		promptSnippet: "Structured plan TODO list (create/start/verify/complete with evidence)",
 		promptGuidelines: [
+			"When creating a plan, state a distinct Goal (the desired end-state), Objective (the bounded work), and ordered steps. Do not use the objective as a substitute for the goal.",
 			"Use the plan tool for multi-step work: create milestones with dependencies, start them when ready, attach evidence with verify, then complete. Never mark a step done without evidence.",
 			"Simple single actions need no plan. For trivial chat, do not touch the plan tool.",
 		],
@@ -140,8 +155,13 @@ export function createPlanToolDefinition(
 						text = formatPlanStatus(store);
 						break;
 					case "create": {
+						const goal = args.goal?.trim();
 						const objective = args.objective?.trim();
 						const steps = splitLines(args.steps);
+						if (!goal) {
+							text = "action=create requires goal.";
+							break;
+						}
 						if (!objective) {
 							text = "action=create requires objective.";
 							break;
@@ -151,7 +171,7 @@ export function createPlanToolDefinition(
 							break;
 						}
 						if (store.active) store.archived.push(store.active);
-						store.active = createPlanRecord(objective, steps);
+						store.active = createPlanRecord(objective, steps, goal);
 						revision = store.active.revision;
 						text = `Plan created (${store.active.steps.length} steps):\n${formatPlanStatus(store)}`;
 						break;
@@ -269,6 +289,18 @@ export function createPlanToolDefinition(
 			return {
 				content: [{ type: "text", text }],
 				details: {
+					plan: store.active
+						? {
+								objective: store.active.objective,
+								revision: store.active.revision,
+								steps: store.active.steps.map(({ id, objective, status, owner }) => ({
+									id,
+									objective,
+									status,
+									owner,
+								})),
+							}
+						: null,
 					action,
 					stepId,
 					revision: store.active?.revision,

@@ -158,6 +158,19 @@ export {
 	truncateTail,
 } from "./truncate.ts";
 export {
+	createVisualizeTool,
+	createVisualizeToolDefinition,
+	type VisualDetails,
+	type VisualParameters,
+} from "./visualize.ts";
+export {
+	createVisualize3DTool,
+	createVisualize3DToolDefinition,
+	type VisualizationDetails,
+	type VisualizationObject,
+	type VisualizationParameters,
+} from "./visualize-3d.ts";
+export {
 	createWebExtractTool,
 	createWebExtractToolDefinition,
 	extractUrl,
@@ -270,6 +283,8 @@ import {
 	createExtractSkillTool,
 	createExtractSkillToolDefinition,
 } from "./skill-tools.ts";
+import { createVisualizeTool, createVisualizeToolDefinition } from "./visualize.ts";
+import { createVisualize3DTool, createVisualize3DToolDefinition } from "./visualize-3d.ts";
 
 export {
 	createInspectRuntimeTool,
@@ -301,7 +316,11 @@ import {
 	createRemindMeToolDefinition,
 	type RemindMeToolOptions,
 } from "../../porcupine/remind-me-tool.ts";
+import { createGoalTool, createGoalToolDefinition, type GoalToolOptions } from "./goal.ts";
 import { createPlanTool, createPlanToolDefinition, type PlanToolOptions } from "./plan.ts";
+
+export { createGoalTool, createGoalToolDefinition, type GoalToolDetails, type GoalToolInput } from "./goal.ts";
+
 import {
 	createSendToSubagentToolDefinition,
 	createStopSubagentToolDefinition,
@@ -348,6 +367,7 @@ export type ToolName =
 	| "memory"
 	| "session_search"
 	| "plan"
+	| "goal"
 	| "tasks"
 	| "projects"
 	| "literature"
@@ -357,6 +377,8 @@ export type ToolName =
 	| "mcp_resources"
 	| "remind_me"
 	| "show_markdown"
+	| "visualize_3d"
+	| "visualize"
 	| "x_search"
 	| "x_read"
 	| "x_draft"
@@ -395,6 +417,7 @@ export const allToolNames: Set<ToolName> = new Set([
 	"memory",
 	"session_search",
 	"plan",
+	"goal",
 	"tasks",
 	"projects",
 	"literature",
@@ -404,6 +427,8 @@ export const allToolNames: Set<ToolName> = new Set([
 	"mcp_resources",
 	"remind_me",
 	"show_markdown",
+	"visualize_3d",
+	"visualize",
 	"x_search",
 	"x_read",
 	"x_draft",
@@ -441,6 +466,7 @@ export interface ToolsOptions {
 	memory?: MemoryToolOptions;
 	session_search?: SessionSearchToolOptions;
 	plan?: PlanToolOptions;
+	goal?: GoalToolOptions;
 	tasks?: TasksToolOptions;
 	remind?: RemindMeToolOptions;
 	projects?: ProjectsToolOptions;
@@ -503,10 +529,13 @@ export function createCodingToolDefinitions(cwd: string, options?: ToolsOptions)
 		createProjectsToolDefinition(options?.projects),
 		createSessionSearchToolDefinition({ cwd, ...options?.session_search }),
 		createPlanToolDefinition(options?.plan),
+		createGoalToolDefinition(options?.goal),
 		createTasksToolDefinition(options?.tasks),
 		createRemindMeToolDefinition(options?.remind),
 		createLiteratureToolDefinition(options?.literature),
 		createShowMarkdownToolDefinition(cwd),
+		createVisualize3DToolDefinition(),
+		createVisualizeToolDefinition(),
 		createXSearchToolDefinition(options?.x),
 		createXReadToolDefinition(options?.x),
 		createXDraftToolDefinition(options?.x),
@@ -534,6 +563,8 @@ export function createReadOnlyToolDefinitions(cwd: string, options?: ToolsOption
 		createProjectsToolDefinition(options?.projects),
 		createSessionSearchToolDefinition({ cwd, ...options?.session_search }),
 		createShowMarkdownToolDefinition(cwd),
+		createVisualize3DToolDefinition(),
+		createVisualizeToolDefinition(),
 	];
 }
 
@@ -560,10 +591,13 @@ export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): R
 		projects: createProjectsToolDefinition(options?.projects),
 		session_search: createSessionSearchToolDefinition({ cwd, ...options?.session_search }),
 		plan: createPlanToolDefinition(options?.plan),
+		goal: createGoalToolDefinition(options?.goal),
 		tasks: createTasksToolDefinition(options?.tasks),
 		remind_me: createRemindMeToolDefinition(options?.remind),
 		literature: createLiteratureToolDefinition(options?.literature),
 		show_markdown: createShowMarkdownToolDefinition(cwd),
+		visualize_3d: createVisualize3DToolDefinition(),
+		visualize: createVisualizeToolDefinition(),
 		subagent: options?.subagent
 			? createSubagentToolDefinition(options.subagent)
 			: createUnavailableSubagentToolDefinition(),
@@ -616,10 +650,13 @@ export function createCodingTools(cwd: string, options?: ToolsOptions): Tool[] {
 		createProjectsTool(options?.projects),
 		createSessionSearchTool({ cwd, ...options?.session_search }),
 		createPlanTool(options?.plan),
+		createGoalTool(options?.goal),
 		createTasksTool(options?.tasks),
 		createRemindMeTool(options?.remind),
 		createLiteratureTool(options?.literature),
 		createShowMarkdownTool(cwd),
+		createVisualize3DTool(),
+		createVisualizeTool(),
 		createXSearchTool(options?.x),
 		createXReadTool(options?.x),
 		createXDraftTool(options?.x),
@@ -647,6 +684,8 @@ export function createReadOnlyTools(cwd: string, options?: ToolsOptions): Tool[]
 		createProjectsTool(options?.projects),
 		createSessionSearchTool({ cwd, ...options?.session_search }),
 		createShowMarkdownTool(cwd),
+		createVisualize3DTool(),
+		createVisualizeTool(),
 	];
 }
 
@@ -673,10 +712,13 @@ export function createAllTools(cwd: string, options?: ToolsOptions): Record<Tool
 		projects: createProjectsTool(options?.projects),
 		session_search: createSessionSearchTool({ cwd, ...options?.session_search }),
 		plan: createPlanTool(options?.plan),
+		goal: createGoalTool(options?.goal),
 		tasks: createTasksTool(options?.tasks),
 		remind_me: createRemindMeTool(options?.remind),
 		literature: createLiteratureTool(options?.literature),
 		show_markdown: createShowMarkdownTool(cwd),
+		visualize_3d: createVisualize3DTool(),
+		visualize: createVisualizeTool(),
 		subagent: wrapToolDefinition(
 			options?.subagent ? createSubagentToolDefinition(options.subagent) : createUnavailableSubagentToolDefinition(),
 		),

@@ -161,11 +161,6 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 		argumentHint: "[--force]",
 	},
 	{
-		name: "goal",
-		description: "Set a persistent session goal",
-		argumentHint: "<text>|[status|pause|resume|clear]",
-	},
-	{
 		name: "plan",
 		description: "Generate and save a capability-aware plan",
 		argumentHint: "<text>|[status|clear]",

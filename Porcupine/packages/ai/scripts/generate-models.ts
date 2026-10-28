@@ -24,6 +24,7 @@ import {
 	type ModelDataStructure,
 	MODEL_DATA_MANIFEST_FILE,
 	readModelDataProviderIds,
+	retainMissingProviderModels,
 	validateGeneratedModelData,
 	validateModelDataDirectory,
 } from "./model-data.ts";
@@ -2637,7 +2638,7 @@ async function generateModels() {
 
 	// Group by provider and deduplicate by model ID
 	const providers: Record<string, Record<string, Model<any>>> = {};
-	for (const model of allModels) {
+	for (const model of retainMissingProviderModels(allModels, packageRoot)) {
 		if (!providers[model.provider]) {
 			providers[model.provider] = {};
 		}

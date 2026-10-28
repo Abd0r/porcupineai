@@ -76,7 +76,6 @@ distilled command tools itself (persisted under the agent home).
 | `/refine` | Run the refiner now: auto-improve weak porcupine-crafted skills (snapshot + feed) |
 | `/mcp [status\|reload\|auth <server>]` | MCP server health, config reload, and interactive browser OAuth |
 | `/mcpp:<server>:<prompt>` | Run an MCP prompt as a slash command |
-| `/goal <text>`               | Start a bounded, durable autonomous goal loop                              |
 | `/plan <text>`               | Inspect and draft a non-executing implementation plan                      |
 | `/modes`                     | Open the Ask / Normal / Auto interaction-mode picker                       |
 | `/auto [on|off|status]`     | Toggle or query Auto Mode (autonomous operation + fail-closed safety gate) |
@@ -174,18 +173,16 @@ activation happens automatically after validation.
 
 ### Goals, Plans, and Refresh
 
-`/goal <text>` starts a bounded goal loop for the current session. Porcupine
-runs the objective as a normal first turn, then queues another normal turn only
-after the prior turn has settled and reported neither completion nor a block.
-Each goal has a 20-turn safety budget. It pauses rather than spins when the
-agent requests user input, reports a block, the budget is exhausted, or you
-queue a new instruction, or you interrupt the turn (interrupts pause the
-goal instead of judging stale output). After each settled turn, a strict JSON judge call on
-the active model determines `done`, `continue`, or `blocked`; a failed or
-malformed judge response fails open to `continue`, never false completion. Use `/goal status`
-(or `/goal show`), `/goal pause`, `/goal resume`, `/goal clear` (or `/goal stop`)
-to inspect or control it. Goals are persisted as immutable session entries and
-restore when that session is resumed.
+Goals are agent-declared, not user commands. There is no `/goal`. When a
+request needs several dependent steps, the model calls the `goal` tool to state
+its objective and steps, then moves each step `start` → `done` with the evidence
+that proved it. A goal becomes `done` only when every step is done, and `blocked`
+when a step is explicitly blocked, so progress is never inferred from prose.
+
+The tracked goal is a session entry, visible in the terminal and in the browser
+workbench panel. `goal status` prints the current record; `goal clear` removes
+it. The tool refuses `done` and `block` without a note, so an empty claim cannot
+close a step.
 
 `/plan <text>` first saves a capability route, then sends a dedicated
 plan-only turn that inspects the codebase and returns an implementation-ready
@@ -238,13 +235,16 @@ task title and prompt remain unambiguous:
 ### Structured plan checklist (plan tool)
 
 For multi-step work the agent can keep a structured TODO list with the `plan`
-tool: `create` starts a plan from an objective and steps, `start` begins a
-ready step, `verify` attaches evidence refs, and `complete` finishes a step
-only after evidence was attached — direct completion without evidence is
-rejected. `status` shows the checklist, `export` renders it as Markdown, and
-`block` / `fail` / `skip` / `cancel` / `clear` manage step outcomes. Unlike the
-live task graph (which follows tool calls), the plan checklist tracks outcome
-milestones with dependencies and verification.
+tool. `create` requires a distinct **Goal** (the desired end-state), an
+**Objective** (the bounded work), and newline-separated steps. The Goal is shown
+in status and Markdown exports; the Objective names the work those milestones
+serve. This checklist Goal is separate from the bounded `/goal` session loop.
+`start` begins a ready step, `verify` attaches evidence refs, and
+`complete` finishes a step only after evidence was attached — direct completion
+without evidence is rejected. `status` shows the checklist, `export` renders it
+as Markdown, and `block` / `fail` / `skip` / `cancel` / `clear` manage step
+outcomes. Unlike the live task graph (which follows tool calls), the plan
+checklist tracks outcome milestones with dependencies and verification.
 
 `/cron` attaches a standard five-field UTC Cron expression to a stored task:
 

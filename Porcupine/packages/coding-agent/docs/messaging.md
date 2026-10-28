@@ -114,7 +114,7 @@ What can run remotely (all behind the same actor + conversation gates):
 | Session info | `/session` `/usage` `/cost` `/changelog` `/memory` `/stacks` `/projects` `/subagents` `/guide` `/update` |
 | State toggles | `/reasoning [level]` `/thinking` `/adaptive` `/auto` `/model <provider/model>` `/name <name>` |
 | Task/cron | `/task list` `/task show <id>` `/task add <title> :: <prompt>` `/task run <id>` `/task pause|resume|cancel <id>` `/cron list` |
-| Goal/plan status | `/goal status` `/plan status` |
+| Plan status | `/plan status` |
 | X / email reads | `/x ...` `/email status|drafts|inbox|read <id>` |
 
 `/task run` and `/cron run` queue the run and post the result back to the
@@ -125,7 +125,7 @@ Declined remotely (with a terminal pointer in the reply): TUI-only selectors
 `/fork`, `/logout`, `/export`, `/import`), lifecycle commands (`/refresh`,
 `/restart`, `/reload`, `/new`, `/quit`, `/kill`, `/clone`, `/extract-stack`,
 `/craft-stack`), and turn-starting builtins that need a live agent turn
-(`/goal <text>`, `/plan <text>`, `/compact`, `/email send`). These are listed
+(`/plan <text>`, `/compact`, `/email send`). These are listed
 so you know they exist, but run them in the terminal. Replies are redacted so
 engine output can never leak tokens, keys, or passwords.
 
