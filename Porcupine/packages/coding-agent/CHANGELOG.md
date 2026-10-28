@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Local browser workbench (GUI):** `porcupine --serve` now serves a local, same-origin workbench alongside the terminal client. Real session history, live transcript, inline thinking disclosure, Markdown with code blocks, tables and blockquotes, and KaTeX math rendered locally with no CDN. Searchable model picker per session and a global default, real reasoning and autonomy controls, five themes with light/dark, a local chat background, collapsible sidebar, Stacks inspection for skills and tools, Project workspaces with bounded document uploads, conflict-safe context-file editing, and a context-usage ring. Visuals are declarative: validated 2D diagrams, line/scatter/bar charts with units and supplied uncertainty, and interactive 3D scenes.
+
+- **Agent-owned goals:** a `goal` tool lets the model declare its own objective and steps instead of a `/goal` command. A goal closes only when every step is done, a block requires a reason, and closing a step requires evidence. Persisted in the session log and shown in both clients.
+
+- **Surface-aware context:** the prompt now states whether the terminal, the browser or no client is attached, and the agent receives a `[Surface switch]` notice when a client attaches or detaches, plus the live compaction threshold and sub-agent limit.
+
+### Fixed
+
+- **Auto-mode bash on hosts that refuse the Seatbelt fence:** when `sandbox-exec` is present but `sandbox_apply` is denied, commands failed with exit 71 and no shell ever started. The fence is now probed once, cached, and the native shell is used with a single warning, matching the documented fallback.
+
 ## [0.1.79] - 2026-09-16
 
 ### Added
