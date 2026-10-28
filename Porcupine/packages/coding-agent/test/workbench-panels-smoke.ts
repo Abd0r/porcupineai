@@ -36,8 +36,32 @@ try {
 	await page.goto(`http://127.0.0.1:${api.port()}/#token=panels-test`);
 	await page.locator("#todos-panel").waitFor();
 	await page.locator(".worker").waitFor();
+	await page.getByRole("button", { name: "Tasks", exact: true }).click();
+	assert.equal(await page.locator("#work-rail").isVisible(), false, "Desktop Tasks must hide the side rail");
+	assert.equal(
+		await page.locator(".main").evaluate((n) => getComputedStyle(n).gridTemplateColumns.split(" ").length),
+		1,
+	);
+	await page.getByRole("button", { name: "Tasks", exact: true }).click();
+	assert.equal(await page.locator("#work-rail").isVisible(), true);
 	await page.getByRole("button", { name: "Settings", exact: true }).click();
 	await page.locator("#appearance-todos-placement").selectOption("overlay");
+	await page.getByRole("button", { name: "Close settings" }).click();
+	for (const width of [1440, 390]) {
+		await page.setViewportSize({ width, height: 960 });
+		const todo = await page.locator("#todos-panel").boundingBox();
+		const worker = await page.locator("#workers-panel").boundingBox();
+		assert.ok(todo && worker);
+		assert.ok(
+			todo.x + todo.width <= worker.x ||
+				worker.x + worker.width <= todo.x ||
+				todo.y + todo.height <= worker.y ||
+				worker.y + worker.height <= todo.y,
+			"Mixed panel placements must not overlap",
+		);
+	}
+	await page.setViewportSize({ width: 1440, height: 960 });
+	await page.getByRole("button", { name: "Settings", exact: true }).click();
 	await page.locator("#appearance-workers-placement").selectOption("hidden");
 	await page.getByRole("button", { name: "Close settings" }).click();
 	assert.equal(await page.locator("#todos-panel").evaluate((n) => n.parentElement?.id), "work-rail-overlay");

@@ -53,14 +53,14 @@ export function formatLearningMath(source: string): string {
 			continue;
 		}
 		formula = formula
-			.replace(/\blim(?=[_{\s(])/g, "\\lim")
+			.replace(/(?<!\\)\blim(?=[_{\s(])/g, "\\lim")
 			.replace(/->|→/g, "\\to ")
 			.replace(/∫/g, "\\int ")
 			.replace(/∞/g, "\\infty ");
 		formula = formula
 			.replace(/\bd\/d([A-Za-z])\b/g, "\\frac{d}{d$1}")
 			.replace(/\[([^[\]]+)\]\s*\/\s*([A-Za-z]|[0-9]+)(?![A-Za-z0-9])/g, "\\frac{$1}{$2}");
-		formula = formula.replace(/\b(sin|cos|tan|log|ln|exp)(?=[(\s])/g, "\\$1");
+		formula = formula.replace(/(?<!\\)\b(sin|cos|tan|log|ln|exp)(?=[(\s])/g, "\\$1");
 		output.push(`${prefix}\\(${formula}\\)`);
 	}
 	return output.join("\n");
