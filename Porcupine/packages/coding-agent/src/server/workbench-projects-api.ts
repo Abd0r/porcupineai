@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { readWorkbenchArtifact } from "./workbench-artifacts.ts";
 import { WorkbenchError } from "./workbench-context-files.ts";
 import { PROJECT_UPLOAD_LIMIT, type WorkbenchProjectStore } from "./workbench-projects.ts";
 
@@ -53,19 +54,23 @@ export async function handleProjectRequest(
 			if (!input || typeof input !== "object" || Array.isArray(input))
 				throw new WorkbenchError(400, "Expected an object");
 			const keys = Object.keys(input);
-			if (!keys.includes("name") || keys.some((key) => !["name", "title"].includes(key)))
-				throw new WorkbenchError(400, "Expected only name and optional title");
-			const { name, title } = input as { name?: unknown; title?: unknown };
-			if (typeof name !== "string" || (title !== undefined && typeof title !== "string"))
-				throw new WorkbenchError(400, "name and title must be strings");
-			router.json(res, 201, router.projects.create(name, title));
+			if (!keys.includes("name") || keys.some((key) => !["name", "title", "description"].includes(key)))
+				throw new WorkbenchError(400, "Expected only name, optional title and description");
+			const { name, title, description } = input as { name?: unknown; title?: unknown; description?: unknown };
+			if (
+				typeof name !== "string" ||
+				(title !== undefined && typeof title !== "string") ||
+				(description !== undefined && (typeof description !== "string" || description.length > 360))
+			)
+				throw new WorkbenchError(400, "name and title must be strings; description must be at most 360 characters");
+			router.json(res, 201, router.projects.create(name, title, description));
 			return true;
 		}
 		res.setHeader("allow", "GET, POST");
 		router.json(res, 405, { error: "Method not allowed" });
 		return true;
 	}
-	const match = /^\/workbench\/projects\/([^/]+)(\/files(?:\/(.+))?)?$/.exec(path);
+	const match = /^\/workbench\/projects\/([^/]+)(\/pin|\/files(?:\/(.+))?)?$/.exec(path);
 	if (!match) {
 		router.json(res, 404, { error: "Unknown project route" });
 		return true;
@@ -88,7 +93,33 @@ export async function handleProjectRequest(
 			router.json(res, 405, { error: "Method not allowed" });
 			return true;
 		}
-		router.json(res, 200, { name, files: router.projects.files(name) });
+		const files = router.projects.files(name);
+		router.json(res, 200, { ...router.projects.list().find((project) => project.name === name), name, files });
+		return true;
+	}
+	if (match[2] === "/pin") {
+		if (method !== "PUT") {
+			res.setHeader("allow", "PUT");
+			router.json(res, 405, { error: "Method not allowed" });
+			return true;
+		}
+		let input: unknown;
+		try {
+			input = JSON.parse(await router.readBody(req));
+		} catch {
+			throw new WorkbenchError(400, "Expected JSON with pinned");
+		}
+		if (
+			!input ||
+			typeof input !== "object" ||
+			Array.isArray(input) ||
+			Object.keys(input).length !== 1 ||
+			!("pinned" in input) ||
+			typeof input.pinned !== "boolean"
+		)
+			throw new WorkbenchError(400, "Expected only a boolean pinned");
+		router.projects.setPinned(name, input.pinned);
+		router.json(res, 200, { pinned: input.pinned });
 		return true;
 	}
 
@@ -122,6 +153,18 @@ export async function handleProjectRequest(
 	} catch {
 		throw new WorkbenchError(400, "Malformed file path");
 	}
-	router.json(res, 200, router.projects.read(name, filePath));
+	if (url.searchParams.get("raw") === "1") {
+		const file = await readWorkbenchArtifact(router.projects.path(name), filePath);
+		res.writeHead(200, {
+			"content-type": file.mime,
+			"content-length": file.bytes.length,
+			"content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.name).replace(/'/g, "%27")}`,
+			"x-porcupine-preview": file.kind,
+			"x-porcupine-name": encodeURIComponent(file.name),
+			"cache-control": "no-store",
+			"x-content-type-options": "nosniff",
+		});
+		res.end(file.bytes);
+	} else router.json(res, 200, router.projects.read(name, filePath));
 	return true;
 }

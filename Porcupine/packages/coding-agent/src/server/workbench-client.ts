@@ -1,7 +1,7 @@
 import { FOLLOWUP_SCRIPT } from "./workbench-followups.ts";
 /** Session transport and interaction state for the bundled, same-origin workbench. */
 export const WORKBENCH_CLIENT_SCRIPT = String.raw`
-let connected=false,connectionEpoch=0,replaying=false,replayEpoch=0,pendingAssistantRender=null,renderFrame=0;
+let busyRevision=0,connected=false,connectionEpoch=0,replaying=false,replayEpoch=0,pendingAssistantRender=null,renderFrame=0;
 function queueAssistantRender(node,text){pendingAssistantRender={node,text};if(!renderFrame)renderFrame=requestAnimationFrame(flushAssistantRender);}
 function flushAssistantRender(){if(renderFrame)cancelAnimationFrame(renderFrame);renderFrame=0;if(!pendingAssistantRender)return;const {node,text}=pendingAssistantRender;pendingAssistantRender=null;renderRichText(node.lastChild,text);scrollFeed();}
 const conversationViews=new Map(),sessionNames=new Map();
@@ -29,6 +29,7 @@ function resetSessionView(id){
   setBusy(false);setError('');
 }
 async function connectEvents(id){
+  if(activeProject)closeProjectPage();
   const epoch=++connectionEpoch;
   if(streamController)streamController.abort();
   const controller=new AbortController();streamController=controller;
@@ -81,7 +82,7 @@ function filterSessions(){const query=$('session-search').value.trim().toLowerCa
 async function refreshSessions(selectFirst=false){
   const data=await json('/session');sessionCatalog=data.sessions||[];
   for(const item of sessionCatalog)if(item.name)sessionNames.set(item.id,item.name.startsWith("[Adaptive UI response]")?"Interactive session":item.name);
-  renderSessionNavigation();if(sessionNames.has(sessionId))ui.title.textContent=sessionNames.get(sessionId);
+  renderSessionNavigation();if(activeProject)renderProjectChats();if(!activeProject&&sessionNames.has(sessionId))ui.title.textContent=sessionNames.get(sessionId);
   if(selectFirst&&sessionCatalog.length)void connectEvents(data.currentSessionId||sessionCatalog[0].id);else if(selectFirst)await createSession();
 }
 async function createSession(project=null){ui.newSession.disabled=true;try{const data=await json('/session',{method:'POST',body:'{}'});if(project)await json('/session/'+encodeURIComponent(data.sessionId)+'/project',{method:'PUT',body:JSON.stringify({name:project})});await refreshSessions(false);if(project)await refreshProjects();void connectEvents(data.sessionId);}finally{ui.newSession.disabled=false;}}
@@ -92,9 +93,9 @@ ui.form.addEventListener('submit',async event=>{
   if(queueSubmitting)return;
   if(text.startsWith('/')&&await submitSlashCommand(text))return;
   if(streaming&&canQueueFollowUps){await submitFollowUp(text);return;}
-  const id=sessionId,attachments=chatAttachments();attachmentDrafts.delete(id);renderAttachments();setError('');ui.prompt.value='';resizeComposer();setBusy(true);
+  const id=sessionId,submittedConnection=connectionEpoch,attachments=chatAttachments();attachmentDrafts.delete(id);renderAttachments();setError('');ui.prompt.value='';resizeComposer();setBusy(true);const submittedBusyRevision=busyRevision;
   try{await json('/session/'+encodeURIComponent(id)+'/message',{method:'POST',body:JSON.stringify({text,attachments:attachments.map(({name,data})=>({name,data}))})});}
-  catch(error){attachmentDrafts.set(id,[...attachments,...chatAttachments(id)]);if(id===sessionId){renderAttachments();setBusy(false);if(!ui.prompt.value)ui.prompt.value=text;else ui.prompt.value=text+'\n\n'+ui.prompt.value;resizeComposer();setError(error.message);ui.prompt.focus()}else{const view=conversationViews.get(id);if(view)view.draft=text+(view.draft?'\n\n'+view.draft:'');}}
+  catch(error){attachmentDrafts.set(id,[...attachments,...chatAttachments(id)]);if(id===sessionId){renderAttachments();if(submittedConnection===connectionEpoch&&submittedBusyRevision===busyRevision)setBusy(false);if(!ui.prompt.value)ui.prompt.value=text;else ui.prompt.value=text+'\n\n'+ui.prompt.value;resizeComposer();setError(error.message);ui.prompt.focus()}else{const view=conversationViews.get(id);if(view)view.draft=text+(view.draft?'\n\n'+view.draft:'');}}
 });
 ui.prompt.addEventListener('input',resizeComposer);
 ui.prompt.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();ui.form.requestSubmit()}});

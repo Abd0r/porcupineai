@@ -29,6 +29,28 @@ async function fixture() {
 	return { cwd, base: `http://127.0.0.1:${handle.port()}`, headers: { authorization: "Bearer project-token" } };
 }
 describe("project workspace API", () => {
+	it("returns project details and persists validated pins through authenticated HTTP", async () => {
+		const { base, headers } = await fixture();
+		await fetch(`${base}/workbench/projects`, {
+			method: "POST",
+			headers,
+			body: JSON.stringify({ name: "paper", title: "Paper", description: "Compare results." }),
+		});
+		const pin = (body: unknown) =>
+			fetch(`${base}/workbench/projects/paper/pin`, { method: "PUT", headers, body: JSON.stringify(body) });
+		expect((await pin({ pinned: true })).status).toBe(200);
+		const details = await (await fetch(`${base}/workbench/projects/paper`, { headers })).json();
+		expect(details).toMatchObject({
+			title: "Paper",
+			description: "Compare results.",
+			pinned: true,
+			files: expect.any(Array),
+		});
+		expect((await pin({ pinned: "yes" })).status).toBe(400);
+		expect(
+			(await fetch(`${base}/workbench/projects/paper/pin`, { method: "PUT", body: '{"pinned":false}' })).status,
+		).toBe(401);
+	});
 	it("creates, uploads and reads a project document through authenticated HTTP", async () => {
 		const { cwd, base, headers } = await fixture();
 		const created = await fetch(`${base}/workbench/projects`, {
@@ -43,6 +65,9 @@ describe("project workspace API", () => {
 			body: "# Notes\nMeasured capacity fade.\n",
 		});
 		expect(uploaded.status).toBe(201);
+		const raw = await fetch(`${base}/workbench/projects/battery-aging/files/uploads/notes.md?raw=1`, { headers });
+		expect(raw.headers.get("x-porcupine-preview")).toBe("text");
+		expect(await raw.text()).toContain("capacity fade");
 		const document = await fetch(`${base}/workbench/projects/battery-aging/files/uploads/notes.md`, { headers });
 		expect((await document.json()).content).toContain("capacity fade");
 		expect(readFileSync(join(cwd, "Project", "battery-aging", "uploads", "notes.md"), "utf8")).toContain(

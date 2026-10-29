@@ -4,6 +4,7 @@
 
 ### Added
 
+- Dedicated project pages with short README descriptions, project chats, multiple resource uploads, shared file previews and persistent project pinning.
 - Persistent conversation pinning with a compact Pinned sidebar section and pin/unpin actions.
 - Safe mathematical chart expressions and parameterized expression simulations and a bounded numerical 1D Schrödinger model, dense charts with paginated data and CSV export, larger quizzes/decks, molecular bonds and chemistry/physics math notation.
 
@@ -19,6 +20,8 @@
 
 ### Fixed
 
+- Preserve newer drafts during slow slash commands, restore failed command text, and isolate delayed card/message responses and answer caches from other chats and newer turns.
+- Ignore stale queue-removal responses after live events have already delivered pending prompts.
 - Anchor floating task panels to the outer conversation corner and bound them above the composer, including mixed side/overlay layouts.
 - Set simulation slider defaults after range constraints so displayed values match the model; improve simulation curve contrast.
 - Deliver GUI queued prompts through steering at the next tool/response boundary instead of waiting for the final answer; preserve queue cancellation, peer notices and attachments.

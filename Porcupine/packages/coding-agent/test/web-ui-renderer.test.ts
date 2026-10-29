@@ -1,3 +1,4 @@
+import { setImmediate } from "node:timers/promises";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 import { PORCUPINE_WEB_UI } from "../src/server/web-ui.ts";
@@ -100,6 +101,20 @@ class FakeElement {
 	querySelectorAll(): FakeElement[] {
 		return [];
 	}
+	querySelector(selector: string): FakeElement | null {
+		return (
+			this.children
+				.flatMap(descendants)
+				.find(
+					(node) =>
+						node.tagName === selector ||
+						(selector.startsWith(".") && node.className.split(" ").includes(selector.slice(1))),
+				) ?? null
+		);
+	}
+	reportValidity(): boolean {
+		return true;
+	}
 	readonly tagName: string;
 	private readonly canvasContext: FakeCanvasContext;
 	constructor(tagName: string, canvasContext: FakeCanvasContext) {
@@ -163,6 +178,8 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	canvasContext: FakeCanvasContext;
 	rich(node: FakeElement, text: string): FakeElement;
 	connect(id: string): Promise<void>;
+	project(name: string): Promise<void>;
+	projects(items: unknown[], chats: unknown[]): void;
 	text(value: unknown): string;
 	mathCalls: Array<{ source: string; displayMode: boolean; trust: boolean }>;
 } {
@@ -243,7 +260,12 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"projects-count",
 		"project-list",
 		"project-new",
-		"project-dialog",
+		"project-page",
+		"project-back",
+		"project-pin",
+		"project-chats",
+		"project-description",
+		"new-project-description",
 		"project-title",
 		"project-delete",
 		"project-conversation",
@@ -374,7 +396,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	if (!script) throw new Error("Workbench script is missing");
 	const instrumented = script.replace(
 		/\}\)\(\);\s*$/,
-		"globalThis.__connect=connectEvents;globalThis.__text=textOf;globalThis.__renderVisualization=renderVisual;globalThis.__renderEvent=renderEvent;globalThis.__renderRichText=renderRichText;})();",
+		"globalThis.__project=openProject;globalThis.__projects=(items,chats)=>{projectCatalog=items;sessionCatalog=chats;renderProjectNavigation();};globalThis.__connect=connectEvents;globalThis.__text=textOf;globalThis.__renderVisualization=renderVisual;globalThis.__renderEvent=renderEvent;globalThis.__renderRichText=renderRichText;})();",
 	);
 	if (instrumented === script) throw new Error("Could not expose the renderer to its test harness");
 	runInNewContext(instrumented, sandbox);
@@ -388,10 +410,227 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	};
 	const connect = runInNewContext("globalThis.__connect", sandbox) as (id: string) => Promise<void>;
 	const text = runInNewContext("globalThis.__text", sandbox) as (value: unknown) => string;
-	return { render, event, rich, feed, elements, canvasContext, connect, text, mathCalls };
+	const project = runInNewContext("globalThis.__project", sandbox) as (name: string) => Promise<void>;
+	const projects = runInNewContext("globalThis.__projects", sandbox) as (items: unknown[], chats: unknown[]) => void;
+	return { render, event, rich, feed, elements, canvasContext, connect, text, mathCalls, project, projects };
 }
 
+describe("project pages", () => {
+	it("opens the project title, short description, resources and only its own chats", async () => {
+		const h = loadRenderer(async () =>
+			Response.json({
+				title: "Lab notes",
+				description: "Measure the samples.",
+				pinned: true,
+				files: [{ path: "uploads/results.csv", bytes: 20 }],
+			}),
+		);
+		h.projects(
+			[{ name: "lab", title: "Lab notes" }],
+			[
+				{ id: "a", name: "Measurements", project: "lab" },
+				{ id: "b", project: "other" },
+			],
+		);
+		await h.project("lab");
+		expect(h.elements.get("project-page")!.hidden).toBe(false);
+		expect(h.elements.get("project-title")!.textContent).toBe("Lab notes");
+		expect(h.elements.get("project-description")!.textContent).toBe("Measure the samples.");
+		expect(h.elements.get("project-files")!.textContent).toContain("uploads/results.csv");
+		expect(
+			descendants(h.elements.get("project-chats")!).filter((node) => node.className.startsWith("session-row")),
+		).toHaveLength(1);
+		expect(h.elements.get("project-pin")!.getAttribute("aria-pressed")).toBe("true");
+	});
+	it("orders pinned projects first without duplicating their chats", () => {
+		const h = loadRenderer();
+		h.projects(
+			[
+				{ name: "a", title: "A" },
+				{ name: "b", title: "B", pinned: true },
+			],
+			[{ id: "chat", project: "b" }],
+		);
+		expect(h.elements.get("project-list")!.children.map((node) => node.dataset.project)).toEqual(["b", "a"]);
+		expect(
+			descendants(h.elements.get("project-list")!).filter((node) => node.className.startsWith("session-row")),
+		).toHaveLength(1);
+	});
+	it("ignores project details that arrive after returning to the chat", async () => {
+		let finish!: (response: Response) => void;
+		const h = loadRenderer(
+			async () =>
+				new Promise<Response>((resolve) => {
+					finish = resolve;
+				}),
+		);
+		const opening = h.project("lab");
+		h.elements.get("project-back")!.handlers.get("click")!();
+		finish(Response.json({ title: "Stale project", description: "Old result", files: [] }));
+		await opening;
+		expect(h.elements.get("project-page")!.hidden).toBe(true);
+		expect(h.elements.get("project-title")!.textContent).not.toBe("Stale project");
+	});
+});
+
 describe("workbench transport regressions", () => {
+	it("keeps a newer turn working when an earlier message send fails after settlement", async () => {
+		let fail!: (reason: Error) => void;
+		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+		const h = loadRenderer(async (path) => {
+			if (String(path).endsWith("/events"))
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streams.push(controller);
+						},
+					}),
+				);
+			if (String(path).endsWith("/message"))
+				return new Promise<Response>((_resolve, reject) => {
+					fail = reject;
+				});
+			return Response.json({ supported: false });
+		});
+		const connection = h.connect("a");
+		await setImmediate();
+		h.elements.get("prompt")!.value = "Original prompt";
+		const submitting = (
+			h.elements.get("prompt-form")!.handlers.get("submit")! as (event: { preventDefault(): void }) => Promise<void>
+		)({ preventDefault() {} });
+		h.event({ type: "agent_start" });
+		h.event({ type: "agent_end" });
+		h.event({ type: "agent_start" });
+		fail(new Error("Earlier request failed"));
+		await submitting;
+		expect(h.elements.get("status-text")!.textContent).toBe("Working");
+		expect(h.elements.get("prompt")!.value).toBe("Original prompt");
+		for (const stream of streams) stream.close();
+		await connection;
+	});
+	it("does not restore one conversation answer into another conversation with the same card ID", async () => {
+		let finish!: (response: Response) => void;
+		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+		const h = loadRenderer(async (path) => {
+			if (String(path).endsWith("/events"))
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streams.push(controller);
+						},
+					}),
+				);
+			if (String(path).endsWith("/message"))
+				return new Promise<Response>((resolve) => {
+					finish = resolve;
+				});
+			return Response.json({ supported: false });
+		});
+		const first = h.connect("a");
+		await setImmediate();
+		const spec = {
+			version: 2,
+			kind: "quiz",
+			title: "Choose",
+			componentId: "same-id",
+			questions: [{ question: "Choose", options: ["A", "B"], correctAnswers: [0], explanation: "A" }],
+		};
+		h.render(spec);
+		const card = h.feed.children.at(-1)!;
+		Object.assign(descendants(card).find((node) => node.tagName === "input")!, { checked: true });
+		const submitting = (
+			descendants(card)
+				.find((node) => node.tagName === "form")!
+				.handlers.get("submit")! as (event: { preventDefault(): void }) => Promise<void>
+		)({ preventDefault() {} });
+		const second = h.connect("b");
+		await setImmediate();
+		finish(Response.json({}));
+		await submitting;
+		h.render(spec);
+		const current = h.feed.children.at(-1)!;
+		expect(current.textContent).not.toContain("Score:");
+		expect(
+			descendants(current)
+				.find((node) => node.tagName === "button" && node.textContent === "Check answers")!
+				.getAttribute("disabled"),
+		).toBeNull();
+		for (const stream of streams) stream.close();
+		await Promise.all([first, second]);
+	});
+	it("does not resurrect delivered prompts when an older removal response arrives", async () => {
+		let finish!: (response: Response) => void;
+		const h = loadRenderer(
+			async () =>
+				new Promise<Response>((resolve) => {
+					finish = resolve;
+				}),
+		);
+		h.event({ type: "queue_update", followUp: ["Remove this", "Already delivered"] });
+		const panel = descendants(h.elements.get("prompt-form")!).find((node) => node.className === "followup-queue")!;
+		const removing = descendants(panel)
+			.find((node) => node.tagName === "button")!
+			.handlers.get("click")!();
+		h.event({ type: "queue_update", followUp: [] });
+		finish(Response.json({ followUp: ["Already delivered"] }));
+		await removing;
+		expect(panel.hidden).toBe(true);
+		expect(panel.textContent).not.toContain("Already delivered");
+	});
+	it.each(["question", "quiz", "form"])("keeps another chat working when a %s submission fails late", async (kind) => {
+		let rejectSubmission!: (reason: Error) => void;
+		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+		const h = loadRenderer(async (path) => {
+			if (String(path).endsWith("/events"))
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streams.push(controller);
+						},
+					}),
+				);
+			if (String(path).endsWith("/message"))
+				return new Promise<Response>((_resolve, reject) => {
+					rejectSubmission = reject;
+				});
+			return Response.json({ supported: false });
+		});
+		const first = h.connect("a");
+		await setImmediate();
+		h.render({
+			version: 2,
+			kind,
+			title: "Answer card",
+			componentId: "answer",
+			...(kind === "question"
+				? { question: "Choose", options: ["A", "B"] }
+				: kind === "quiz"
+					? { questions: [{ question: "Choose", options: ["A", "B"], correctAnswers: [0], explanation: "A" }] }
+					: { fields: [{ label: "Notes", type: "text" }] }),
+		});
+		const card = h.feed.children.at(-1)!,
+			form = descendants(card).find((node) => node.tagName === "form")!;
+		Object.assign(descendants(card).find((node) => node.tagName === "input")!, { checked: true });
+		const submitting =
+			kind === "form"
+				? descendants(card)
+						.find((node) => node.tagName === "button" && node.textContent === "Send to agent")!
+						.handlers.get("click")!()
+				: (form.handlers.get("submit")! as (event: { preventDefault(): void }) => Promise<void>)({
+						preventDefault() {},
+					});
+		expect(rejectSubmission).toBeTypeOf("function");
+		const second = h.connect("b");
+		await setImmediate();
+		h.event({ type: "agent_start" });
+		expect(h.elements.get("status-text")!.textContent).toBe("Working");
+		rejectSubmission(new Error("Submission failed"));
+		await submitting;
+		expect(h.elements.get("status-text")!.textContent).toBe("Working");
+		expect(h.elements.get("stop")!.hidden).toBe(false);
+		for (const stream of streams) stream.close();
+		await Promise.all([first, second]);
+	});
 	it("keeps sub-agent tools internal and updates one task row without tool chatter", () => {
 		const { event, feed, elements } = loadRenderer();
 		const run = {

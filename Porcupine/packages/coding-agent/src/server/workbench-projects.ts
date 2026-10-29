@@ -6,6 +6,7 @@ import {
 	readFileSync,
 	realpathSync,
 	renameSync,
+	rmSync,
 	statSync,
 	writeFileSync,
 } from "node:fs";
@@ -26,6 +27,8 @@ export interface ProjectSummary {
 	title: string;
 	state: string;
 	statusSummary?: string;
+	description?: string;
+	pinned?: boolean;
 	files: number;
 	updatedAt: string;
 }
@@ -58,6 +61,16 @@ export class WorkbenchProjectStore {
 	constructor(cwd: string) {
 		this.cwd = realpathSync(cwd);
 		this.root = join(this.cwd, "Project");
+	}
+	setPinned(name: string, pinned: boolean): void {
+		const directory = this.projectPath(name);
+		const temporary = join(directory, `.workbench-pin-${randomUUID()}`);
+		try {
+			writeFileSync(temporary, JSON.stringify(pinned), { flag: "wx", mode: 0o600 });
+			renameSync(temporary, join(directory, ".workbench-pin"));
+		} finally {
+			rmSync(temporary, { force: true });
+		}
 	}
 	private projectPath(name: string): string {
 		if (!name.trim() || name.startsWith(".") || /[\\/\x00-\x1f]/.test(name) || Buffer.byteLength(name) > 240)
@@ -103,10 +116,34 @@ export class WorkbenchProjectStore {
 					const directory = this.projectPath(project.name),
 						files: ProjectFile[] = [];
 					this.walk(directory, files);
+					let pinned = false,
+						description = "";
+					try {
+						const pin = join(directory, ".workbench-pin");
+						if (lstatSync(pin).isFile() && realpathSync(pin) === pin && statSync(pin).size <= 8)
+							pinned = readFileSync(pin, "utf8") === "true";
+					} catch {}
+					try {
+						const readme = join(directory, "README.md");
+						if (
+							lstatSync(readme).isFile() &&
+							realpathSync(readme) === readme &&
+							statSync(readme).size <= MAX_TEXT_BYTES
+						) {
+							const content = readFileSync(readme, "utf8");
+							const objective = content.match(/^## Objective\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/im)?.[1];
+							description = (objective ?? content.replace(/^# .+\n?/, "").split(/^## /m)[0] ?? "")
+								.replace(/\s+/g, " ")
+								.trim()
+								.slice(0, 360);
+						}
+					} catch {}
 					return [
 						{
 							name: project.name,
 							title: project.title,
+							description,
+							pinned,
 							state: project.state || "unknown",
 							statusSummary: project.statusSummary,
 							files: files.length,
@@ -142,7 +179,7 @@ export class WorkbenchProjectStore {
 		renameSync(directory, trashPath);
 		return { trashPath };
 	}
-	create(name: string, title?: string): ProjectSummary {
+	create(name: string, title?: string, description = ""): ProjectSummary {
 		const project = slug(name);
 		const directory = join(this.root, project);
 		mkdirSync(this.root, { recursive: true });
@@ -156,7 +193,7 @@ export class WorkbenchProjectStore {
 		const heading = (title?.trim() || project).slice(0, 120);
 		writeFileSync(
 			join(directory, "README.md"),
-			`# ${heading}\n\n## Objective\n\n## Scope\n- In scope:\n- Out of scope:\n\n## Workspace map\n- \`uploads/\`: documents supplied through the workbench\n`,
+			`# ${heading.replace(/[\r\n]/g, " ")}\n\n## Objective\n${description.replace(/\s+/g, " ").trim().slice(0, 360)}\n\n## Scope\n- In scope:\n- Out of scope:\n\n## Workspace map\n- \`uploads/\`: documents supplied through the workbench\n`,
 			{ mode: 0o600 },
 		);
 		writeFileSync(

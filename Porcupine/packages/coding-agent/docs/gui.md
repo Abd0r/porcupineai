@@ -178,10 +178,16 @@ Run `node --import tsx packages/coding-agent/test/workbench-attachments-smoke.ts
 
 ## Conversation organization and commands
 
+Click a project title to open its page: a title, a description of up to three lines, its chats and its resources. **New project** accepts an optional short description, stored as the README objective; existing projects use their README objective or introductory paragraph. **Add resources** accepts multiple supported files and retains the existing upload limits. Select a resource for authenticated PDF, image or text preview, opening or download. **Back to chat** restores the current conversation without discarding its draft or stopping its work.
+
+Use **Pin project** on the project page to keep it at the top of Projects. Unpin from the same button. Pins persist atomically in the project’s hidden `.workbench-pin` file across browser and server restarts; they do not change chat pins or project assignments. Project management actions stay in a collapsed disclosure.
+
 Use **⋯ → Pin conversation** to keep a chat in the sidebar’s **Pinned** section. Unpin it from the same menu. Pins persist with session metadata across server restarts, keep the existing project association, and can be changed while the agent works. Pinned chats appear once, and search includes them.
 
 Drag a conversation onto a Project folder, or use its **⋯ → Project** selector. Choose **No project** to ungroup it. The same menu can delete any idle conversation. Busy sessions and their workers must stop before a move or deletion. Deleted session JSONL files move to their session directory’s `.trash/`; project folders move to `.porcupine-trash/projects/` beneath the workspace. Files remain recoverable, but the GUI has no restore button yet.
 
 Type `/` for a searchable command menu, use arrows to select, Tab to complete, Enter to execute, and Escape to dismiss. `/commands` or `/help` lists the live registry, including extension commands, prompt templates and explicit skills. Browser controls handle `/new`, `/settings`, `/resume`, `/model`, `/modes`, `/reasoning`, `/copy` and `/reasoning-show`. Runtime engines handle naming, usage/cost, resource reload, compaction, project/capability search, memory, learning, trace, guide, context generation and HTML export. Command results are saved without adding command-output noise to model context. Commands that still depend on terminal UI or lifecycle services are marked **terminal only** and return an explanation; they are never forwarded as ordinary model prompts.
+
+Commands consume their submitted text immediately and preserve anything typed while the command runs. Failed commands restore their text alongside the newer draft. Delayed message/card responses cannot clear another chat’s working state or copy an answer into its component cache, and older queue-removal responses cannot resurrect prompts already delivered by live events.
 
 Run `node --import tsx packages/coding-agent/test/workbench-organization-smoke.ts` for real project metadata persistence, drag/drop, accessible moves, deletion, slash command completion, session setting changes and command replay.

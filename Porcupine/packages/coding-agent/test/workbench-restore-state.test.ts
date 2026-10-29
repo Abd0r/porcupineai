@@ -123,6 +123,7 @@ describe("history restoration state", () => {
 			.mockResolvedValue({ done: true });
 		const context = {
 			connectionEpoch: 0,
+			activeProject: null,
 			streamController: null,
 			sessionId: "session",
 			liveThinking: null,

@@ -16,6 +16,24 @@ function fixture() {
 const pdf = Buffer.from("%PDF-1.7\nsynthetic test document\n");
 
 describe("workbench project workspaces", () => {
+	it("keeps project pins across store restarts and describes the README objective", () => {
+		const { cwd, store } = fixture();
+		store.create("paper", "Paper");
+		writeFileSync(
+			join(cwd, "Project", "paper", "README.md"),
+			"# Paper\n\n## Objective\nCompare measured results.\nTrack uncertainty.\n\n## Scope\nOther details.",
+		);
+		store.setPinned("paper", true);
+		const reopened = new WorkbenchProjectStore(cwd);
+		expect(reopened.list()[0]).toMatchObject({
+			title: "Paper",
+			description: "Compare measured results. Track uncertainty.",
+			pinned: true,
+		});
+		reopened.setPinned("paper", false);
+		expect(new WorkbenchProjectStore(cwd).list()[0]?.pinned).toBe(false);
+		expect(reopened.files("paper").map((file) => file.path)).toEqual(["README.md", "STATUS.md"]);
+	});
 	it("uses the agent project index and moves deleted projects into recoverable trash", () => {
 		const { cwd, store } = fixture();
 		store.create("Study");

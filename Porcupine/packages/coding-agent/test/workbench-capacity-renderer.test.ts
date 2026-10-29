@@ -142,6 +142,8 @@ function environment() {
 			},
 		},
 		sessionId: "test",
+		connectionEpoch: 0,
+		busyRevision: 0,
 		devicePixelRatio: 1,
 		connected: true,
 		streaming: false,

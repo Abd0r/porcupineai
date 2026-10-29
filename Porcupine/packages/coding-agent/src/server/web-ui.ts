@@ -30,7 +30,13 @@ import {
 	STACKS_NAVIGATION,
 } from "./workbench-navigation.ts";
 import { ORGANIZATION_DIALOG, ORGANIZATION_SCRIPT, ORGANIZATION_STYLES } from "./workbench-organization-ui.ts";
-import { PROJECT_DIALOG, PROJECTS_NAVIGATION, PROJECTS_SCRIPT, PROJECTS_STYLES } from "./workbench-projects-ui.ts";
+import {
+	PROJECT_DIALOG,
+	PROJECT_PAGE,
+	PROJECTS_NAVIGATION,
+	PROJECTS_SCRIPT,
+	PROJECTS_STYLES,
+} from "./workbench-projects-ui.ts";
 import { WORKBENCH_RAIL, WORKBENCH_RAIL_STYLES } from "./workbench-rail.ts";
 import { REPLAY_SCRIPT } from "./workbench-replay.ts";
 import { CONTEXT_SETTINGS_SCRIPT, CONTEXT_SETTINGS_STYLES } from "./workbench-settings.ts";
@@ -94,6 +100,7 @@ ${PROJECTS_NAVIGATION}
 <div class="notice" id="history-notice">Local workspace</div>
 </section>
 ${WORKBENCH_RAIL}
+${PROJECT_PAGE}
 </main>
 </div>
 <div class="auth" id="auth">
@@ -110,7 +117,7 @@ ${ORGANIZATION_DIALOG}
 const $=id=>document.getElementById(id);const ui={auth:$('auth'),authForm:$('auth-form'),token:$('token'),authError:$('auth-error'),sessions:$('sessions'),newSession:$('new-session'),feed:$('feed'),welcome:$('welcome'),form:$('prompt-form'),prompt:$('prompt'),send:$('send'),stop:$('stop'),error:$('error'),status:$('status-text'),title:$('session-title')};
 let token='',sessionId='',streamController=null,streaming=false,streamingAssistant=null;
 const shell=document.querySelector('.shell'),sidebarToggle=$('sidebar-toggle'),sidebarKey='porcupine.workbench.sidebar-collapsed';
-function applySidebar(collapsed,save=false){if(!shell||!sidebarToggle)return;shell.dataset.sidebar=collapsed?'collapsed':'open';sidebarToggle.setAttribute('aria-expanded',String(!collapsed));const sidebar=$('sidebar'),returnFocus=collapsed&&sidebar.contains(document.activeElement),mobileOpen=!collapsed&&window.matchMedia('(max-width: 700px)').matches;sidebar.inert=collapsed;sidebar.setAttribute('role',mobileOpen?'dialog':'complementary');if(mobileOpen)sidebar.setAttribute('aria-modal','true');else sidebar.removeAttribute('aria-modal');for(const node of [document.querySelector('.content'),document.querySelector('.topbar-actions'),$('work-rail'),$('work-rail-overlay')])if(node)node.inert=mobileOpen;if(returnFocus)sidebarToggle.focus();else if(save&&mobileOpen)$('session-search').focus();$('sidebar-dismiss').hidden=collapsed||!window.matchMedia('(max-width: 700px)').matches;if(save)try{window.localStorage.setItem(sidebarKey,collapsed?'1':'0')}catch{}}
+function applySidebar(collapsed,save=false){if(!shell||!sidebarToggle)return;shell.dataset.sidebar=collapsed?'collapsed':'open';sidebarToggle.setAttribute('aria-expanded',String(!collapsed));const sidebar=$('sidebar'),returnFocus=collapsed&&sidebar.contains(document.activeElement),mobileOpen=!collapsed&&window.matchMedia('(max-width: 700px)').matches;sidebar.inert=collapsed;sidebar.setAttribute('role',mobileOpen?'dialog':'complementary');if(mobileOpen)sidebar.setAttribute('aria-modal','true');else sidebar.removeAttribute('aria-modal');for(const node of [$('project-page'),document.querySelector('.content'),document.querySelector('.topbar-actions'),$('work-rail'),$('work-rail-overlay')])if(node)node.inert=mobileOpen;if(returnFocus)sidebarToggle.focus();else if(save&&mobileOpen)$('session-search').focus();$('sidebar-dismiss').hidden=collapsed||!window.matchMedia('(max-width: 700px)').matches;if(save)try{window.localStorage.setItem(sidebarKey,collapsed?'1':'0')}catch{}}
 try{applySidebar(window.matchMedia('(max-width: 700px)').matches||window.localStorage.getItem(sidebarKey)==='1')}catch{}
 if(sidebarToggle)sidebarToggle.addEventListener('click',()=>applySidebar(shell.dataset.sidebar!=='collapsed',true));
 window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='b'){event.preventDefault();if(shell)applySidebar(shell.dataset.sidebar!=='collapsed',true)}});
@@ -118,7 +125,7 @@ window.matchMedia('(max-width: 700px)').addEventListener('change',event=>applySi
 function setError(message,auth=false){const el=auth?ui.authError:ui.error;el.textContent=message;el.hidden=!message}
 function api(path,options={}){const headers=new Headers(options.headers||{});if(token)headers.set('authorization','Bearer '+token);if(typeof options.body==='string')headers.set('content-type','application/json');return fetch(path,{...options,headers})}
 async function json(path,options){const response=await api(path,options);let body={};try{body=await response.json()}catch{}if(!response.ok)throw new Error(body.error||'Request failed ('+response.status+')');return body}
-function setBusy(value){streaming=value;ui.feed.setAttribute('aria-busy',String(value));ui.status.textContent=connected?(value?'Working':'Ready'):'Disconnected';ui.status.dataset.state=value?'working':'ready';ui.stop.hidden=!value;updateSend();updateControlDisabled()}
+function setBusy(value){busyRevision++;streaming=value;ui.feed.setAttribute('aria-busy',String(value));ui.status.textContent=connected?(value?'Working':'Ready'):'Disconnected';ui.status.dataset.state=value?'working':'ready';ui.stop.hidden=!value;updateSend();updateControlDisabled()}
 function enterDelay(){const count=ui.feed.children.length%5;return count===0?'0ms':(count*28)+'ms'}
 function appendMessage(role,text){ui.welcome.hidden=true;const node=document.createElement('article');node.className='message '+role;node.style.setProperty('--enter-delay',enterDelay());const label=document.createElement('div');label.className='label';label.textContent=role==='user'?'You':role==='assistant'?'':'Activity';const body=document.createElement('div');body.className='message-body';body.textContent=text;if(role==='assistant'){const copy=document.createElement('button');copy.type='button';copy.className='message-copy';copy.textContent='Copy';copy.setAttribute('aria-label','Copy response');copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(body.innerText);copy.textContent='Copied'}catch{copy.textContent='Copy unavailable'}});label.append(copy)}node.append(label,body);ui.feed.append(node);scrollFeed();return node}
 function textOf(value){if(typeof value==='string')return value;if(!Array.isArray(value))return '';return value.map(part=>{if(typeof part==='string')return part;if(part&&typeof part==='object'&&part.type==='text'&&typeof part.text==='string')return part.text;return ''}).filter(Boolean).join('\n')}

@@ -152,13 +152,13 @@ try {
 	await page.locator("#new-project-name").fill("Battery Aging");
 	await page.locator("#new-project-title-input").fill("Battery Aging Study");
 	await page.locator("#new-project-create").click();
-	await page.locator("#project-summary").filter({ hasText: "supported document" }).waitFor();
+	await page.locator("#project-summary").filter({ hasText: "resources" }).waitFor();
 	await page.locator("#project-upload").setInputFiles({
 		name: "measurements.md",
 		mimeType: "text/markdown",
 		buffer: Buffer.from("# Measurements\nCapacity fade after 200 cycles.\n"),
 	});
-	await page.getByText("Saved to uploads/measurements.md").waitFor();
+	await page.getByText("Added 1 resource.").waitFor();
 	await page.locator("#project-files button").filter({ hasText: "measurements" }).first().click();
 	await page.getByText("Capacity fade after 200 cycles.").waitFor();
 	assert.match(readFileSync(join(root, "Project", "battery-aging", "STATUS.md"), "utf8"), /planning/);
@@ -168,7 +168,8 @@ try {
 			animations: "disabled",
 		});
 	}
-	await page.getByRole("button", { name: "Close project" }).click();
+	await page.getByRole("button", { name: "Close file preview" }).click();
+	await page.getByRole("button", { name: "← Back to chat" }).click();
 	assert.deepEqual(errors, []);
 	console.log("PASS live controls, plan fence, Stacks skills/tools inspection, project create + upload + preview");
 } finally {
