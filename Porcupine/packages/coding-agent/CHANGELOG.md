@@ -6,6 +6,10 @@
 
 - Bundled Adaptive GUI and Adaptive Learning skills with validated tool examples, surface-aware guidance, user-response handling and sub-agent presentation handoffs.
 
+### Changed
+
+- Distinct GUI activity animations for coding, skills, search and collaboration, with a blue neutron-star reasoning indicator. Subagent messages and expandable reports appear in chat without execution accounting headers.
+
 ### Fixed
 
 - Preserve composer drafts when adding a visual follow-up question, and avoid adding the same question twice.

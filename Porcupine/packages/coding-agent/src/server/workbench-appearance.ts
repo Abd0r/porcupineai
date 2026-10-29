@@ -89,7 +89,7 @@ export const APPEARANCE_STYLES = `
   border-radius: 0 !important;
   backdrop-filter: none !important;
 }
-:root[data-theme="pixel"] :is(.dream-thread,.dream-spark,.activity-glyph svg *) { animation-timing-function: steps(8,end); }
+:root[data-theme="pixel"] :is(.thinking-glyph,.worker-icon,.activity-glyph) svg * { animation-timing-function: steps(8,end); }
 :root[data-theme="pixel"] .sidebar { background: var(--sidebar); }
 :root[data-theme="pixel"] .session.active { background: rgb(128 128 128 / 18%); border-left: 2px solid var(--quiet); }
 :root[data-theme="pixel"] :is(.new-session,.send,.interactive-visual > button,.followup-queue) { border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--line-soft); }

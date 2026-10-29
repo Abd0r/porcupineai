@@ -22,6 +22,7 @@ function renderTodos(){
 }
 async function refreshTracker(id=sessionId){const epoch=++trackerEpoch;if(!id)return;try{const view=await json('/session/'+encodeURIComponent(id)+'/goal-plan');if(epoch===trackerEpoch&&id===sessionId)renderTracker(view.supported===false?null:view)}catch{}}
 function applySubagents(runs){
+  for(const run of runs)if(run.id&&run.name)subagentNames.set(run.id,'@'+run.name);
   const active=runs.filter(run=>run.status==='running'),ids=new Set(active.map(run=>run.id));for(const [id,worker] of subagentRuns)if(!ids.has(id)){worker.row.remove();subagentRuns.delete(id)}
   for(const run of active){const activity=run.activity||{kind:'dreaming',summary:run.status==='running'?'Working on the task':'Task '+run.status};let worker=subagentRuns.get(run.id);
     if(!worker){const row=document.createElement('section');row.className='worker';row.dataset.workerId=run.id;const icon=document.createElement('span'),name=document.createElement('div'),tag=document.createElement('span'),state=document.createElement('span'),task=document.createElement('p'),summary=document.createElement('p');icon.className='worker-icon';icon.setAttribute('aria-hidden','true');name.className='worker-name';state.className='worker-state';task.className='worker-task';summary.className='worker-activity';name.append(tag,state);row.append(icon,name,task,summary);railUi.workerList.append(row);worker={row,icon,tag,state,task,summary,kind:null};subagentRuns.set(run.id,worker);}
@@ -30,5 +31,5 @@ function applySubagents(runs){
 }
 function noteSubagent(message){if(!String(message.customType||'').includes('report'))return;const info=message.details||{},id=info.id||info.from||info.subagentId||info.agentTag;for(const [key,worker] of subagentRuns){if(key===id||worker.tag.textContent==='@'+String(info.from||info.agentTag||'').replace(/^@/,'')){worker.row.remove();subagentRuns.delete(key)}}railUi.workers.hidden=subagentRuns.size===0;railUi.workerCount.textContent=String(subagentRuns.size)+' active';updateRail();}
 
-function resetActivity(){trackedGoal=null;trackedPlan=null;subagentRuns.clear();railUi.workerList.replaceChildren();railUi.workers.hidden=true;renderTodos();}
+function resetActivity(){collaborationCalls.clear();subagentNames.clear();trackedGoal=null;trackedPlan=null;subagentRuns.clear();railUi.workerList.replaceChildren();railUi.workers.hidden=true;renderTodos();}
 `;

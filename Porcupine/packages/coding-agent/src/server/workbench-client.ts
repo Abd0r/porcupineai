@@ -61,8 +61,8 @@ function toolDescription(name,args){return describeWorkbenchActivity(name,args).
 function toolResultText(result){const text=textOf(result&&result.content),details=result&&result.details;const diff=details&&(typeof details.diff==='string'?details.diff:typeof details.patch==='string'?details.patch:'');return text+(diff?'\n\nChanges\n'+diff:'');}
 function setToolOutput(run,text,tail=false){run.resultText=text;run.tail=tail;const full=run.args+(text?'\n\n'+text:'');run.more.hidden=text.length<=16000;run.more.textContent=run.expanded?'Show preview':'Show full output';run.more.setAttribute('aria-expanded',String(run.expanded));run.output.textContent=run.expanded||text.length<=16000?full:run.args+'\n\n'+(tail?text.slice(-16000):text.slice(0,16000))+'\n[Preview · expand for full saved output]';}
 function showToolStart(event){
-	if(event.toolName==='subagent')return;
 	if(!replaying&&liveThinking){if(liveThinking.hasReasoning)finalizeThinking(liveThinking.reasoningText);else{stopThinking(liveThinking);liveThinking.wrap.remove();liveThinking=null;}}
+	if(collaborationTool(event,'start'))return;
   ui.welcome.hidden=true;
   const row=document.createElement('details');row.className='tool-activity';row.dataset.state='running';
   const summary=document.createElement('summary'),name=document.createElement('span'),state=document.createElement('span'),icon=document.createElement('span');
@@ -74,7 +74,7 @@ function showToolStart(event){
   toolRuns.set(event.toolCallId||event.toolName,run);scrollFeed();
 }
 function showToolUpdate(event){const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;setToolOutput(run,toolResultText(event.partialResult),true);scrollFeed();}
-function showToolEnd(event){if(liveThinking&&!replaying)setThinkingLabel('Working');const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;run.row.dataset.state=event.isError?'failed':'done';run.state.textContent=event.isError?'Failed':'Done';const svg=document.createElementNS(MATH_NS,'svg'),path=document.createElementNS(MATH_NS,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');path.setAttribute('d',event.isError?'m7 7 10 10M17 7 7 17':'m5 12 4 4L19 6');svg.append(path);run.icon.replaceChildren(svg);setToolOutput(run,toolResultText(event.result));toolRuns.delete(event.toolCallId||event.toolName);}
+function showToolEnd(event){if(collaborationTool(event,'end'))return;if(liveThinking&&!replaying)setThinkingLabel('Working');const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;run.row.dataset.state=event.isError?'failed':'done';run.state.textContent=event.isError?'Failed':'Done';const svg=document.createElementNS(MATH_NS,'svg'),path=document.createElementNS(MATH_NS,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');path.setAttribute('d',event.isError?'m7 7 10 10M17 7 7 17':'m5 12 4 4L19 6');svg.append(path);run.icon.replaceChildren(svg);setToolOutput(run,toolResultText(event.result));toolRuns.delete(event.toolCallId||event.toolName);}
 function filterSessions(){const query=$('session-search').value.trim().toLowerCase();for(const button of document.querySelectorAll('.session'))button.parentNode.hidden=Boolean(query&&!button.textContent.toLowerCase().includes(query));}
 async function refreshSessions(selectFirst=false){
   const data=await json('/session');sessionCatalog=data.sessions||[];
