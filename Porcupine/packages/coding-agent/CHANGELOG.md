@@ -9,11 +9,14 @@
 ### Changed
 
 - Distinct GUI activity animations for coding, skills, search and collaboration, with a blue neutron-star reasoning indicator. Subagent messages and expandable reports appear in chat without execution accounting headers.
+- Batch long GUI history restores and expanded reasoning updates; defer collapsed reasoning rendering until opened. Add a saved Reduce motion preference, keyboard model navigation and mobile navigation focus containment.
 
 ### Fixed
 
 - Preserve composer drafts when adding a visual follow-up question, and avoid adding the same question twice.
 - Resolve current workspace package names directly from source during tests and type checking in fresh checkouts.
+- Keep floating task panels above the composer in short viewports, make short connection screens scrollable, and fit input to visual-viewport changes. Pixel highlights the whole active composer instead of its inner textarea.
+- Improve small-text contrast across dark/light theme surfaces and keep context information above the composer rather than below the viewport.
 
 ## [0.1.80] - 2026-10-28
 

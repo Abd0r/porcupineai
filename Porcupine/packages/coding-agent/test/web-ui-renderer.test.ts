@@ -37,6 +37,16 @@ class FakeElement {
 	readonly dataset: Record<string, string> = {};
 	readonly children: FakeElement[] = [];
 	parentNode?: FakeElement;
+	get parentElement(): FakeElement | undefined {
+		return this.parentNode;
+	}
+	get nextElementSibling(): FakeElement | undefined {
+		return this.parentNode?.children[this.parentNode.children.indexOf(this) + 1];
+	}
+	contains(node?: FakeElement): boolean {
+		return node === this || this.children.some((child) => child.contains(node));
+	}
+	focus(): void {}
 	remove(): void {
 		if (this.parentNode) {
 			const siblings = this.parentNode.children;
@@ -51,6 +61,7 @@ class FakeElement {
 	}
 	readonly attributes = new Map<string, string>();
 	readonly listeners = new Set<string>();
+	readonly handlers = new Map<string, () => void>();
 	readonly classes = new Set<string>();
 	readonly classList = {
 		add: (name: string) => {
@@ -98,11 +109,15 @@ class FakeElement {
 	get lastChild(): FakeElement | undefined {
 		return this.children[this.children.length - 1];
 	}
-	addEventListener(type: string): void {
+	addEventListener(type: string, handler?: () => void): void {
 		this.listeners.add(type);
+		if (handler) this.handlers.set(type, handler);
 	}
 	append(...items: FakeElement[]): void {
-		for (const item of items) item.parentNode = this;
+		for (const item of items) {
+			item.remove();
+			item.parentNode = this;
+		}
 		this.children.push(...items);
 	}
 	appendChild(item: FakeElement): FakeElement {
@@ -246,6 +261,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"appearance-workers-placement",
 		"appearance-mode",
 		"appearance-reasoning",
+		"appearance-motion",
 		"appearance-image",
 		"appearance-remove",
 		"appearance-opacity",
@@ -274,6 +290,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	]) {
 		elements.set(id, new FakeElement("div", canvasContext));
 	}
+	new FakeElement("div", canvasContext).append(elements.get("feed")!);
 	const document = {
 		documentElement: new FakeElement("html", canvasContext),
 		addEventListener(): void {},
@@ -708,7 +725,7 @@ describe("inline thinking state", () => {
 			["web_search", { query: "Qubits" }, "web", "Searching Qubits"],
 			["read", { path: "USER.md" }, "reading", "Reading USER.md"],
 			["bash", { command: "npm run check" }, "terminal", "Running checks"],
-			["edit", { path: "Quatrix.ts" }, "editing", "Editing Quatrix.ts"],
+			["edit", { path: "Quatrix.ts" }, "coding", "Editing Quatrix.ts"],
 			["write", { path: "plan.md" }, "writing", "Writing plan.md"],
 		] as const) {
 			event({ type: "tool_execution_start", toolName, args });
@@ -725,6 +742,10 @@ describe("inline thinking state", () => {
 		});
 		expect(label()).toMatch(/^Thought for \d+ seconds?$/);
 		const body = descendants(feed).find((child) => child.className === "thinking-body");
+		expect(body?.textContent).toBe("");
+		descendants(row)
+			.find((child) => child.className === "thinking-head")
+			?.handlers.get("click")?.();
 		expect(body?.textContent).toContain("compare the three readings");
 		expect(descendants(feed).some((child) => child.textContent === "Compared.")).toBe(true);
 	});

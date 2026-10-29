@@ -1,21 +1,23 @@
 import { FOLLOWUP_SCRIPT } from "./workbench-followups.ts";
 /** Session transport and interaction state for the bundled, same-origin workbench. */
 export const WORKBENCH_CLIENT_SCRIPT = String.raw`
-let connected=false,connectionEpoch=0,replaying=false,pendingAssistantRender=null,renderFrame=0;
+let connected=false,connectionEpoch=0,replaying=false,replayEpoch=0,pendingAssistantRender=null,renderFrame=0;
 function queueAssistantRender(node,text){pendingAssistantRender={node,text};if(!renderFrame)renderFrame=requestAnimationFrame(flushAssistantRender);}
 function flushAssistantRender(){if(renderFrame)cancelAnimationFrame(renderFrame);renderFrame=0;if(!pendingAssistantRender)return;const {node,text}=pendingAssistantRender;pendingAssistantRender=null;renderRichText(node.lastChild,text);scrollFeed();}
 const conversationViews=new Map(),sessionNames=new Map();
 ${FOLLOWUP_SCRIPT}
-function updateSend(){ui.send.disabled=queueSubmitting||commandBusy||(streaming&&!canQueueFollowUps&&!/^\/kill(?:\s|$)/.test(ui.prompt.value.trim()))||!connected||attachmentReading.has(sessionId)||(!ui.prompt.value.trim()&&!chatAttachments().length);ui.prompt.setAttribute('aria-busy',String(streaming));ui.send.setAttribute('aria-label',streaming&&canQueueFollowUps?'Queue follow-up':'Send message');ui.send.title=streaming&&canQueueFollowUps?'Queue follow-up after current work':'Send message';}
-function resizeComposer(){ui.prompt.style.height='auto';ui.prompt.style.height=Math.min(ui.prompt.scrollHeight,Math.max(100,innerHeight*.25))+'px';updateSend();}
+function updateSend(){ui.send.disabled=replaying||queueSubmitting||commandBusy||(streaming&&!canQueueFollowUps&&!/^\/kill(?:\s|$)/.test(ui.prompt.value.trim()))||!connected||attachmentReading.has(sessionId)||(!ui.prompt.value.trim()&&!chatAttachments().length);ui.prompt.setAttribute('aria-busy',String(streaming||replaying));ui.send.setAttribute('aria-label',streaming&&canQueueFollowUps?'Queue follow-up':'Send message');ui.send.title=streaming&&canQueueFollowUps?'Queue follow-up after current work':'Send message';}
+function resizeComposer(){ui.prompt.style.height='auto';ui.prompt.style.height=Math.min(ui.prompt.scrollHeight,Math.max(60,(window.visualViewport?window.visualViewport.height:innerHeight)*.25))+'px';updateSend();}
 function nearBottom(){return ui.feed.scrollHeight-ui.feed.scrollTop-ui.feed.clientHeight<100;}
 function scrollFeed(force=false){if(!replaying&&(force||followOutput))ui.feed.scrollTop=ui.feed.scrollHeight;}
-let followOutput=true;
+let followOutput=true,feedGesture=0;
+for(const type of ['wheel','touchstart','pointerdown','keydown'])ui.feed.addEventListener(type,()=>{feedGesture++;},{passive:true});
 ui.feed.addEventListener('scroll',()=>{followOutput=nearBottom();$('jump-latest').hidden=followOutput;});
 $('jump-latest').addEventListener('click',()=>{followOutput=true;scrollFeed(true);$('jump-latest').hidden=true;});
 function setConnection(value){connected=value;ui.status.textContent=value?(streaming?'Working':'Ready'):'Disconnected';ui.status.dataset.state=value?(streaming?'working':'ready'):'offline';$('reconnect').hidden=value;ui.stop.disabled=!value;updateSend();updateControlDisabled();}
 function rememberView(){if(!sessionId)return;conversationViews.set(sessionId,{nodes:[...ui.feed.children],draft:ui.prompt.value,scroll:ui.feed.scrollTop,follow:followOutput});}
 function resetSessionView(id){
+  replaying=false;replayEpoch=connectionEpoch;ui.feed.dataset.replaying='false';
   flushAssistantRender();rememberView();
   if(liveThinking){stopThinking(liveThinking);liveThinking=null;}
   renderFollowUps();canQueueFollowUps=false;clearVisuals();toolRuns.clear();streamingAssistant=null;resetActivity();
@@ -50,7 +52,7 @@ async function connectEvents(id){
         const data=block.split(/\r?\n/).filter(line=>line.startsWith('data:')).map(line=>line.slice(5).replace(/^ /,'')).join('\n');
         if(!data)continue;
         let event;try{event=JSON.parse(data)}catch{continue}
-        renderEvent(event);
+        await renderEvent(event);if(epoch!==connectionEpoch)return;
       }
     }
     if(epoch===connectionEpoch)throw new Error('Connection closed. Reconnect to continue. Your draft is preserved.');
@@ -100,7 +102,7 @@ ui.stop.addEventListener('click',async()=>{if(!sessionId||!connected)return;cons
 $('reconnect').addEventListener('click',()=>{if(sessionId)void connectEvents(sessionId)});
 $('session-search').addEventListener('input',filterSessions);
 for(const button of document.querySelectorAll('[data-prompt]'))button.addEventListener('click',()=>{ui.prompt.value=button.dataset.prompt;resizeComposer();ui.prompt.focus()});
-window.addEventListener('keydown',event=>{if(event.key==='Escape'&&window.matchMedia('(max-width: 700px)').matches)applySidebar(true)});
+window.addEventListener('keydown',event=>{if(event.key==='Escape'&&!event.defaultPrevented&&!document.querySelector('dialog[open]')&&window.matchMedia('(max-width: 700px)').matches)applySidebar(true)});
 $('sidebar-dismiss').addEventListener('click',()=>{applySidebar(true);sidebarToggle.focus()});
 window.addEventListener('focus',()=>{if(!ui.auth.hidden)return;void refreshSessions(false).catch(error=>setError(error.message));if(!projectsUi.tree.hidden)void refreshProjects();});
 `;
