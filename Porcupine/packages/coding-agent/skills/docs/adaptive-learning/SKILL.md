@@ -33,7 +33,7 @@ stack: docs
 - Give the card a stable `componentId`. Use a distinct ID for a new exercise.
   Update an existing ID when correcting the same exercise; changed content
   may reset the answer revision.
-- For quizzes, use 1–6 questions with 2–6 distinct options each. Check every
+- For quizzes, use 1–100 questions (five per page) with 2–6 distinct options each. Check every
   `correctAnswers` index against the options. Multiple indices enable multiple
   selection. Scoring requires an exact match; it does not award partial credit.
 - Verify answer keys independently of the intended explanation. Make distractors
@@ -62,6 +62,7 @@ stack: docs
 
 - Question and quiz submissions restore from session history. Unsubmitted
   interactive state is local; changing the question creates a new revision.
+- Decks accept up to 500 flashcards and show one card at a time.
 - Flashcard recall ratings and intervals become durable when the user presses
   **Send to agent**. Review is not a reminder service and does not run while
   the deck is closed.

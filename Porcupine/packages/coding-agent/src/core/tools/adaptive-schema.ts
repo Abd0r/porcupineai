@@ -1,4 +1,6 @@
 import { type Static, Type } from "typebox";
+import { compileMathExpression } from "./math-expression.ts";
+import { createQuantumSimulation } from "./quantum-simulation.ts";
 
 const object = <const T extends Parameters<typeof Type.Object>[0]>(properties: T) =>
 	Type.Object(properties, { additionalProperties: false });
@@ -27,8 +29,34 @@ export const adaptiveSchemas = [
 	object({
 		...common,
 		kind: Type.Literal("simulation"),
-		model: Type.Union([Type.Literal("linear"), Type.Literal("projectile"), Type.Literal("oscillator")]),
-		parameters: list(
+		model: Type.Union([
+			Type.Literal("linear"),
+			Type.Literal("projectile"),
+			Type.Literal("oscillator"),
+			Type.Literal("expression"),
+			Type.Literal("quantum1d"),
+		]),
+		quantum: Type.Optional(
+			object({
+				domain: Type.Tuple([
+					Type.Number({ minimum: -20, maximum: 20 }),
+					Type.Number({ minimum: -20, maximum: 20 }),
+				]),
+				grid: Type.Integer({ minimum: 64, maximum: 256 }),
+				timeStep: Type.Number({ minimum: 0.0001, maximum: 0.02 }),
+				duration: Type.Number({ minimum: 0.01, maximum: 10 }),
+				potential: text(1024),
+			}),
+		),
+		expression: Type.Optional(
+			object({
+				x: text(1024),
+				y: text(1024),
+				duration: Type.Number({ minimum: 0.01, maximum: 3600 }),
+				samples: Type.Integer({ minimum: 2, maximum: 2000 }),
+			}),
+		),
+		parameters: Type.Array(
 			object({
 				name: text(40),
 				label: text(80),
@@ -37,7 +65,7 @@ export const adaptiveSchemas = [
 				value: num,
 				step: Type.Number({ exclusiveMinimum: 0, maximum: 1e6 }),
 			}),
-			5,
+			{ minItems: 0, maxItems: 12 },
 		),
 	}),
 	object({
@@ -63,7 +91,7 @@ export const adaptiveSchemas = [
 	object({
 		...common,
 		kind: Type.Literal("flashcards"),
-		cards: list(object({ front: text(2000), back: text(3000) }), 40),
+		cards: list(object({ front: text(2000), back: text(3000) }), 500),
 	}),
 	object({
 		...common,
@@ -134,7 +162,11 @@ export const adaptiveSchema = Type.Union([...adaptiveSchemas]);
 export type AdaptiveSpec = Static<typeof adaptiveSchema>;
 
 /** Relationships not expressible by the bounded field schemas. Also used by the browser. */
-export function adaptiveIssue(spec: AdaptiveSpec): string | undefined {
+export function adaptiveIssue(
+	spec: AdaptiveSpec,
+	compileExpression = compileMathExpression,
+	quantumSimulation = createQuantumSimulation,
+): string | undefined {
 	if (
 		spec.kind === "form" &&
 		spec.fields.some(
@@ -154,12 +186,54 @@ export function adaptiveIssue(spec: AdaptiveSpec): string | undefined {
 			return "Graph nodes need unique IDs and edges must reference existing nodes";
 	}
 	if (spec.kind === "simulation") {
+		if (spec.model === "quantum1d") {
+			const q = spec.quantum,
+				names = spec.parameters.map((p) => p.name),
+				p = Object.fromEntries(spec.parameters.map((p) => [p.name, p.value]));
+			if (!q || q.domain[0] >= q.domain[1] || Math.ceil(q.duration / q.timeStep) > 4000 || spec.expression)
+				return "Quantum models need a valid domain and at most 4000 time steps";
+			if (
+				names.some((name) => !/^[A-Za-z_][A-Za-z_0-9]*$/.test(name) || ["x", "pi", "e"].includes(name)) ||
+				["mass", "hbar", "width"].some((name) => !spec.parameters.some((p) => p.name === name && p.min > 0))
+			)
+				return "Quantum mass, hbar and width must stay positive";
+			try {
+				const potential = compileExpression(q.potential, ["x", ...names]);
+				quantumSimulation({
+					...q,
+					mass: p.mass,
+					hbar: p.hbar,
+					center: p.center,
+					width: p.width,
+					momentum: p.momentum,
+					potential: (x) => potential({ ...p, x }),
+				});
+			} catch (error) {
+				return error instanceof Error ? error.message : "Invalid quantum model";
+			}
+		} else if (spec.quantum) return "Quantum settings require model quantum1d";
+		if (spec.model === "expression") {
+			if (!spec.expression) return "Expression simulations require x, y, duration and samples";
+			const names = spec.parameters.map((p) => p.name);
+			if (names.some((name) => !/^[A-Za-z_][A-Za-z_0-9]*$/.test(name) || ["t", "pi", "e"].includes(name)))
+				return "Invalid expression parameter name";
+			try {
+				compileExpression(spec.expression.x, ["t", ...names]);
+				compileExpression(spec.expression.y, ["t", ...names]);
+			} catch (error) {
+				return error instanceof Error ? error.message : "Invalid expression";
+			}
+		} else if (spec.expression) return "Expressions require the expression model";
 		const required =
-			spec.model === "linear"
-				? ["slope", "intercept"]
-				: spec.model === "projectile"
-					? ["speed", "angle", "gravity"]
-					: ["amplitude", "frequency"];
+			spec.model === "quantum1d"
+				? ["mass", "hbar", "center", "width", "momentum"]
+				: spec.model === "expression"
+					? []
+					: spec.model === "linear"
+						? ["slope", "intercept"]
+						: spec.model === "projectile"
+							? ["speed", "angle", "gravity"]
+							: ["amplitude", "frequency"];
 		if (
 			new Set(spec.parameters.map((p) => p.name)).size !== spec.parameters.length ||
 			required.some((name) => !spec.parameters.some((p) => p.name === name)) ||

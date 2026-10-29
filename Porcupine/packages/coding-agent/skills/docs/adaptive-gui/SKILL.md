@@ -34,7 +34,7 @@ stack: docs
 | Review proposed text changes | `visualize`, `code` | Filename, language, before and after |
 | Explore a bounded formula | `visualize`, `simulation` | A supported model and exact parameter names |
 | Explain motion with keyframes | `visualize`, `motion` | Bounded layers and increasing keyframe times |
-| Inspect spatial structure | `visualize_3d` | Boxes, spheres and arrows |
+| Inspect spatial structure | `visualize_3d` | Boxes, spheres, arrows and molecular bonds |
 
 Read [schema-valid examples](references/tool-examples.json) only for the chosen
 kind. Each record contains a tool name and the exact tool input; pass `input`
@@ -51,16 +51,22 @@ user's verified data. Examples labelled illustrative are not measurements.
   use another ID for a different question or independent workspace.
 - Use canonical diagram primitives: `rectangle` with `position` and `size`,
   `circle` with `position` and `radius`, and `arrow`/`line` with `from`/`to`.
-  Positive y points upward. Keep coordinates within [-20,20] and at most 80
-  objects. `visualize_3d` has no `kind`, `version` or `componentId` argument.
+  Positive y points upward. Keep coordinates within [-20,20] and at most 1000
+  2D objects or 2000 3D objects. `visualize_3d` has no `kind`, `version` or `componentId` argument.
 - Put units on chart axes. Use point labels for categories. Supply `error`
   only for known absolute symmetric y uncertainty. Preserve sample order in
-  line charts. Limit each chart to 8 series and 200 points per series. Split
-  dense content into separate views. Choose colours legible on light and dark
+  line charts. Charts accept 16 series, 10000 points per series and 40000 total points.
+  Their data tables are paginated with a full-data CSV export. For mathematical
+  curves, replace points with `expression`, `domain: [min,max]` and `samples`.
+  Expressions use variable `x`, arithmetic `+ - * / ^`, constants `pi`/`e`, and
+  functions such as `sin`, `cos`, `exp`, `log`, `sqrt`, `abs`, `min` and `max`.
+  Use explicit multiplication. Singular or nonfinite samples are rejected. Choose colours legible on light and dark
   backgrounds, and identify series with text as well as colour.
 - Use LaTeX delimiters in labels and explanations: `\( ... \)` inline and
   `\[ ... \]` for display equations. Escape backslashes in JSON strings.
-  Keep executable code in code fences. Use only supported KaTeX syntax.
+  Keep executable code in code fences. Use supported KaTeX syntax, chemistry `\ce{...}`/`\pu{...}`, and physics
+  `\bra{...}`, `\ket{...}`, `\braket{a}{b}`, `\dv{f}{x}` and `\pdv{f}{x}`.
+  Full TeX package documents require a separately generated PDF; share that file.
 - Check units, arithmetic, relationships and the source data before calling.
   A successful tool result validates the specification, not scientific truth
   or visual quality. Inspect the rendered result when an observation tool is
@@ -101,11 +107,17 @@ user's verified data. Examples labelled illustrative are not measurements.
 
 ## Respect current limits
 
-- Simulations cover only `linear` (slope/intercept), `projectile`
+- Built-in simulations cover `linear` (slope/intercept), `projectile`
   (speed/angle/gravity; degrees), and `oscillator` (amplitude/frequency;
   cycles/second). Use these exact names. Gravity must remain positive. The
   interval is 0–10 seconds; these are illustrative calculators, not general
-  solvers or validated experiments.
+  solvers or validated experiments. Custom `model: "expression"` simulations
+  use `expression: {x:"t",y:"exp(-a*t^2)*cos(t)",duration:20,samples:1000}`
+  and named slider parameters such as `a`. Up to 12 sliders, 2000 samples and
+  3600 seconds are supported. `t` is time; use the same arithmetic grammar as
+  charts. These plot supplied analytical models, not arbitrary PDE solvers.
+- For molecular geometry use verified atom spheres and `bond` objects with
+  `from`, `to`, `radius` and `color`; do not infer scientific coordinates.
 - Motion uses normalized 0–100 positions and linear interpolation over at
   most 60 seconds. Keep keyframe times increasing and within the duration.
 - A code card's apply request does not write a file. Inspect the real file
@@ -117,3 +129,7 @@ user's verified data. Examples labelled illustrative are not measurements.
   Worker tool results are not automatically displayed as main-chat visuals;
   do not promise a card from a worker-only call. Never spawn a worker solely
   to draw a small visual.
+
+## Quantum models
+
+Use `model: "quantum1d"` with `quantum: {domain:[-8,8],grid:128,timeStep:0.01,duration:4,potential:"x^2/2"}` and slider parameters `mass`, `hbar`, `center`, `width`, `momentum`. The Gaussian packet evolves under the time-independent real potential using Crank–Nicolson, with zero endpoint boundaries. `mass`, `hbar` and `width` must remain positive. Use consistent scaled units and explain them. The view plots probability density and reports its integral; sliders rebuild the initial state, and scrubbing backward recomputes it. Grid size is 64–256, duration at most 10, time step 0.0001–0.02, with at most 4000 steps. Check convergence by refining grid and time step before scientific use. This is a one-dimensional finite-domain solver, not a general PDE or molecular dynamics engine. See the quantum example in the bundled Adaptive GUI examples.

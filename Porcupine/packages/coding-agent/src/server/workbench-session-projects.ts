@@ -6,6 +6,18 @@ import { WorkbenchError } from "./workbench-context-files.ts";
 
 const PROJECT_ENTRY = "porcupine.project";
 
+export function getSessionPinned(manager: SessionManager): boolean {
+	for (const entry of manager.getEntries().reverse())
+		if (entry.type === "custom" && entry.customType === "porcupine.pinned") return entry.data === true;
+	return false;
+}
+
+export function setSessionPinned(manager: SessionManager, pinned: boolean): void {
+	if (getSessionPinned(manager) === pinned) return;
+	manager.appendCustomEntry("porcupine.pinned", pinned);
+	manager.forceFlushToDisk();
+}
+
 /** Organization lives with the session, never in a competing project document. */
 export function getSessionProject(manager: SessionManager): string | null {
 	for (const entry of manager.getEntries().reverse()) {

@@ -13,6 +13,9 @@ class TestNode {
 	append(...nodes: TestNode[]) {
 		this.children.push(...nodes);
 	}
+	replaceChildren(...nodes: TestNode[]) {
+		this.children = nodes;
+	}
 	setAttribute() {}
 	addEventListener(name: string, handler: () => void) {
 		this.listeners.set(name, handler);

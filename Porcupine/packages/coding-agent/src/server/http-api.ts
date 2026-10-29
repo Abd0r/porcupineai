@@ -99,10 +99,11 @@ export interface ServeApiOptions {
 	/** Factory used by POST /session to mint a new session by optional id. */
 	createSession?: (id?: string) => ServeApiSession | Promise<ServeApiSession>;
 	/** Discover persisted conversations without starting an agent for each one. */
-	listSessions?: () => Promise<Array<{ id: string; name?: string; project?: string | null }>>;
+	listSessions?: () => Promise<Array<{ id: string; name?: string; project?: string | null; pinned?: boolean }>>;
 	/** Resume only a discovered id; never accept a client-supplied filesystem path. */
 	openSession?: (id: string) => Promise<ServeApiSession>;
 	assignProject?: (id: string, name: string | null) => Promise<void>;
+	setSessionPinned?: (id: string, pinned: boolean) => Promise<void>;
 	deleteSession?: (id: string) => Promise<void>;
 	deleteProject?: (name: string) => Promise<void>;
 	port?: number;
@@ -405,6 +406,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					canCreateSessions: Boolean(createSession),
 					canDeleteSessions: Boolean(options.deleteSession),
 					canAssignProjects: Boolean(options.assignProject),
+					canPinSessions: Boolean(options.setSessionPinned),
 				});
 				return;
 			}
@@ -553,6 +555,37 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				return;
 			}
 
+			const pinMatch = /^\/session\/([^/]+)\/pin$/.exec(path);
+			if (pinMatch) {
+				if (method !== "PUT") {
+					res.setHeader("allow", "PUT");
+					json(res, 405, { error: "Method not allowed" });
+					return;
+				}
+				if (!options.setSessionPinned) throw new WorkbenchError(501, "Chat pinning is unavailable");
+				let input: unknown;
+				try {
+					input = JSON.parse(await readBody(req));
+				} catch (error) {
+					if (error instanceof Error && "statusCode" in error) throw error;
+					throw new WorkbenchError(400, "Expected a pinned boolean");
+				}
+				if (
+					!input ||
+					typeof input !== "object" ||
+					Array.isArray(input) ||
+					!("pinned" in input) ||
+					typeof input.pinned !== "boolean" ||
+					Object.keys(input).length !== 1
+				)
+					throw new WorkbenchError(400, "Expected only a pinned boolean");
+				const id = decodeURIComponent(pinMatch[1]!),
+					pinned = input.pinned;
+				// Presentation metadata may be appended while sendUserMessage is awaiting the turn.
+				await options.setSessionPinned(id, pinned);
+				json(res, 200, { ok: true, pinned });
+				return;
+			}
 			const projectMatch = /^\/session\/([^/]+)\/project$/.exec(path);
 			if (method === "PUT" && projectMatch) {
 				if (!options.assignProject) {

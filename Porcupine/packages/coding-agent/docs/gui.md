@@ -30,7 +30,7 @@ The following `visualize` kinds extend the same component identity and session r
 | --- | --- |
 | `form` | Text, number, choice and toggle fields; required values and number bounds; submitted values restore |
 | `table` | Search, sortable columns, row selection, optional cell editing; original row identities retained through sorting |
-| `simulation` | Parameter sliders, formula plot, time scrubbing, play/pause/reset; linear, projectile and oscillator models |
+| `simulation` | Parameter sliders, formula plot, time scrubbing, play/pause/reset; linear, projectile, oscillator, expression and numerical quantum1d models |
 | `graph` | Select nodes, inspect their descriptions and follow labelled connections |
 | `timeline` | Previous/next steps and a step scrubber with explanations |
 | `comparison` | Adjustable criterion weights, supplied scores and weighted ranking |
@@ -46,9 +46,9 @@ Example form:
 {"kind":"form","componentId":"experiment-setup","title":"Experiment setup","fields":[{"label":"Trial name","type":"text","required":true},{"label":"Samples","type":"number","min":1,"max":100,"required":true},{"label":"Method","type":"choice","options":["Control","Treatment"]}]}
 ```
 
-Simulation parameter names are fixed: `slope`/`intercept`, `speed`/`angle`/`gravity` (angle in degrees), or `amplitude`/`frequency` (cycles per second). The plotted interval is 0–10 seconds. These are illustrative formula calculators; they do not run a general solver, enforce ground collisions or validate experimental assumptions. Put units and assumptions in parameter labels and the description. Motion uses linear interpolation, normalized 0–100 positions and at most 60 seconds; playback starts only on user action. Video export, arbitrary meshes, executable formulas and document file mutation inside the card are not implemented. Code changes are requested through the agent's normal tool and permission flow. Evidence links and confidence are model-supplied data, not independent source verification. Spaced review runs only while the deck is open; there is no reminder service.
+Built-in simulation parameter names are fixed: `slope`/`intercept`, `speed`/`angle`/`gravity` (angle in degrees), or `amplitude`/`frequency` (cycles per second). For those three presets the plotted interval is 0–10 seconds. These are illustrative formula calculators; they do not run a general solver, enforce ground collisions or validate experimental assumptions. Put units and assumptions in parameter labels and the description. Motion uses linear interpolation, normalized 0–100 positions and at most 60 seconds; playback starts only on user action. Video export, arbitrary meshes, JavaScript formulas and document file mutation inside the card are not implemented. Code changes are requested through the agent's normal tool and permission flow. Evidence links and confidence are model-supplied data, not independent source verification. Spaced review runs only while the deck is open; there is no reminder service.
 
-For a scored quiz, call `visualize` with `kind: "quiz"`, a title and 1–6 questions. Each question supplies `question`, 2–6 `options`, zero-based `correctAnswers`, an `explanation`, and an optional `hint`. More than one correct answer enables multiple selection. Submission reveals an exact-match score and review for every question; answers and review restore from session history. The score checks the supplied answer key, so the agent must verify that key. Written answers continue through the question card for agent evaluation.
+For a scored quiz, call `visualize` with `kind: "quiz"`, a title and 1–100 questions, displayed five per page. Each question supplies `question`, 2–6 `options`, zero-based `correctAnswers`, an `explanation`, and an optional `hint`. More than one correct answer enables multiple selection. Submission reveals an exact-match score and review for every question; answers and review restore from session history. The score checks the supplied answer key, so the agent must verify that key. Written answers continue through the question card for agent evaluation.
 
 The visualization tools prepare JSON-encoded array arguments before runtime validation, including nested coordinates, chart points and series, and 3D objects. Invalid JSON, wrong shapes and bounds still fail validation.
 
@@ -60,13 +60,13 @@ Supply `componentId` to give a 2D visual, chart or question a stable identity. L
 | --- | --- | --- |
 | 2D diagram | `visualize` with `kind: "diagram"` | Rectangles, circles, arrows, lines, and plain-text labels. Useful for force diagrams, process flows, annotated geometry, and conceptual maps. |
 | Chart | `visualize` with `kind: "chart"` | Line, scatter, and grouped bar charts; multiple named series; axis labels and units; optional point annotations and supplied symmetric y uncertainty bars. |
-| Interactive 3D scene | `visualize_3d` | Boxes, spheres, and arrows; drag, keyboard, and button rotation controls. |
+| Interactive 3D scene | `visualize_3d` | Boxes, spheres, arrows and molecular bonds; drag, keyboard, and button rotation controls. |
 
 Each view has a title and optional explanation. Charts expose all supplied values in an accessible data table, retaining full precision even when canvas labels are abbreviated. Diagrams expose object positions and labels as text. The new 2D/chart cards include **Ask about this visual**, which prepares a follow-up prompt without sending it. The model also receives a text fallback from `visualize`, so the explanation remains usable in non-graphical clients.
 
 Attaching the browser activates the configured `visualize` and `visualize_3d` tools for future turns. Explicitly excluded tools remain unavailable. The agent is instructed to choose diagrams for relationships, charts for supplied data, and 3D for spatial structure when useful, without requiring a separate visualization request.
 
-Chat replies and reasoning use locally served KaTeX and fonts for math: `\(...\)` and `$...$` inline, `\[...\]` and `$$...$$` for display equations. Fractions, integrals, aligned equations, cases and matrices use standard KaTeX syntax. Table cells support math, including vertical bars inside expressions. Code fences remain literal. Incomplete or unsupported expressions remain visible; HTML and external-resource commands are untrusted. Canvas figure labels remain plain text.
+Chat replies and reasoning use locally served KaTeX and fonts for math: `\(...\)` and `$...$` inline, `\[...\]` and `$$...$$` for display equations. Fractions, integrals, aligned equations, cases and matrices use standard KaTeX syntax. Table cells support math, including vertical bars inside expressions. Code fences remain literal. Incomplete or unsupported expressions remain visible; HTML and external-resource commands are untrusted. Canvas labels use positioned math overlays when they contain supported notation.
 
 For example, ask: "Teach me Newton's second law with a labelled 2D force diagram" or "Plot these measurements against time with units and the uncertainty I supplied." Diagrams use positive y pointing upwards. Chart x values are numeric; use point labels for discrete category names. Line segments connect samples in the supplied order.
 
@@ -74,9 +74,15 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 
 - Chart supplied data only. Clearly identify illustrative or synthetic examples in the title or description. Do not present model-generated examples as measurements.
 - Put units in `xLabel` and `yLabel`. Optional `error` is an absolute symmetric y uncertainty (`y ± error`), not a percentage. Omitted uncertainty is shown as **Not supplied**, not silently treated as a measured zero.
-- 2D/3D diagrams allow at most 80 objects with coordinates in `[-20, 20]`. Charts allow at most 8 series and 200 points per series, with finite coordinates in `[-1e12, 1e12]`. Uncertainty must be finite and in `[0, 1e12]`.
-- Backend validation and independent browser validation reject unsupported types, extra properties, and out-of-bounds data. The model supplies data, not executable code, HTML, meshes, URLs, or external assets. Formula labels are plain text, not executed expressions or typeset LaTeX.
+- 2D diagrams allow at most 1000 objects and 3D scenes at most 2000 objects with coordinates in `[-20, 20]`. Charts allow at most 16 series, 10000 points per series and 40000 total points, with finite coordinates in `[-1e12, 1e12]`. Uncertainty must be finite and in `[0, 1e12]`.
+- Backend validation and independent browser validation reject unsupported types, extra properties, and out-of-bounds data. The model supplies data, not executable code, HTML, meshes, URLs, or external assets. Formula labels use the shared math renderer. Mathematical chart series may supply `expression`, `domain:[min,max]`, and `samples` instead of points; a bounded arithmetic parser samples them without evaluating JavaScript. It supports explicit multiplication, powers, constants pi/e and standard math functions. Nonfinite or out-of-range samples are rejected. Full data is available in paginated tables and CSV export.
 - Heatmaps, surface plots, chart animation and user-authored drawing are not implemented. The separate motion component supports bounded keyframe animation.
+
+Expression simulations accept `model: "expression"`, `expression: {x:"t",y:"exp(-a*t^2)*cos(t)",duration:20,samples:1000}` and up to 12 named slider parameters. Up to 2000 samples and 3600 seconds are supported. This extends analytical models; it is not an arbitrary PDE solver. Quizzes accept 100 questions, paginated five at a time; flashcards accept 500 cards. 3D molecular geometry uses verified atom spheres and rounded `bond` objects with `from`, `to`, `radius`, and `color`. Geometry and measurements are supplied by the agent, not inferred or chemically validated by the renderer.
+
+### 1D quantum simulation
+
+Use `model: "quantum1d"` with `quantum: {domain:[-8,8],grid:128,timeStep:0.01,duration:4,potential:"x^2/2"}` and slider parameters `mass`, `hbar`, `center`, `width`, `momentum`. The Gaussian packet evolves under the time-independent real potential using Crank–Nicolson, with zero endpoint boundaries. `mass`, `hbar` and `width` must remain positive. Use consistent scaled units and explain them. The view plots probability density and reports its integral; sliders rebuild the initial state, and scrubbing backward recomputes it. Grid size is 64–256, duration at most 10, time step 0.0001–0.02, with at most 4000 steps. Check convergence by refining grid and time step before scientific use. This is a one-dimensional finite-domain solver, not a general PDE or molecular dynamics engine. See the quantum example in the bundled Adaptive GUI examples.
 
 ## Workspace surfaces
 
@@ -114,6 +120,8 @@ status labels and icon shapes remain present so colour is never the only cue.
 Appearance settings place Todos and Subagents independently in the side rail, as a floating overlay on chat, or hide them entirely. Hidden panels do not reserve a side column. Active worker summaries disappear on completion. Starting/stopping workers and sending/checking messages use compact collaboration rows; failed actions remain visibly failed on replay. Short messages open immediately. Reports start collapsed and expand to Markdown and math, without the step/token accounting header.
 
 Floating panels stay within the chat viewport and scroll independently, so they cannot cover the composer in short layouts. **Escape** dismisses an open task overlay and returns focus to **Tasks**; an open settings dialog keeps its own Escape behavior. Goal/Plan steps remain above Subagents when both share a panel location. On mobile, the navigation drawer contains keyboard focus and returns it to the navigation toggle when closed.
+
+Chemistry notation uses the locally bundled mhchem extension (`\ce`, `\pu`). Physics macros include `\bra`, `\ket`, two-argument `\braket`, `\ketbra`, `\dv`, `\pdv`, `\abs` and `\norm`. These do not implement a general TeX compiler or arbitrary LaTeX packages; generate and share a PDF for those documents.
 
 Math uses the shared KaTeX path in workspace content and labels, including DOM overlays for canvas diagrams/charts, 3D labels and motion text. Timelines and flashcards recognize a limited set of standalone ASCII formulas such as difference quotients and derivative operators. Explicit LaTeX delimiters remain preferred; prose and code are preserved, and unsupported syntax stays visible. Text inputs, native dropdown values and source editors retain editable source; math-bearing form selections and table text cells also show a rendered preview.
 
@@ -169,6 +177,8 @@ Original files are saved under the agent directory’s `attachments/<session-has
 Run `node --import tsx packages/coding-agent/test/workbench-attachments-smoke.ts` for previews, removal, attachment-only sending, failure recovery, isolated session drafts, actual photo input, file readability and photo replay.
 
 ## Conversation organization and commands
+
+Use **⋯ → Pin conversation** to keep a chat in the sidebar’s **Pinned** section. Unpin it from the same menu. Pins persist with session metadata across server restarts, keep the existing project association, and can be changed while the agent works. Pinned chats appear once, and search includes them.
 
 Drag a conversation onto a Project folder, or use its **⋯ → Project** selector. Choose **No project** to ungroup it. The same menu can delete any idle conversation. Busy sessions and their workers must stop before a move or deletion. Deleted session JSONL files move to their session directory’s `.trash/`; project folders move to `.porcupine-trash/projects/` beneath the workspace. Files remain recoverable, but the GUI has no restore button yet.
 

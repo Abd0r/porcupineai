@@ -29,7 +29,13 @@ import { prepareWorkbenchAttachments } from "../server/workbench-attachments.ts"
 import { createWorkbenchCommands } from "../server/workbench-commands.ts";
 import { ContextFileStore, WorkbenchError } from "../server/workbench-context-files.ts";
 import { WorkbenchProjectStore } from "../server/workbench-projects.ts";
-import { getSessionProject, moveSessionToTrash, setSessionProject } from "../server/workbench-session-projects.ts";
+import {
+	getSessionPinned,
+	getSessionProject,
+	moveSessionToTrash,
+	setSessionPinned,
+	setSessionProject,
+} from "../server/workbench-session-projects.ts";
 import { createSessionSurfaces } from "../server/workbench-session-surfaces.ts";
 import { serializeWorkbenchHistory } from "../server/workbench-transcript.ts";
 import { openBrowser } from "../utils/open-browser.ts";
@@ -273,12 +279,25 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 				.map((item) => ({
 					id: item.id,
 					name: item.name || item.firstMessage.slice(0, 80) || undefined,
+					pinned: getSessionPinned(
+						liveRuntimes.get(item.id)?.session.sessionManager || SessionManager.open(item.path),
+					),
 					project: projects.nameForPath(
 						getSessionProject(
 							liveRuntimes.get(item.id)?.session.sessionManager || SessionManager.open(item.path),
 						),
 					),
 				})),
+		setSessionPinned: async (id, pinned) => {
+			if (deleted.has(id)) throw new WorkbenchError(404, "Saved conversation not found");
+			let manager = liveRuntimes.get(id)?.session.sessionManager;
+			if (!manager) {
+				const saved = (await discover()).find((item) => item.id === id);
+				if (!saved) throw new WorkbenchError(404, "Saved conversation not found");
+				manager = SessionManager.open(saved.path);
+			}
+			setSessionPinned(manager, pinned);
+		},
 		deleteProject: async (name) => {
 			const path = projects.path(name),
 				managers = new Map([...liveRuntimes].map(([id, live]) => [id, live.session.sessionManager]));

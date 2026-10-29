@@ -1,5 +1,6 @@
 import { CANVAS_MATH_SCRIPT } from "./canvas-math.ts";
 import { formatLearningMath } from "./learning-math.ts";
+import { WORKBENCH_MATH_MACROS } from "./math-macros.ts";
 /**
  * Message rendering for the browser workbench.
  *
@@ -68,6 +69,7 @@ export const RICH_TEXT_STYLES = `
 `;
 export const MESSAGE_RENDERER_SCRIPT = `
 const formatLearningMath=${formatLearningMath.toString()};
+const workbenchMathMacros=${JSON.stringify(WORKBENCH_MATH_MACROS)};
 ${CANVAS_MATH_SCRIPT}
 const mathRenderCache=new Map(),richTextSources=new WeakMap();
 function renderMathLabel(node,text){node.replaceChildren();for(const child of inlineNodes(formatLearningMath(String(text))))node.append(child);return node;}
@@ -76,7 +78,7 @@ function renderMathSafe(tex,display){
   if(!window.katex||tex.length>20000)return mathFallback(tex,display);
   const span=document.createElement('span');span.className='math-expression';
   const cacheKey=String(display)+':'+tex,cached=mathRenderCache.get(cacheKey);if(cached)return cached.cloneNode(true);
-  try{window.katex.render(tex,span,{displayMode:display,output:'htmlAndMathml',trust:false,throwOnError:true,strict:'ignore',maxExpand:1000,maxSize:20,macros:{}});if(tex.length<=2000&&typeof span.cloneNode==='function'){if(mathRenderCache.size>=64)mathRenderCache.delete(mathRenderCache.keys().next().value);mathRenderCache.set(cacheKey,span.cloneNode(true));}return span}catch{return mathFallback(tex,display)}
+  try{window.katex.render(tex,span,{displayMode:display,output:'htmlAndMathml',trust:false,throwOnError:true,strict:'ignore',maxExpand:1000,maxSize:20,macros:{...workbenchMathMacros}});if(tex.length<=2000&&typeof span.cloneNode==='function'){if(mathRenderCache.size>=64)mathRenderCache.delete(mathRenderCache.keys().next().value);mathRenderCache.set(cacheKey,span.cloneNode(true));}return span}catch{return mathFallback(tex,display)}
 }
 function inlineNodes(text){const nodes=[];let rest=text;
   while(rest){const match=/\\\\\\[[\\s\\S]*?\\\\\\]|\\\\\\([\\s\\S]*?\\\\\\)|\\$\\$[\\s\\S]*?\\$\\$|(?<![\\\\\\d])\\$(?!\\s)(?:\\\\.|[^$\\\\\\n])+(?<!\\s)\\$|\\*\\*[^*]+\\*\\*|\\*[^*\\n]+\\*|\`[^\`\\n]+\`|!?\\[[^\\]]*]\\([^)\\s]+\\)/.exec(rest);

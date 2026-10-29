@@ -116,10 +116,10 @@ describe("visualize tool", () => {
 			{ ...chart, script: "anything" },
 			{ ...chart, series: [{ ...chart.series[0], points: [{ x: Infinity, y: 1 }] }] },
 			{ ...chart, series: [{ ...chart.series[0], points: [{ x: 0, y: 1, error: -1 }] }] },
-			{ ...chart, series: [{ ...chart.series[0], points: Array.from({ length: 201 }, () => ({ x: 0, y: 0 })) }] },
+			{ ...chart, series: [{ ...chart.series[0], points: Array.from({ length: 10001 }, () => ({ x: 0, y: 0 })) }] },
 			{ ...diagram, objects: [{ ...diagram.objects[0], from: [21, 0] }] },
 			{ ...diagram, objects: [{ type: "svg", source: "<script>" }] },
-			{ ...diagram, objects: Array.from({ length: 81 }, () => diagram.objects[0]) },
+			{ ...diagram, objects: Array.from({ length: 1001 }, () => diagram.objects[0]) },
 		])
 			await expect(run(input)).rejects.toThrow(/Invalid/);
 	});

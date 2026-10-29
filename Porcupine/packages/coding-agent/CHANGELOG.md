@@ -4,6 +4,9 @@
 
 ### Added
 
+- Persistent conversation pinning with a compact Pinned sidebar section and pin/unpin actions.
+- Safe mathematical chart expressions and parameterized expression simulations and a bounded numerical 1D Schrödinger model, dense charts with paginated data and CSV export, larger quizzes/decks, molecular bonds and chemistry/physics math notation.
+
 - Bundled Adaptive GUI and Adaptive Learning skills with validated tool examples, surface-aware guidance, user-response handling and sub-agent presentation handoffs.
 - Agent-shared workspace file cards from Markdown links, with inline raster images, PDF/text viewers, authenticated downloads and direct opening from the GUI.
 
