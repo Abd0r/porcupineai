@@ -250,6 +250,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"conversation-menu",
 		"conversation-menu-title",
 		"conversation-project",
+		"conversation-pin",
 		"conversation-delete",
 		"conversation-action-error",
 		"project-summary",
@@ -611,7 +612,7 @@ describe("browser 3D scene renderer", () => {
 	it("fails closed for malformed scenes before adding any DOM content", () => {
 		const { render, feed } = loadRenderer();
 		render({ ...scene, objects: [{ type: "mesh", source: "<script>" }] });
-		render({ ...scene, objects: Array.from({ length: 81 }, () => scene.objects[0]) });
+		render({ ...scene, objects: Array.from({ length: 2001 }, () => scene.objects[0]) });
 		expect(feed.children).toHaveLength(0);
 	});
 });

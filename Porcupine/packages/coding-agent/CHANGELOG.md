@@ -12,12 +12,15 @@
 
 ### Changed
 
+- Default new GUI preferences to Pixel with system colour mode; retain saved appearance, panel placement and Tasks visibility choices.
 - Distinct GUI activity animations for coding, skills, search and collaboration, with a blue neutron-star reasoning indicator. Subagent messages and expandable reports appear in chat without execution accounting headers.
 - Coordinated colour palettes across all five themes in light/dark modes, including raised surfaces, selection, buttons, focus and semantic activity/status accents.
 - Batch long GUI history restores and expanded reasoning updates; defer collapsed reasoning rendering until opened. Add a saved Reduce motion preference, keyboard model navigation and mobile navigation focus containment.
 
 ### Fixed
 
+- Anchor floating task panels to the outer conversation corner and bound them above the composer, including mixed side/overlay layouts.
+- Set simulation slider defaults after range constraints so displayed values match the model; improve simulation curve contrast.
 - Deliver GUI queued prompts through steering at the next tool/response boundary instead of waiting for the final answer; preserve queue cancellation, peer notices and attachments.
 - Preserve composer drafts when adding a visual follow-up question, and avoid adding the same question twice.
 - Resolve current workspace package names directly from source during tests and type checking in fresh checkouts.

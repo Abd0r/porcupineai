@@ -8,8 +8,55 @@ import { PORCUPINE_WEB_UI } from "../src/server/web-ui.ts";
 class Node {
 	children: Node[] = [];
 	textContent = "";
-	value = "";
-	type = "";
+	private inputValue = "";
+	private inputType = "";
+	private inputMin = "";
+	private inputMax = "";
+	private inputStep = "";
+	get value() {
+		return this.inputValue;
+	}
+	set value(value: string) {
+		this.inputValue = value;
+		this.sanitizeRange();
+	}
+	get type() {
+		return this.inputType;
+	}
+	set type(value: string) {
+		this.inputType = value;
+		this.sanitizeRange();
+	}
+	get min() {
+		return this.inputMin;
+	}
+	set min(value: string) {
+		this.inputMin = value;
+		this.sanitizeRange();
+	}
+	get max() {
+		return this.inputMax;
+	}
+	set max(value: string) {
+		this.inputMax = value;
+		this.sanitizeRange();
+	}
+	get step() {
+		return this.inputStep;
+	}
+	set step(value: string) {
+		this.inputStep = value;
+		this.sanitizeRange();
+	}
+	/** Native range controls sanitize on each constraint change, including the default step of one. */
+	private sanitizeRange() {
+		if (this.inputType !== "range") return;
+		const min = this.inputMin === "" ? 0 : Number(this.inputMin),
+			max = this.inputMax === "" ? 100 : Number(this.inputMax),
+			step = this.inputStep === "" ? 1 : Number(this.inputStep),
+			raw = this.inputValue === "" ? (min + max) / 2 : Number(this.inputValue);
+		this.inputValue = String(Math.max(min, Math.min(max, min + Math.round((raw - min) / step) * step)));
+	}
 	hidden = false;
 	disabled = false;
 	checked = false;
@@ -222,6 +269,13 @@ describe("capacity renderer execution", () => {
 				input: { version: 2, ...example.input },
 			});
 			const time = env.feed.querySelectorAll("input").at(-1)!;
+			const parameters = example.input.parameters as Array<{ value: number }>;
+			env.feed
+				.querySelectorAll("input")
+				.slice(0, -1)
+				.forEach((node, i) => {
+					expect(Number(node.value)).toBeCloseTo(parameters[i].value, 12);
+				});
 			time.value = "1";
 			time.listeners.get("input")!();
 			expect(

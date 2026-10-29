@@ -15,7 +15,7 @@ function observeVisual(canvas,draw){const observer=typeof ResizeObserver!=='unde
 function redrawVisuals(){for(const item of visualObservers.values())item.draw()}
 window.addEventListener('porcupine-theme-change',redrawVisuals);
 window.addEventListener('resize',redrawVisuals);
-function plotColors(canvas){const style=window.getComputedStyle(canvas);return{text:style.getPropertyValue('--plot-text').trim(),label:style.getPropertyValue('--plot-label').trim(),grid:style.getPropertyValue('--plot-grid').trim(),axis:style.getPropertyValue('--plot-axis').trim()}}
+function plotColors(canvas){const style=window.getComputedStyle(canvas);return{text:style.getPropertyValue('--plot-text').trim(),label:style.getPropertyValue('--plot-label').trim(),grid:style.getPropertyValue('--plot-grid').trim(),axis:style.getPropertyValue('--plot-axis').trim(),accent:style.getPropertyValue('--accent').trim()}}
 function validText(value,max){return typeof value==='string'&&value.trim().length>0&&value.length<=max}
 function bounded(value,min,max){return typeof value==='number'&&Number.isFinite(value)&&value>=min&&value<=max}
 function validPoint2(value){return Array.isArray(value)&&value.length===2&&value.every(n=>bounded(n,-20,20))}
