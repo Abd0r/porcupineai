@@ -1,7 +1,7 @@
 import { FOLLOWUP_SCRIPT } from "./workbench-followups.ts";
 /** Session transport and interaction state for the bundled, same-origin workbench. */
 export const WORKBENCH_CLIENT_SCRIPT = String.raw`
-let busyRevision=0,connected=false,connectionEpoch=0,replaying=false,replayEpoch=0,pendingAssistantRender=null,renderFrame=0;
+let sessionListEpoch=0,busyRevision=0,connected=false,connectionEpoch=0,replaying=false,replayEpoch=0,pendingAssistantRender=null,renderFrame=0;
 function queueAssistantRender(node,text){pendingAssistantRender={node,text};if(!renderFrame)renderFrame=requestAnimationFrame(flushAssistantRender);}
 function flushAssistantRender(){if(renderFrame)cancelAnimationFrame(renderFrame);renderFrame=0;if(!pendingAssistantRender)return;const {node,text}=pendingAssistantRender;pendingAssistantRender=null;renderRichText(node.lastChild,text);scrollFeed();}
 const conversationViews=new Map(),sessionNames=new Map();
@@ -80,7 +80,7 @@ function showToolUpdate(event){const run=toolRuns.get(event.toolCallId||event.to
 function showToolEnd(event){if(collaborationTool(event,'end'))return;if(liveThinking&&!replaying)setThinkingLabel('Working');const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;run.row.dataset.state=event.isError?'failed':'done';run.state.textContent=event.isError?'Failed':'Done';const svg=document.createElementNS(MATH_NS,'svg'),path=document.createElementNS(MATH_NS,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');path.setAttribute('d',event.isError?'m7 7 10 10M17 7 7 17':'m5 12 4 4L19 6');svg.append(path);run.icon.replaceChildren(svg);setToolOutput(run,toolResultText(event.result));toolRuns.delete(event.toolCallId||event.toolName);}
 function filterSessions(){const query=$('session-search').value.trim().toLowerCase();for(const button of document.querySelectorAll('.session'))button.parentNode.hidden=Boolean(query&&!button.textContent.toLowerCase().includes(query));for(const group of ui.sessions.querySelectorAll('.pinned-sessions'))group.hidden=![...group.querySelectorAll('.session-row')].some(row=>!row.hidden);}
 async function refreshSessions(selectFirst=false){
-  const data=await json('/session');sessionCatalog=data.sessions||[];
+  const epoch=++sessionListEpoch,data=await json('/session');if(epoch!==sessionListEpoch)return;sessionCatalog=data.sessions||[];
   for(const item of sessionCatalog)if(item.name)sessionNames.set(item.id,item.name.startsWith("[Adaptive UI response]")?"Interactive session":item.name);
   renderSessionNavigation();if(activeProject)renderProjectChats();if(!activeProject&&sessionNames.has(sessionId))ui.title.textContent=sessionNames.get(sessionId);
   if(selectFirst&&sessionCatalog.length)void connectEvents(data.currentSessionId||sessionCatalog[0].id);else if(selectFirst)await createSession();

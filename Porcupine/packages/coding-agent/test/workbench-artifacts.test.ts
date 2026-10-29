@@ -23,6 +23,7 @@ describe("workspace artifacts", () => {
 			["plot.png", Buffer.from("89504e470d0a1a0a", "hex"), "image"],
 			["report.pdf", Buffer.from("%PDF-1.7\nreview"), "pdf"],
 			["notes.md", Buffer.from("# Notes"), "text"],
+			["notes.markdown", Buffer.from("# Project notes"), "text"],
 			["page.html", Buffer.from("<script>alert(1)</script>"), "file"],
 			["drawing.svg", Buffer.from('<svg onload="alert(1)"/>'), "file"],
 			["archive.zip", Buffer.from("archive"), "file"],

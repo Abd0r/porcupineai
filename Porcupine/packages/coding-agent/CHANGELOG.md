@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- Keep the latest sidebar session list when refreshes finish out of order, prevent repeated project-chat creation, and preview `.markdown` resources as text.
 - Preserve newer drafts during slow slash commands, restore failed command text, and isolate delayed card/message responses and answer caches from other chats and newer turns.
 - Ignore stale queue-removal responses after live events have already delivered pending prompts.
 - Anchor floating task panels to the outer conversation corner and bound them above the composer, including mixed side/overlay layouts.

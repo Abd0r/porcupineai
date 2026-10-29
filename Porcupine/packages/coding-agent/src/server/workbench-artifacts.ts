@@ -60,7 +60,9 @@ export async function readWorkbenchArtifact(root: string, path: string) {
 				mime = "application/pdf";
 				kind = "pdf";
 			} else if (
-				/^\.(txt|md|csv|tsv|json|log|py|js|ts|tsx|jsx|css|yaml|yml|toml|c|cpp|h|rs|go|sh)$/.test(extension) &&
+				/^\.(txt|md|markdown|csv|tsv|json|log|py|js|ts|tsx|jsx|css|yaml|yml|toml|c|cpp|h|rs|go|sh)$/.test(
+					extension,
+				) &&
 				!bytes.includes(0)
 			) {
 				mime = "text/plain; charset=utf-8";

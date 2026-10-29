@@ -178,6 +178,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	canvasContext: FakeCanvasContext;
 	rich(node: FakeElement, text: string): FakeElement;
 	connect(id: string): Promise<void>;
+	refresh(): Promise<void>;
 	project(name: string): Promise<void>;
 	projects(items: unknown[], chats: unknown[]): void;
 	text(value: unknown): string;
@@ -396,7 +397,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	if (!script) throw new Error("Workbench script is missing");
 	const instrumented = script.replace(
 		/\}\)\(\);\s*$/,
-		"globalThis.__project=openProject;globalThis.__projects=(items,chats)=>{projectCatalog=items;sessionCatalog=chats;renderProjectNavigation();};globalThis.__connect=connectEvents;globalThis.__text=textOf;globalThis.__renderVisualization=renderVisual;globalThis.__renderEvent=renderEvent;globalThis.__renderRichText=renderRichText;})();",
+		"globalThis.__refresh=refreshSessions;globalThis.__project=openProject;globalThis.__projects=(items,chats)=>{projectCatalog=items;sessionCatalog=chats;renderProjectNavigation();};globalThis.__connect=connectEvents;globalThis.__text=textOf;globalThis.__renderVisualization=renderVisual;globalThis.__renderEvent=renderEvent;globalThis.__renderRichText=renderRichText;})();",
 	);
 	if (instrumented === script) throw new Error("Could not expose the renderer to its test harness");
 	runInNewContext(instrumented, sandbox);
@@ -412,10 +413,31 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	const text = runInNewContext("globalThis.__text", sandbox) as (value: unknown) => string;
 	const project = runInNewContext("globalThis.__project", sandbox) as (name: string) => Promise<void>;
 	const projects = runInNewContext("globalThis.__projects", sandbox) as (items: unknown[], chats: unknown[]) => void;
-	return { render, event, rich, feed, elements, canvasContext, connect, text, mathCalls, project, projects };
+	const refresh = runInNewContext("globalThis.__refresh", sandbox) as () => Promise<void>;
+	return { render, event, rich, feed, elements, canvasContext, connect, text, mathCalls, project, projects, refresh };
 }
 
 describe("project pages", () => {
+	it("creates only one chat when the project action is clicked repeatedly", async () => {
+		const pending: Array<(response: Response) => void> = [];
+		const h = loadRenderer(async (path, options) => {
+			if (path === "/session" && options?.method === "POST")
+				return new Promise<Response>((resolve) => pending.push(resolve));
+			return Response.json({ title: "Lab", files: [] });
+		});
+		await h.project("lab");
+		const click = h.elements.get("project-conversation")!.handlers.get("click")!;
+		const first = click(),
+			second = click();
+		const count = pending.length;
+		for (const finish of pending) finish(Response.json({ error: "Try again" }, { status: 503 }));
+		await Promise.all([first, second]);
+		expect(count).toBe(1);
+		const retry = click();
+		expect(pending).toHaveLength(2);
+		pending[1]!(Response.json({ error: "Try again" }, { status: 503 }));
+		await retry;
+	});
 	it("opens the project title, short description, resources and only its own chats", async () => {
 		const h = loadRenderer(async () =>
 			Response.json({
@@ -474,6 +496,24 @@ describe("project pages", () => {
 });
 
 describe("workbench transport regressions", () => {
+	it("keeps the latest session pins when an older sidebar refresh finishes late", async () => {
+		let finish!: (response: Response) => void;
+		let calls = 0;
+		const h = loadRenderer(async () =>
+			++calls === 1
+				? new Promise<Response>((resolve) => {
+						finish = resolve;
+					})
+				: Response.json({ sessions: [{ id: "a", name: "Latest chat", pinned: true }] }),
+		);
+		const older = h.refresh();
+		await h.refresh();
+		finish(Response.json({ sessions: [{ id: "a", name: "Old chat", pinned: false }] }));
+		await older;
+		expect(h.elements.get("sessions")!.textContent).toContain("Latest chat");
+		expect(h.elements.get("sessions")!.textContent).toContain("Pinned");
+		expect(h.elements.get("sessions")!.textContent).not.toContain("Old chat");
+	});
 	it("keeps a newer turn working when an earlier message send fails after settlement", async () => {
 		let fail!: (reason: Error) => void;
 		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
