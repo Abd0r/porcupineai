@@ -15,6 +15,7 @@
 
 ### Fixed
 
+- Deliver GUI queued prompts through steering at the next tool/response boundary instead of waiting for the final answer; preserve queue cancellation, peer notices and attachments.
 - Preserve composer drafts when adding a visual follow-up question, and avoid adding the same question twice.
 - Resolve current workspace package names directly from source during tests and type checking in fresh checkouts.
 - Keep floating task panels above the composer in short viewports, make short connection screens scrollable, and fit input to visual-viewport changes. Pixel highlights the whole active composer instead of its inner textarea.

@@ -148,7 +148,7 @@ export function adaptSessionToServeApi(session: AgentSession, attachmentRoot = g
 				});
 			previousProjectContext = context;
 		}
-		await session.sendUserMessage(content, followUp ? { deliverAs: "followUp" } : undefined);
+		await session.sendUserMessage(content, followUp ? { deliverAs: "steer" } : undefined);
 	};
 
 	return {
@@ -168,8 +168,13 @@ export function adaptSessionToServeApi(session: AgentSession, attachmentRoot = g
 		id: session.sessionId,
 		sendUserMessage: (text, attachments) => send(text, attachments),
 		queueFollowUp: (text, attachments) => send(text, attachments, true),
-		getFollowUps: () => session.getFollowUpMessages(),
-		removeFollowUp: (index, expected) => session.removeFollowUp(index, expected),
+		getFollowUps: () => [...session.getSteeringMessages(), ...session.getFollowUpMessages()],
+		removeFollowUp: (index, expected) => {
+			const steering = session.getSteeringMessages().length;
+			return index < steering
+				? session.removeSteering(index, expected)
+				: session.removeFollowUp(index - steering, expected);
+		},
 		abort: async () => {
 			await session.abort();
 		},
@@ -177,7 +182,13 @@ export function adaptSessionToServeApi(session: AgentSession, attachmentRoot = g
 		getTimeline: () => serializeWorkbenchHistory(session.sessionManager.getBranch()),
 		getSubagents: subagentSnapshot,
 		onEvent: (listener) => {
-			const events = session.subscribe((event) => listener(event));
+			const events = session.subscribe((event) =>
+				listener(
+					event.type === "queue_update"
+						? { ...event, followUp: [...event.steering, ...event.followUp], steering: [] }
+						: event,
+				),
+			);
 			let previous = JSON.stringify(subagentSnapshot());
 			const subagents = session.onSubagentEvent(() => {
 				const runs = subagentSnapshot(),
