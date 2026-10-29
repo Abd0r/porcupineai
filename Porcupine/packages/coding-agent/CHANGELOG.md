@@ -5,10 +5,12 @@
 ### Added
 
 - Bundled Adaptive GUI and Adaptive Learning skills with validated tool examples, surface-aware guidance, user-response handling and sub-agent presentation handoffs.
+- Agent-shared workspace file cards from Markdown links, with inline raster images, PDF/text viewers, authenticated downloads and direct opening from the GUI.
 
 ### Changed
 
 - Distinct GUI activity animations for coding, skills, search and collaboration, with a blue neutron-star reasoning indicator. Subagent messages and expandable reports appear in chat without execution accounting headers.
+- Coordinated colour palettes across all five themes in light/dark modes, including raised surfaces, selection, buttons, focus and semantic activity/status accents.
 - Batch long GUI history restores and expanded reasoning updates; defer collapsed reasoning rendering until opened. Add a saved Reduce motion preference, keyboard model navigation and mobile navigation focus containment.
 
 ### Fixed

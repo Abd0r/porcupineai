@@ -1,6 +1,6 @@
 ---
 name: adaptive-gui
-description: Use Porcupine's Adaptive GUI tools visualize and visualize_3d to explain relationships, chart supplied data, collect forms, explore tables or graphs, compare options, show evidence, and build interactive workspaces. Use for visual explanations and interactive analysis in the browser workbench; includes schema-valid examples, component updates, user-response handling, math, surface checks and sub-agent handoffs.
+description: Use Porcupine's Adaptive GUI tools visualize and visualize_3d to explain relationships, chart supplied data, collect forms, explore tables or graphs, compare options, show evidence, and build interactive workspaces. Share PDFs, images and workspace files in chat with previews and downloads. Use for visual explanations and interactive analysis in the browser workbench; includes schema-valid examples, component updates, user-response handling, math, surface checks and sub-agent handoffs.
 stack: docs
 ---
 
@@ -67,6 +67,22 @@ user's verified data. Examples labelled illustrative are not measurements.
   available. Otherwise describe that verification limit honestly.
 - On validation failure, read the error, correct the selected kind's payload,
   and retry. Remove unsupported fields. Do not cycle through guessed APIs.
+
+## Share files in chat
+
+- Create and verify the file inside the conversation's workspace before linking it.
+  Use `[Report](reports/report.pdf)` for a compact file card and
+  `![Plot](images/plot.png)` for an inline image preview. Absolute workspace paths
+  and `sandbox:/` paths also work. Percent-encode spaces in Markdown destinations.
+- Preview PDFs, raster images and text directly in the GUI. Other formats,
+  including Office documents, archives, HTML and SVG, have download cards.
+  Do not promise an inline preview for every format. PDFs use the browser's viewer.
+- Keep shared files at or below 25 MiB. Hidden files, symlinks and paths outside
+  the workspace are unavailable. Copy a requested deliverable into the workspace
+  through normal tools when needed; never link credentials or hidden state.
+- Use ordinary text links on other clients. Remote URLs remain external links;
+  do not claim a remote image has been embedded. Links survive chat replay while
+  the underlying file still exists; they are not immutable saved copies.
 
 ## Handle interaction and updates
 

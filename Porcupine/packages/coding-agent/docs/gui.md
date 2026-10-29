@@ -105,6 +105,12 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 
 ## Interaction and recovery
 
+Each theme has coordinated backgrounds, raised surfaces, message bubbles, selection and
+focus colours. Workbench uses slate/blue, Pixel uses paper/forest or indigo/mint, Tokyo
+Night uses ink/periwinkle, Cyberpunk uses plum/teal, and Static stays monochrome. Small
+activity accents distinguish coding, reading skills, search and peer communication;
+status labels and icon shapes remain present so colour is never the only cue.
+
 Appearance settings place Todos and Subagents independently in the side rail, as a floating overlay on chat, or hide them entirely. Hidden panels do not reserve a side column. Active worker summaries disappear on completion. Starting/stopping workers and sending/checking messages use compact collaboration rows; failed actions remain visibly failed on replay. Short messages open immediately. Reports start collapsed and expand to Markdown and math, without the step/token accounting header.
 
 Floating panels stay within the chat viewport and scroll independently, so they cannot cover the composer in short layouts. **Escape** dismisses an open task overlay and returns focus to **Tasks**; an open settings dialog keeps its own Escape behavior. Goal/Plan steps remain above Subagents when both share a panel location. On mobile, the navigation drawer contains keyboard focus and returns it to the navigation toggle when closed.
@@ -140,6 +146,21 @@ Run `node --import tsx packages/coding-agent/test/workbench-interaction-smoke.ts
 Run `node --import tsx packages/coding-agent/test/workbench-replay-smoke.ts` for disk-backed replay, full output and diffs, reasoning preferences, prompt ordering, live and reduced motion, chart/3D redraws, and desktop/mobile layout across all five themes in light, dark and system modes (both system preferences).
 
 ## Chat files and photos
+
+Agents can share workspace files in replies using ordinary Markdown: `[Report](reports/report.pdf)`
+creates a compact file card; `![Plot](images/plot.png)` adds an inline raster-image preview.
+Absolute paths inside the conversation workspace and `sandbox:/` destinations also work.
+Percent-encode spaces in destinations. **Preview / download** opens a viewer with image,
+PDF or literal text content, **Open in new tab**, and **Download**. Other formats, including
+Office documents, archives, HTML and SVG, remain downloadable files. PDF display depends
+on the browser's built-in viewer; open/download remain available if embedding is unsupported.
+
+Shared files must be regular files inside the conversation's original working directory,
+at most 25 MiB each. Hidden paths, symlinks and outside-workspace paths are refused.
+Project assignment does not change this directory. File requests use the session's bearer
+authentication; credentials are never embedded in a download URL. Inline images load as
+they enter view. Text previews show up to 256 KiB. Replayed links read the current file;
+they are not versioned copies, and missing files show an error with a retry path.
 
 Use **＋** beside the composer, paste a photo, or drop files onto the composer. Review previews and removable filename chips before sending. Attach up to eight files, 12 MiB total, with or without text. Failed sends restore both text and attachments. Draft attachments stay in tab memory per conversation and disappear on page reload.
 

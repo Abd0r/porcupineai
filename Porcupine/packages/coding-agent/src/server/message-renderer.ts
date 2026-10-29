@@ -79,7 +79,7 @@ function renderMathSafe(tex,display){
   try{window.katex.render(tex,span,{displayMode:display,output:'htmlAndMathml',trust:false,throwOnError:true,strict:'ignore',maxExpand:1000,maxSize:20,macros:{}});if(tex.length<=2000&&typeof span.cloneNode==='function'){if(mathRenderCache.size>=64)mathRenderCache.delete(mathRenderCache.keys().next().value);mathRenderCache.set(cacheKey,span.cloneNode(true));}return span}catch{return mathFallback(tex,display)}
 }
 function inlineNodes(text){const nodes=[];let rest=text;
-  while(rest){const match=/\\\\\\[[\\s\\S]*?\\\\\\]|\\\\\\([\\s\\S]*?\\\\\\)|\\$\\$[\\s\\S]*?\\$\\$|(?<![\\\\\\d])\\$(?!\\s)(?:\\\\.|[^$\\\\\\n])+(?<!\\s)\\$|\\*\\*[^*]+\\*\\*|\\*[^*\\n]+\\*|\`[^\`\\n]+\`|\\[[^\\]]+]\\([^)\\s]+\\)/.exec(rest);
+  while(rest){const match=/\\\\\\[[\\s\\S]*?\\\\\\]|\\\\\\([\\s\\S]*?\\\\\\)|\\$\\$[\\s\\S]*?\\$\\$|(?<![\\\\\\d])\\$(?!\\s)(?:\\\\.|[^$\\\\\\n])+(?<!\\s)\\$|\\*\\*[^*]+\\*\\*|\\*[^*\\n]+\\*|\`[^\`\\n]+\`|!?\\[[^\\]]*]\\([^)\\s]+\\)/.exec(rest);
     if(!match){if(rest)nodes.push(document.createTextNode(rest.replaceAll('\\\\$', '$')));break}
     if(match.index>0)nodes.push(document.createTextNode(rest.slice(0,match.index).replaceAll('\\\\$', '$')));
     const token=match[0];rest=rest.slice(match.index+token.length);
@@ -89,7 +89,7 @@ function inlineNodes(text){const nodes=[];let rest=text;
     else if(token.startsWith("**")){const strong=document.createElement("strong");strong.textContent=token.slice(2,-2);nodes.push(strong)}
     else if(token.startsWith("*")){const em=document.createElement("em");em.textContent=token.slice(1,-1);nodes.push(em)}
     else if(token.startsWith("\`")){const code=document.createElement("code");code.textContent=token.slice(1,-1);nodes.push(code)}
-    else{const link=document.createElement("a");const label=token.slice(1,token.indexOf("]"));const href=token.slice(token.indexOf("](")+2,-1);link.textContent=label;if(/^https?:\\/\\//i.test(href)){link.setAttribute("href",href);link.setAttribute("rel","noopener noreferrer");link.setAttribute("target","_blank")}nodes.push(link)}
+    else{const embedded=token.startsWith('!'),label=token.slice(embedded?2:1,token.indexOf("]")),href=token.slice(token.indexOf("](")+2,-1),artifact=typeof createWorkbenchArtifact==='function'?createWorkbenchArtifact(label,href,embedded):null;if(artifact){nodes.push(artifact);continue;}const link=document.createElement("a");link.textContent=label||href;if(/^https?:\\/\\//i.test(href)){link.setAttribute("href",href);link.setAttribute("rel","noopener noreferrer");link.setAttribute("target","_blank")}nodes.push(link)}
   }
   return nodes}
 function codeBlock(language,source){const wrap=document.createElement("div");wrap.className="code-block";const banner=document.createElement("div");banner.className="code-banner";const label=document.createElement("span");label.textContent=language||"text";const copy=document.createElement("button");copy.type="button";copy.className="quiet-button";copy.textContent="Copy";copy.addEventListener("click",()=>{void navigator.clipboard?.writeText(source).then(()=>{copy.textContent="Copied"}).catch(()=>{copy.textContent="Copy failed"})});banner.append(label,copy);const pre=document.createElement("pre");const code=document.createElement("code");code.textContent=source;pre.append(code);wrap.append(banner,pre);return wrap}

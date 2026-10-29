@@ -153,6 +153,7 @@ export function adaptSessionToServeApi(session: AgentSession, attachmentRoot = g
 
 	return {
 		...createSessionSurfaces(session),
+		artifactRoot: session.sessionManager.getCwd(),
 		getCommands: commands.catalog,
 		runCommand: commands.execute,
 		setClientSurface: (surface) => {

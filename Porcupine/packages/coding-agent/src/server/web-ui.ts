@@ -4,6 +4,7 @@ import { WORKBENCH_STYLES } from "./web-ui-styles.ts";
 import { WORKBENCH_ACTIVITY_SCRIPT } from "./workbench-activity.ts";
 import { ACTIVITY_DESCRIPTION_SCRIPT } from "./workbench-activity-description.ts";
 import { APPEARANCE_DIALOG, APPEARANCE_SCRIPT, APPEARANCE_STYLES } from "./workbench-appearance.ts";
+import { ARTIFACT_DIALOG, ARTIFACT_SCRIPT, ARTIFACT_STYLES } from "./workbench-artifacts-ui.ts";
 import {
 	ATTACHMENT_BUTTON,
 	ATTACHMENT_CONTROLS,
@@ -12,6 +13,7 @@ import {
 } from "./workbench-attachments-ui.ts";
 import { WORKBENCH_CLIENT_SCRIPT } from "./workbench-client.ts";
 import { COLLABORATION_SCRIPT, COLLABORATION_STYLES } from "./workbench-collaboration.ts";
+import { WORKBENCH_COLOUR_STYLES } from "./workbench-colours.ts";
 import { COMMAND_MENU, COMMAND_SCRIPT, COMMAND_STYLES } from "./workbench-commands-ui.ts";
 import { FOCUS_SCRIPT } from "./workbench-focus.ts";
 import { FOLLOWUP_STYLES } from "./workbench-followups.ts";
@@ -64,6 +66,8 @@ ${ORGANIZATION_STYLES}
 ${COMMAND_STYLES}
 ${MODE_ICON_STYLES}
 ${VIEWPORT_STYLES}
+${WORKBENCH_COLOUR_STYLES}
+${ARTIFACT_STYLES}
 </style>
 </head>
 <body>
@@ -95,6 +99,7 @@ ${WORKBENCH_RAIL}
 <form class="auth-card" id="auth-form"><h2>Connect to Porcupine</h2><p>This workbench talks only to the local Porcupine server. Enter its bearer token if one was configured. The token stays in this tab and is not saved.</p><label for="token">Server token</label><input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Leave blank for explicitly tokenless local mode"><button class="send" type="submit">Connect</button><div class="error" id="auth-error" role="alert" hidden></div></form>
 </div>
 ${APPEARANCE_DIALOG}
+${ARTIFACT_DIALOG}
 ${STACKS_DIALOG}
 ${MODEL_DIALOG}
 ${PROJECT_DIALOG}
@@ -185,6 +190,7 @@ ${WORKBENCH_CLIENT_SCRIPT}
 ${REPLAY_SCRIPT}
 ${FOCUS_SCRIPT}
 ${THINKING_SCRIPT}
+${ARTIFACT_SCRIPT}
 ${MESSAGE_RENDERER_SCRIPT}
 ${SESSION_NAVIGATION_SCRIPT}
 ${MODE_ICON_SCRIPT}

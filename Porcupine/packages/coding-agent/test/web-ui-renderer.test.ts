@@ -61,7 +61,7 @@ class FakeElement {
 	}
 	readonly attributes = new Map<string, string>();
 	readonly listeners = new Set<string>();
-	readonly handlers = new Map<string, () => void>();
+	readonly handlers = new Map<string, () => void | Promise<void>>();
 	readonly classes = new Set<string>();
 	readonly classList = {
 		add: (name: string) => {
@@ -126,6 +126,7 @@ class FakeElement {
 		return item;
 	}
 	replaceChildren(...items: FakeElement[]): void {
+		this.text = "";
 		this.children.splice(0, this.children.length, ...items);
 	}
 	setAttribute(name: string, value: string): void {
@@ -144,7 +145,14 @@ class FakeElement {
 		return this.canvasContext;
 	}
 	setPointerCapture(): void {}
-	close(): void {}
+	open = false;
+	showModal(): void {
+		this.open = true;
+	}
+	close(): void {
+		this.open = false;
+		this.handlers.get("close")?.();
+	}
 }
 
 function loadRenderer(mockFetch?: typeof fetch): {
@@ -255,6 +263,11 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"new-project-error",
 		"new-project-create",
 		"settings-dialog",
+		"artifact-dialog",
+		"artifact-title",
+		"artifact-content",
+		"artifact-open",
+		"artifact-download",
 		"settings-open",
 		"appearance-theme",
 		"appearance-todos-placement",
@@ -320,6 +333,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	const sandbox = {
 		fetch: mockFetch ?? (async () => Response.json({ supported: false, sessions: [] })),
 		Headers,
+		URL,
 		AbortController,
 		TextDecoder,
 		innerHeight: 960,
@@ -603,6 +617,64 @@ describe("browser 3D scene renderer", () => {
 });
 
 describe("rich message rendering", () => {
+	it("ignores a file response that arrives after its preview was closed", async () => {
+		let finish: ((response: Response) => void) | undefined;
+		const { rich, elements } = loadRenderer(async (path) => {
+			if (String(path).includes("/artifact?"))
+				return new Promise<Response>((resolve) => {
+					finish = resolve;
+				});
+			return Response.json({ supported: false });
+		});
+		const node = rich(new FakeElement("div", new FakeCanvasContext()), "[Report](report.pdf)");
+		const pending = descendants(node)
+			.find((child) => child.tagName === "button")
+			?.handlers.get("click")?.();
+		elements.get("artifact-dialog")?.close();
+		finish!(
+			new Response("%PDF-1.7", { headers: { "content-type": "application/pdf", "x-porcupine-preview": "pdf" } }),
+		);
+		await pending;
+		expect(elements.get("artifact-content")?.children).toHaveLength(0);
+		expect(elements.get("artifact-open")?.attributes.has("href")).toBe(false);
+	});
+	it("renders local files as preview cards, fetches on demand and previews text literally", async () => {
+		const requests: string[] = [];
+		const { rich, connect, elements } = loadRenderer(async (path) => {
+			requests.push(String(path));
+			if (String(path).includes("/artifact?"))
+				return new Response("<script>literal text</script>", {
+					headers: {
+						"content-type": "text/plain",
+						"x-porcupine-preview": "text",
+						"x-porcupine-name": "notes.txt",
+					},
+				});
+			return Response.json({ supported: false });
+		});
+		await connect("files");
+		const node = rich(
+			new FakeElement("div", new FakeCanvasContext()),
+			"[Notes](notes.txt) and ![Plot](plot.png) and [Unsafe](javascript:alert)",
+		);
+		const cards = descendants(node).filter((child) => child.className === "artifact-card");
+		expect(cards).toHaveLength(2);
+		expect(requests.filter((path) => path.includes("/artifact?"))).toHaveLength(0);
+		await descendants(cards[0])
+			.find((child) => child.tagName === "button")
+			?.handlers.get("click")?.();
+		expect(requests).toContain("/session/files/artifact?path=notes.txt");
+		expect(elements.get("artifact-content")?.children[0]?.tagName).toBe("pre");
+		expect(elements.get("artifact-content")?.textContent).toBe("<script>literal text</script>");
+		expect(elements.get("artifact-download")?.hidden).toBe(false);
+		expect(
+			descendants(node)
+				.find((child) => child.textContent === "Unsafe")
+				?.attributes.get("href"),
+		).toBeUndefined();
+		elements.get("artifact-dialog")?.close();
+		expect(elements.get("artifact-content")?.children).toHaveLength(0);
+	});
 	it.each(["| A plain line, not a table", "``` typescript with a title"])(
 		"does not stall on incomplete Markdown: %s",
 		(source) => {

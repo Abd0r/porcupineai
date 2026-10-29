@@ -35,6 +35,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { stripAnsi } from "../utils/ansi.ts";
 import { serveMathAsset } from "./math-assets.ts";
 import { PORCUPINE_WEB_UI } from "./web-ui.ts";
+import { readWorkbenchArtifact } from "./workbench-artifacts.ts";
 import { validateWorkbenchAttachments, type WorkbenchAttachment } from "./workbench-attachments.ts";
 import type { WorkbenchCommand, WorkbenchCommandResult } from "./workbench-commands.ts";
 import { type ContextFileStore, WorkbenchError } from "./workbench-context-files.ts";
@@ -56,6 +57,8 @@ export interface ServeApiSession
 		Partial<SurfaceControl>,
 		Partial<ContextSurfaces> {
 	readonly id: string;
+	/** Files shared in chat are confined to this session's workspace. */
+	readonly artifactRoot?: string;
 	getCommands?(): WorkbenchCommand[];
 	runCommand?(text: string): Promise<WorkbenchCommandResult>;
 	sendUserMessage(text: string, attachments?: WorkbenchAttachment[]): Promise<void>;
@@ -380,7 +383,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					"content-length": Buffer.byteLength(PORCUPINE_WEB_UI),
 					"cache-control": "no-store",
 					"content-security-policy":
-						"default-src 'none'; img-src blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+						"default-src 'none'; img-src blob: data:; frame-src blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
 					"x-content-type-options": "nosniff",
 					"x-frame-options": "DENY",
 					"referrer-policy": "no-referrer",
@@ -403,6 +406,30 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					canDeleteSessions: Boolean(options.deleteSession),
 					canAssignProjects: Boolean(options.assignProject),
 				});
+				return;
+			}
+			const artifactMatch = /^\/session\/([^/]+)\/artifact$/.exec(path);
+			if (artifactMatch) {
+				if (method !== "GET") {
+					res.setHeader("allow", "GET");
+					json(res, 405, { error: "Method not allowed" });
+					return;
+				}
+				const target = allSessions.get(decodeURIComponent(artifactMatch[1]!))?.session;
+				if (!target) throw new WorkbenchError(404, "No such session");
+				if (!target.artifactRoot) throw new WorkbenchError(501, "File sharing is unavailable for this session");
+				const file = await readWorkbenchArtifact(target.artifactRoot, url.searchParams.get("path") || "");
+				res.writeHead(200, {
+					"content-type": file.mime,
+					"content-length": file.bytes.length,
+					"cache-control": "no-store",
+					"x-content-type-options": "nosniff",
+					"content-security-policy": "default-src 'none'; sandbox",
+					"content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.name).replace(/'/g, "%27")}`,
+					"x-porcupine-preview": file.kind,
+					"x-porcupine-name": encodeURIComponent(file.name),
+				});
+				res.end(file.bytes);
 				return;
 			}
 			if (path === "/workbench/context" || path.startsWith("/workbench/context/")) {
