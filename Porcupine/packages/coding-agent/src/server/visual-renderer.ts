@@ -77,7 +77,7 @@ function renderVisual(visual,callId){
     const body=visualElement('tbody');for(const s of visual.series)for(const p of s.points){const tr=visualElement('tr');for(const value of [s.name,p.x,p.y,p.error===undefined?'Not supplied':p.error,p.label||''])tr.append(visualElement('td',value));body.append(tr)}table.append(body);details.append(table);
   }
   card.append(details);
-  const ask=visualElement('button','Ask about this visual');ask.type='button';ask.className='stop';ask.addEventListener('click',()=>{ui.prompt.value='Explain "'+visual.title+'" step by step, including its labels and assumptions.';resizeComposer();ui.prompt.focus()});card.append(ask);
+  const ask=visualElement('button','Ask about this visual');ask.type='button';ask.className='stop';ask.addEventListener('click',()=>{const question='Explain "'+visual.title+'" step by step, including its labels and assumptions.';if(!ui.prompt.value.includes(question))ui.prompt.value=ui.prompt.value.trim()?ui.prompt.value+'\n\n'+question:question;resizeComposer();ui.prompt.focus()});card.append(ask);
   mountComponent();scrollFeed();
   const ctx=canvas.getContext('2d');if(!ctx)return;const mathLabels=createCanvasMathLabels(canvas);let colors=plotColors(canvas);
   function figureText(text,x,y,width){if(!mathLabels.draw(text,x,y,width))ctx.fillText(text,x,y,width);}

@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Bundled Adaptive GUI and Adaptive Learning skills with validated tool examples, surface-aware guidance, user-response handling and sub-agent presentation handoffs.
+
+### Fixed
+
+- Preserve composer drafts when adding a visual follow-up question, and avoid adding the same question twice.
+- Resolve current workspace package names directly from source during tests and type checking in fresh checkouts.
+
 ## [0.1.80] - 2026-10-28
 
 ### Added
