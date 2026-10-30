@@ -20,6 +20,9 @@
 
 ### Fixed
 
+- Scope approval replies and pending queue submissions to their original chats; deny pending approvals on server shutdown and cancel their timers when answered.
+- Preserve newer context-file drafts and selections when saves or loads finish late, and keep the current project open when a different project's deletion completes.
+- Reject project creation through aliased Project roots and bound text preview reads to 256 KiB without splitting UTF-8 characters.
 - Keep the latest sidebar session list when refreshes finish out of order, prevent repeated project-chat creation, and preview `.markdown` resources as text.
 - Preserve newer drafts during slow slash commands, restore failed command text, and isolate delayed card/message responses and answer caches from other chats and newer turns.
 - Ignore stale queue-removal responses after live events have already delivered pending prompts.

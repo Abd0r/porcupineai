@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -16,6 +16,23 @@ function fixture() {
 const pdf = Buffer.from("%PDF-1.7\nsynthetic test document\n");
 
 describe("workbench project workspaces", () => {
+	it("refuses to create a project through a symlinked Project root", () => {
+		const { cwd, store } = fixture(),
+			outside = mkdtempSync(join(tmpdir(), "outside-project-root-"));
+		roots.push(outside);
+		symlinkSync(outside, join(cwd, "Project"));
+		expect(() => store.create("escape")).toThrow();
+		expect(existsSync(join(outside, "escape"))).toBe(false);
+	});
+	it("limits text previews by bytes rather than UTF-16 character count", () => {
+		const { cwd, store } = fixture();
+		store.create("bounded");
+		writeFileSync(join(cwd, "Project", "bounded", "large.md"), "界".repeat(100000));
+		const document = store.read("bounded", "large.md");
+		expect(document.truncated).toBe(true);
+		expect(Buffer.byteLength(document.content!)).toBeLessThanOrEqual(256 * 1024);
+		expect(document.content).not.toContain("�");
+	});
 	it("keeps project pins across store restarts and describes the README objective", () => {
 		const { cwd, store } = fixture();
 		store.create("paper", "Paper");

@@ -264,7 +264,10 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 		};
 
 		endpoint.unsubscribeConfirm = sessionToRegister.onConfirm((permission, respond) => {
+			let timeout: ReturnType<typeof setTimeout>;
 			const responder: (allow: boolean) => void = (allow) => {
+				if (endpoint.permissionResponders.get(permission.id) !== responder) return;
+				clearTimeout(timeout);
 				endpoint.permissionResponders.delete(permission.id);
 				endpoint.permissionRequests.delete(permission.id);
 				const settled = `data: ${JSON.stringify({ type: "permission_resolved", permissionId: permission.id, allow })}\n\n`;
@@ -283,9 +286,8 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			for (const client of Array.from(endpoint.sseClients)) {
 				writeSse(client, `data: ${serialized}\n\n`, endpoint.sseClients);
 			}
-			setTimeout(() => {
-				if (endpoint.permissionResponders.has(permission.id)) responder(false);
-			}, PERMISSION_TIMEOUT_MS).unref();
+			timeout = setTimeout(() => responder(false), PERMISSION_TIMEOUT_MS);
+			timeout.unref();
 		});
 
 		endpoint.unsubscribeEvents = sessionToRegister.onEvent((event) => {
@@ -882,7 +884,6 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					json(res, 404, { error: "permission request not found or already answered" });
 					return;
 				}
-				entry.permissionResponders.delete(permissionId);
 				responder(allow);
 				json(res, 200, { ok: true });
 				return;
@@ -944,6 +945,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				entry.unsubscribeConfirm();
 				entry.unsubscribeEvents();
 				entry.unsubscribeGoalPlan();
+				for (const respond of [...entry.permissionResponders.values()]) respond(false);
 			}
 			for (const entry of allSessions.values()) {
 				for (const client of entry.sseClients) client.end();

@@ -6,7 +6,7 @@ function queueAssistantRender(node,text){pendingAssistantRender={node,text};if(!
 function flushAssistantRender(){if(renderFrame)cancelAnimationFrame(renderFrame);renderFrame=0;if(!pendingAssistantRender)return;const {node,text}=pendingAssistantRender;pendingAssistantRender=null;renderRichText(node.lastChild,text);scrollFeed();}
 const conversationViews=new Map(),sessionNames=new Map();
 ${FOLLOWUP_SCRIPT}
-function updateSend(){ui.send.disabled=replaying||queueSubmitting||commandBusy||(streaming&&!canQueueFollowUps&&!/^\/kill(?:\s|$)/.test(ui.prompt.value.trim()))||!connected||attachmentReading.has(sessionId)||(!ui.prompt.value.trim()&&!chatAttachments().length);ui.prompt.setAttribute('aria-busy',String(streaming||replaying));ui.send.setAttribute('aria-label',streaming&&canQueueFollowUps?'Queue follow-up':'Send message');ui.send.title=streaming&&canQueueFollowUps?'Send at the next tool or response boundary':'Send message';}
+function updateSend(){ui.send.disabled=replaying||queueSubmissions.has(sessionId)||commandBusy||(streaming&&!canQueueFollowUps&&!/^\/kill(?:\s|$)/.test(ui.prompt.value.trim()))||!connected||attachmentReading.has(sessionId)||(!ui.prompt.value.trim()&&!chatAttachments().length);ui.prompt.setAttribute('aria-busy',String(streaming||replaying));ui.send.setAttribute('aria-label',streaming&&canQueueFollowUps?'Queue follow-up':'Send message');ui.send.title=streaming&&canQueueFollowUps?'Send at the next tool or response boundary':'Send message';}
 function resizeComposer(){ui.prompt.style.height='auto';ui.prompt.style.height=Math.min(ui.prompt.scrollHeight,Math.max(60,(window.visualViewport?window.visualViewport.height:innerHeight)*.25))+'px';updateSend();}
 function nearBottom(){return ui.feed.scrollHeight-ui.feed.scrollTop-ui.feed.clientHeight<100;}
 function scrollFeed(force=false){if(!replaying&&(force||followOutput))ui.feed.scrollTop=ui.feed.scrollHeight;}
@@ -90,7 +90,7 @@ ui.authForm.addEventListener('submit',async event=>{event.preventDefault();token
 ui.newSession.addEventListener('click',async()=>{setError('');try{await createSession()}catch(error){setError(error.message)}});
 ui.form.addEventListener('submit',async event=>{
   event.preventDefault();const text=ui.prompt.value.trim();if((!text&&!chatAttachments().length)||!sessionId||(streaming&&!canQueueFollowUps&&!/^\/kill(?:\s|$)/.test(text))||!connected||attachmentReading.has(sessionId))return;
-  if(queueSubmitting)return;
+  if(queueSubmissions.has(sessionId))return;
   if(text.startsWith('/')&&await submitSlashCommand(text))return;
   if(streaming&&canQueueFollowUps){await submitFollowUp(text);return;}
   const id=sessionId,submittedConnection=connectionEpoch,attachments=chatAttachments();attachmentDrafts.delete(id);renderAttachments();setError('');ui.prompt.value='';resizeComposer();setBusy(true);const submittedBusyRevision=busyRevision;

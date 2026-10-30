@@ -90,6 +90,7 @@ class FakeElement {
 		this.children.splice(0);
 	}
 	hidden = false;
+	disabled = false;
 	tabIndex = -1;
 	width = 0;
 	height = 0;
@@ -98,8 +99,10 @@ class FakeElement {
 	role = "";
 	value = "";
 	clientHeight = 640;
-	querySelectorAll(): FakeElement[] {
-		return [];
+	querySelectorAll(selector?: string): FakeElement[] {
+		return selector === ".permission"
+			? this.children.flatMap(descendants).filter((node) => node.className === "permission")
+			: [];
 	}
 	querySelector(selector: string): FakeElement | null {
 		return (
@@ -371,6 +374,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		setTimeout: () => 0,
 		document,
 		window: {
+			confirm: () => true,
 			katex: {
 				render(source: string, node: FakeElement, options: { displayMode: boolean; trust: boolean }) {
 					if (source.includes("notacommand")) throw new Error("Unsupported math");
@@ -418,6 +422,28 @@ function loadRenderer(mockFetch?: typeof fetch): {
 }
 
 describe("project pages", () => {
+	it("keeps the current project open when another project's deletion finishes", async () => {
+		let finish!: (response: Response) => void;
+		const h = loadRenderer(async (path, options) => {
+			if (options?.method === "DELETE")
+				return new Promise<Response>((resolve) => {
+					finish = resolve;
+				});
+			return Response.json({
+				title: String(path).endsWith("/b") ? "Project B" : "Project A",
+				files: [],
+				projects: [],
+				sessions: [],
+			});
+		});
+		await h.project("a");
+		const deleting = h.elements.get("project-delete")!.handlers.get("click")!();
+		await h.project("b");
+		finish(Response.json({ ok: true }));
+		await deleting;
+		expect(h.elements.get("project-page")!.hidden).toBe(false);
+		expect(h.elements.get("project-title")!.textContent).toBe("Project B");
+	});
 	it("creates only one chat when the project action is clicked repeatedly", async () => {
 		const pending: Array<(response: Response) => void> = [];
 		const h = loadRenderer(async (path, options) => {
@@ -496,6 +522,76 @@ describe("project pages", () => {
 });
 
 describe("workbench transport regressions", () => {
+	it("does not settle another chat's approval when an older approval response arrives", async () => {
+		let finish!: (response: Response) => void;
+		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+		const h = loadRenderer(async (path) => {
+			if (String(path).endsWith("/events"))
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streams.push(controller);
+						},
+					}),
+				);
+			if (String(path).includes("/permissions/"))
+				return new Promise<Response>((resolve) => {
+					finish = resolve;
+				});
+			return Response.json({ supported: false });
+		});
+		const first = h.connect("a");
+		await setImmediate();
+		h.event({ type: "permission_request", permissionId: "shared", title: "A approval" });
+		const submitting = descendants(h.feed)
+			.find((node) => node.className === "allow")!
+			.handlers.get("click")!();
+		const second = h.connect("b");
+		await setImmediate();
+		h.event({ type: "permission_request", permissionId: "shared", title: "B approval" });
+		finish(Response.json({}));
+		await submitting;
+		const resolved = h.feed.children.find((node) => node.className === "permission")!.dataset.resolved;
+		for (const stream of streams) stream.close();
+		await Promise.all([first, second]);
+		expect(resolved).not.toBe("true");
+	});
+	it("lets another chat send while the first chat's queue request is pending", async () => {
+		let finish!: (response: Response) => void;
+		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+		const h = loadRenderer(async (path) => {
+			if (String(path).endsWith("/events"))
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streams.push(controller);
+						},
+					}),
+				);
+			if (String(path).endsWith("/follow-up"))
+				return new Promise<Response>((resolve) => {
+					finish = resolve;
+				});
+			return Response.json({ supported: false });
+		});
+		const first = h.connect("a");
+		await setImmediate();
+		h.event({ type: "server_connected", streaming: true, canQueueFollowUps: true });
+		h.elements.get("prompt")!.value = "Queued in A";
+		const submitting = (
+			h.elements.get("prompt-form")!.handlers.get("submit")! as (event: { preventDefault(): void }) => Promise<void>
+		)({ preventDefault() {} });
+		const second = h.connect("b");
+		await setImmediate();
+		h.elements.get("prompt")!.value = "New prompt in B";
+		h.event({ type: "server_connected", streaming: false });
+		const disabled = h.elements.get("send")!.disabled;
+		finish(Response.json({}));
+		await submitting;
+		for (const stream of streams) stream.close();
+		await Promise.all([first, second]);
+		expect(disabled).toBe(false);
+	});
 	it("keeps the latest session pins when an older sidebar refresh finishes late", async () => {
 		let finish!: (response: Response) => void;
 		let calls = 0;

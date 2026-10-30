@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
 import {
+	closeSync,
+	constants,
+	fstatSync,
 	lstatSync,
 	mkdirSync,
+	openSync,
 	readdirSync,
 	readFileSync,
+	readSync,
 	realpathSync,
 	renameSync,
 	rmSync,
@@ -183,6 +188,8 @@ export class WorkbenchProjectStore {
 		const project = slug(name);
 		const directory = join(this.root, project);
 		mkdirSync(this.root, { recursive: true });
+		if (lstatSync(this.root).isSymbolicLink() || realpathSync(this.root) !== this.root)
+			throw new WorkbenchError(403, "Refusing an aliased Project workspace");
 		try {
 			mkdirSync(directory);
 		} catch (error) {
@@ -219,14 +226,29 @@ export class WorkbenchProjectStore {
 			throw new WorkbenchError(403, "Only regular project files can be opened");
 		const extension = extname(target).toLowerCase();
 		if (TEXT_EXTENSIONS.has(extension)) {
-			const content = readFileSync(target, "utf8");
+			const descriptor = openSync(target, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+			let content: string;
+			try {
+				if (!fstatSync(descriptor).isFile())
+					throw new WorkbenchError(403, "Only regular project files can be opened");
+				const buffer = Buffer.alloc(Math.min(stat.size, MAX_TEXT_BYTES));
+				let length = 0;
+				while (length < buffer.length) {
+					const count = readSync(descriptor, buffer, length, buffer.length - length, length);
+					if (!count) break;
+					length += count;
+				}
+				content = new TextDecoder().decode(buffer.subarray(0, length), { stream: stat.size > MAX_TEXT_BYTES });
+			} finally {
+				closeSync(descriptor);
+			}
 			return {
 				path: relative(directory, target),
 				bytes: stat.size,
 				kind: "text",
 				updatedAt: stat.mtime.toISOString(),
-				content: content.slice(0, MAX_TEXT_BYTES),
-				truncated: content.length > MAX_TEXT_BYTES,
+				content,
+				truncated: stat.size > MAX_TEXT_BYTES,
 			};
 		}
 		if (BINARY_EXTENSIONS.has(extension))
