@@ -16,6 +16,16 @@ function fixture() {
 const pdf = Buffer.from("%PDF-1.7\nsynthetic test document\n");
 
 describe("workbench project workspaces", () => {
+	it("keeps office documents available as downloadable project resources", () => {
+		const { store } = fixture();
+		store.create("paper");
+		for (const filename of ["notes.docx", "results.xlsx", "slides.pptx"]) {
+			const file = store.upload("paper", filename, Buffer.from("synthetic document"));
+			expect(store.read("paper", file.path).kind).toBe("binary");
+		}
+		expect(store.files("paper")).toHaveLength(5);
+	});
+
 	it("refuses to create a project through a symlinked Project root", () => {
 		const { cwd, store } = fixture(),
 			outside = mkdtempSync(join(tmpdir(), "outside-project-root-"));

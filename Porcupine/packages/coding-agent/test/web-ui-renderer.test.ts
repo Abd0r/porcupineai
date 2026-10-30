@@ -264,6 +264,24 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"projects-count",
 		"project-list",
 		"project-new",
+
+		"project-note-edit",
+		"project-note-reading",
+		"project-note-fields",
+		"project-notes",
+		"project-notes-list",
+		"project-notes-count",
+		"project-note-add",
+		"project-notes-status",
+		"project-note-dialog",
+		"project-note-heading",
+		"project-note-title",
+		"project-note-text",
+		"project-note-color",
+		"project-note-save",
+		"project-note-delete",
+		"project-note-status",
+		"project-note-upload",
 		"project-page",
 		"project-back",
 		"project-pin",
@@ -422,6 +440,143 @@ function loadRenderer(mockFetch?: typeof fetch): {
 }
 
 describe("project pages", () => {
+	it("inserts safe Markdown links for uploaded filenames with parentheses", async () => {
+		const h = loadRenderer(async (_path, options) =>
+			options?.method === "POST"
+				? Response.json({ path: "uploads/paper (1).pdf" })
+				: Response.json({ title: "Lab", files: [], notes: [] }),
+		);
+		await h.project("lab");
+		h.elements.get("project-note-add")!.handlers.get("click")!();
+		Object.assign(h.elements.get("project-note-upload")!, { files: [{ name: "paper (1).pdf", size: 100 }] });
+		await h.elements.get("project-note-upload")!.handlers.get("change")!();
+		expect(h.elements.get("project-note-text")!.value).toContain("uploads/paper%20%281%29.pdf");
+	});
+
+	it("bounds crowded navigation and searches names beyond the first page", () => {
+		const h = loadRenderer();
+		const projects = Array.from({ length: 40 }, (_, i) => ({
+			name: `project-${i}`,
+			title: `Long project title ${i} with detailed research notes`,
+		}));
+		const chats = Array.from({ length: 100 }, (_, i) => ({
+			id: `chat-${i}`,
+			name: i === 99 ? "A unique long name to discover" : `Conversation ${i}`,
+		}));
+		h.projects(projects, chats);
+		expect(h.elements.get("project-list")!.children.length).toBeLessThanOrEqual(9);
+		const rows = () => descendants(h.elements.get("sessions")!).filter((n) => n.className.startsWith("session-row"));
+		expect(rows()).toHaveLength(20);
+		const search = h.elements.get("session-search")!;
+		search.value = "unique";
+		search.handlers.get("input")!();
+		expect(rows()).toHaveLength(1);
+		expect(rows()[0].textContent).toContain("unique long name");
+		const button = rows()[0].children[0];
+		expect((button as FakeElement & { title: string }).title).toBe("A unique long name to discover");
+		search.value = "research notes";
+		search.handlers.get("input")!();
+		expect(h.elements.get("project-list")!.children.length).toBeLessThanOrEqual(9);
+	});
+	it("loads additional conversations only when requested", () => {
+		const h = loadRenderer();
+		h.projects(
+			[],
+			Array.from({ length: 45 }, (_, i) => ({ id: `chat-${i}`, name: `Conversation ${i}` })),
+		);
+		const more = descendants(h.elements.get("sessions")!).find(
+			(n) => n.tagName === "button" && n.textContent.startsWith("Show more"),
+		)!;
+		expect(more).toBeDefined();
+		more.handlers.get("click")!();
+		expect(
+			descendants(h.elements.get("sessions")!).filter((n) => n.className.startsWith("session-row")),
+		).toHaveLength(40);
+	});
+
+	it("renders rich sticky notes and resolves PDF links inside their project", async () => {
+		const requests: string[] = [];
+		const h = loadRenderer(async (path) => {
+			requests.push(String(path));
+			if (String(path).includes("?raw=1"))
+				return new Response("%PDF-1.7", {
+					headers: { "x-porcupine-preview": "pdf", "x-porcupine-name": "paper.pdf" },
+				});
+			return Response.json({
+				title: "Lab",
+				files: [],
+				notes: [
+					{
+						id: "n",
+						title: "Remember",
+						text: "**Verify** [Paper](uploads/paper.pdf)",
+						color: "blue",
+						author: "agent",
+						revision: "r",
+					},
+				],
+			});
+		});
+		await h.project("lab");
+		const list = h.elements.get("project-notes-list")!;
+		expect(list.textContent).toContain("Remember");
+		expect(descendants(list).some((n) => n.tagName === "strong" && n.textContent === "Verify")).toBe(true);
+		const preview = descendants(list).find((n) => n.tagName === "button" && n.textContent === "Preview / download")!;
+		await preview.handlers.get("click")!();
+		expect(requests).toContain("/workbench/projects/lab/files/uploads/paper.pdf?raw=1");
+		expect(h.elements.get("artifact-content")!.children[0].tagName).toBe("iframe");
+	});
+	it("allows adding notes and preserves the editor draft after a conflict", async () => {
+		let conflict = false;
+		const h = loadRenderer(async (_path, options) => {
+			if (options?.method === "POST")
+				return conflict
+					? Response.json({ error: "This note changed" }, { status: 409 })
+					: Response.json({ id: "n", title: "New", text: "Draft", color: "amber", revision: "r" });
+			return Response.json({ title: "Lab", files: [], notes: [] });
+		});
+		await h.project("lab");
+		await h.elements.get("project-note-add")!.handlers.get("click")!();
+		h.elements.get("project-note-title")!.value = "New";
+		h.elements.get("project-note-text")!.value = "Draft";
+		conflict = true;
+		await h.elements.get("project-note-save")!.handlers.get("click")!();
+		expect(h.elements.get("project-note-dialog")!.open).toBe(true);
+		expect(h.elements.get("project-note-text")!.value).toBe("Draft");
+		expect(h.elements.get("project-note-status")!.textContent).toContain("changed");
+	});
+	it("disables adding when the project already contains twenty notes", async () => {
+		const h = loadRenderer(async () =>
+			Response.json({
+				title: "Lab",
+				files: [],
+				notes: Array.from({ length: 20 }, (_, i) => ({
+					id: String(i),
+					title: `Note ${i}`,
+					text: "",
+					color: "amber",
+				})),
+			}),
+		);
+		await h.project("lab");
+		expect(h.elements.get("project-note-add")!.disabled).toBe(true);
+	});
+	it("renders Markdown resource headings and safe literal HTML", async () => {
+		const h = loadRenderer(async (path) =>
+			String(path).includes("?raw=1")
+				? new Response("# Preview heading\n\n**Bold** <script>alert(1)</script>", {
+						headers: { "x-porcupine-preview": "text", "x-porcupine-name": "guide.md" },
+					})
+				: Response.json({ title: "Lab", files: [{ path: "guide.md", bytes: 20 }] }),
+		);
+		await h.project("lab");
+		await h.elements.get("project-files")!.children[0].handlers.get("click")!();
+		await setImmediate();
+		const host = h.elements.get("artifact-content")!;
+		expect(descendants(host).some((n) => n.className.includes("md-heading"))).toBe(true);
+		expect(descendants(host).some((n) => n.tagName === "script")).toBe(false);
+	});
+
 	it("keeps the current project open when another project's deletion finishes", async () => {
 		let finish!: (response: Response) => void;
 		const h = loadRenderer(async (path, options) => {

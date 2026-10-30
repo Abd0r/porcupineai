@@ -83,9 +83,10 @@ ${ARTIFACT_STYLES}
 <aside id="sidebar" class="sidebar" aria-label="Conversations">
 <div class="brand"><span class="brand-name"><svg class="brand-symbol" viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 26V13a7 7 0 0 1 7-7h2a7 7 0 0 1 0 14h-4"/><path d="m5 13 4-4M5 21l4-4M13 6l3-3M21 6l3-3"/></svg>Porcupine</span><span class="edition">Workbench</span></div>
 <button class="new-session" id="new-session" type="button">＋ New conversation</button>
+<input id="session-search" class="nav-search" type="search" aria-label="Search chats and projects" placeholder="Search chats and projects…" autocomplete="off">
 ${STACKS_NAVIGATION}
 ${PROJECTS_NAVIGATION}
-<div class="session-section"><p class="caption">Conversations</p><input id="session-search" class="nav-search" type="search" aria-label="Search conversations" placeholder="Search conversations…" autocomplete="off"><nav class="sessions" id="sessions" aria-label="Recent sessions"></nav></div>
+<div class="session-section"><p class="caption">Conversations</p><nav class="sessions" id="sessions" aria-label="Recent sessions"></nav></div>
 <div class="side-foot">Local workspace</div>
 </aside>
 <main class="main">

@@ -31,6 +31,28 @@ describe("theme text contrast", () => {
 		for (const mode of ["dark", "light"]) {
 			it(`${theme} ${mode} keeps small text legible on common surfaces`, () => {
 				const palette = paletteFor(theme, mode);
+				for (const tint of theme === "static" ? [palette.muted] : ["#c29532", "#609bd0", "#79a37a", "#c67b94"]) {
+					for (const weight of [0.18, 0.28]) {
+						const paper = `#${[0, 1, 2]
+							.map((i) =>
+								Math.round(
+									Number.parseInt(tint.slice(1 + i * 2, 3 + i * 2), 16) * weight +
+										Number.parseInt(palette.elevated.slice(1 + i * 2, 3 + i * 2), 16) * (1 - weight),
+								)
+									.toString(16)
+									.padStart(2, "0"),
+							)
+							.join("")}`;
+						for (const foreground of ["text", "muted", "quiet", "accent"]) {
+							const a = luminance(palette[foreground === "quiet" ? "muted" : foreground]),
+								b = luminance(paper);
+							expect(
+								(Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+								`${foreground} on sticky ${tint} ${weight}`,
+							).toBeGreaterThanOrEqual(4.5);
+						}
+					}
+				}
 				for (const foreground of [
 					"text",
 					"muted",

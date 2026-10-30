@@ -4,6 +4,8 @@
 
 ### Added
 
+- Shared project sticky notes (up to 20) with paper styling, rich Markdown, image/file attachments, read/edit/delete controls and agent note actions with conflict-safe persistence.
+
 - Dedicated project pages with short README descriptions, project chats, multiple resource uploads, shared file previews and persistent project pinning.
 - Persistent conversation pinning with a compact Pinned sidebar section and pin/unpin actions.
 - Safe mathematical chart expressions and parameterized expression simulations and a bounded numerical 1D Schrödinger model, dense charts with paginated data and CSV export, larger quizzes/decks, molecular bonds and chemistry/physics math notation.
@@ -12,6 +14,12 @@
 - Agent-shared workspace file cards from Markdown links, with inline raster images, PDF/text viewers, authenticated downloads and direct opening from the GUI.
 
 ### Changed
+
+- Add a compact GUI-only agent guide with exact Adaptive GUI/Learning skill-loading calls, presentation tools, project-note actions and response handling; remove stale simulation restrictions.
+
+- Keep long chat/project names on one line with full-name tooltips; add unified sidebar search, bounded lists with Show more, compact project counts and remembered folder expansion.
+
+- Render project Markdown resources with formatted headings, tables, code and math; resolve resource links inside their project.
 
 - Default new GUI preferences to Pixel with system colour mode; retain saved appearance, panel placement and Tasks visibility choices.
 - Distinct GUI activity animations for coding, skills, search and collaboration, with a blue neutron-star reasoning indicator. Subagent messages and expandable reports appear in chat without execution accounting headers.

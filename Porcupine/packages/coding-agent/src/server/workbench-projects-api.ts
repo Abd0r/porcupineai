@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readWorkbenchArtifact } from "./workbench-artifacts.ts";
 import { WorkbenchError } from "./workbench-context-files.ts";
+import { ProjectNoteStore } from "./workbench-project-notes.ts";
 import { PROJECT_UPLOAD_LIMIT, type WorkbenchProjectStore } from "./workbench-projects.ts";
 
 export function readRawBody(req: IncomingMessage, limit = PROJECT_UPLOAD_LIMIT): Promise<Buffer> {
@@ -70,7 +71,7 @@ export async function handleProjectRequest(
 		router.json(res, 405, { error: "Method not allowed" });
 		return true;
 	}
-	const match = /^\/workbench\/projects\/([^/]+)(\/pin|\/files(?:\/(.+))?)?$/.exec(path);
+	const match = /^\/workbench\/projects\/([^/]+)(\/notes(?:\/([a-f0-9-]+))?|\/pin|\/files(?:\/(.+))?)?$/.exec(path);
 	if (!match) {
 		router.json(res, 404, { error: "Unknown project route" });
 		return true;
@@ -80,6 +81,49 @@ export async function handleProjectRequest(
 		name = decodeURIComponent(match[1]!);
 	} catch {
 		throw new WorkbenchError(400, "Malformed project name");
+	}
+
+	if (match[2]?.startsWith("/notes")) {
+		const store = new ProjectNoteStore(router.projects.path(name)),
+			id = match[3];
+		if (method === "GET" && !id) {
+			router.json(res, 200, { notes: store.list() });
+			return true;
+		}
+		if ((method === "POST" && !id) || (method === "PUT" && id) || (method === "DELETE" && id)) {
+			let input: unknown;
+			try {
+				input = JSON.parse(await router.readBody(req));
+			} catch {
+				throw new WorkbenchError(400, "Expected a note object");
+			}
+			if (!input || typeof input !== "object" || Array.isArray(input))
+				throw new WorkbenchError(400, "Expected a note object");
+			const values = input as Record<string, unknown>;
+			const allowed =
+				method === "DELETE"
+					? ["revision"]
+					: method === "POST"
+						? ["title", "text", "color"]
+						: ["title", "text", "color", "revision"];
+			if (Object.keys(values).some((key) => !allowed.includes(key)))
+				throw new WorkbenchError(400, "Unknown note property");
+			router.json(
+				res,
+				method === "POST" ? 201 : 200,
+				store.mutate(
+					method === "POST" ? "add" : method === "PUT" ? "update" : "delete",
+					input,
+					"user",
+					id,
+					typeof values.revision === "string" ? values.revision : undefined,
+				),
+			);
+			return true;
+		}
+		res.setHeader("allow", id ? "PUT, DELETE" : "GET, POST");
+		router.json(res, 405, { error: "Method not allowed" });
+		return true;
 	}
 	if (match[2] === undefined) {
 		if (method === "DELETE") {
@@ -94,7 +138,12 @@ export async function handleProjectRequest(
 			return true;
 		}
 		const files = router.projects.files(name);
-		router.json(res, 200, { ...router.projects.list().find((project) => project.name === name), name, files });
+		router.json(res, 200, {
+			...router.projects.list().find((project) => project.name === name),
+			name,
+			files,
+			notes: new ProjectNoteStore(router.projects.path(name)).list(),
+		});
 		return true;
 	}
 	if (match[2] === "/pin") {
@@ -123,7 +172,7 @@ export async function handleProjectRequest(
 		return true;
 	}
 
-	if (match[3] === undefined) {
+	if (match[4] === undefined) {
 		if (method === "GET") {
 			router.json(res, 200, { name, files: router.projects.files(name) });
 			return true;
@@ -138,7 +187,7 @@ export async function handleProjectRequest(
 		router.json(res, 405, { error: "Method not allowed" });
 		return true;
 	}
-	if (match[3] === "" || match[3] === "." || match[3] === "..") {
+	if (match[4] === "" || match[4] === "." || match[4] === "..") {
 		router.json(res, 404, { error: "Unknown project file" });
 		return true;
 	}
@@ -149,7 +198,7 @@ export async function handleProjectRequest(
 	}
 	let filePath: string;
 	try {
-		filePath = match[3].split("/").map(decodeURIComponent).join("/");
+		filePath = match[4].split("/").map(decodeURIComponent).join("/");
 	} catch {
 		throw new WorkbenchError(400, "Malformed file path");
 	}

@@ -20,7 +20,22 @@ import { discoverProjects } from "../porcupine/project-search.ts";
 import { WorkbenchError } from "./workbench-context-files.ts";
 
 const TEXT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".csv", ".json", ".yaml", ".yml", ".toml", ".log"]);
-const BINARY_EXTENSIONS = new Set([".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".zip"]);
+const BINARY_EXTENSIONS = new Set([
+	".pdf",
+	".png",
+	".jpg",
+	".jpeg",
+	".webp",
+	".gif",
+	".zip",
+	".docx",
+	".xlsx",
+	".pptx",
+	".odt",
+	".ods",
+	".odp",
+	".rtf",
+]);
 const MAX_TEXT_BYTES = 256 * 1024;
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 const MAX_FILES = 400;

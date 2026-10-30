@@ -24,7 +24,7 @@ function resetSessionView(id){
   lastContext=null;ringUi.ring.hidden=true;ringUi.fill.style.strokeDashoffset=String(RING_CIRCUMFERENCE);ringUi.tip.textContent='Context usage unavailable';
   limitsUi.status.textContent='';hideCommandMenu();modelUi.dialog.close();modelEpoch++;stackInspection++;surfaceUi.dialog.close();sessionId=id;const cached=conversationViews.get(id);ui.feed.replaceChildren(...(cached?cached.nodes:[]));ui.prompt.value=cached?cached.draft:'';
   ui.welcome.hidden=ui.feed.children.length>0;ui.feed.scrollTop=cached?cached.scroll:0;followOutput=cached?cached.follow:true;$('jump-latest').hidden=followOutput;renderAttachments();resizeComposer();
-  for(const button of document.querySelectorAll('.session')){button.classList.toggle('active',button.title===id);button.setAttribute('aria-current',button.title===id?'page':'false');}
+  for(const button of document.querySelectorAll('.session')){button.classList.toggle('active',button.dataset.sessionId===id);button.setAttribute('aria-current',button.dataset.sessionId===id?'page':'false');}
   ui.title.textContent=sessionNames.get(id)||'Conversation '+id.slice(-8);
   setBusy(false);setError('');
 }
@@ -78,7 +78,8 @@ function showToolStart(event){
 }
 function showToolUpdate(event){const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;setToolOutput(run,toolResultText(event.partialResult),true);scrollFeed();}
 function showToolEnd(event){if(collaborationTool(event,'end'))return;if(liveThinking&&!replaying)setThinkingLabel('Working');const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;run.row.dataset.state=event.isError?'failed':'done';run.state.textContent=event.isError?'Failed':'Done';const svg=document.createElementNS(MATH_NS,'svg'),path=document.createElementNS(MATH_NS,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');path.setAttribute('d',event.isError?'m7 7 10 10M17 7 7 17':'m5 12 4 4L19 6');svg.append(path);run.icon.replaceChildren(svg);setToolOutput(run,toolResultText(event.result));toolRuns.delete(event.toolCallId||event.toolName);}
-function filterSessions(){const query=$('session-search').value.trim().toLowerCase();for(const button of document.querySelectorAll('.session'))button.parentNode.hidden=Boolean(query&&!button.textContent.toLowerCase().includes(query));for(const group of ui.sessions.querySelectorAll('.pinned-sessions'))group.hidden=![...group.querySelectorAll('.session-row')].some(row=>!row.hidden);}
+function filterSessions(){navigationLimits.clear();renderProjectNavigation();}
+
 async function refreshSessions(selectFirst=false){
   const epoch=++sessionListEpoch,data=await json('/session');if(epoch!==sessionListEpoch)return;sessionCatalog=data.sessions||[];
   for(const item of sessionCatalog)if(item.name)sessionNames.set(item.id,item.name.startsWith("[Adaptive UI response]")?"Interactive session":item.name);

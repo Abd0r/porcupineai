@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { classifyPlanTurnTool, isPlanFenceSafeBash } from "../src/porcupine/plan-fence.ts";
 
 describe("plan-turn fence (T1.5)", () => {
+	it("permits reading notes but refuses all project mutations", () => {
+		expect(classifyPlanTurnTool("projects", { action: "notes" }).allow).toBe(true);
+		for (const action of ["add_note", "update_note", "delete_note", "unknown"])
+			expect(classifyPlanTurnTool("projects", { action }).allow).toBe(false);
+	});
 	it("allows read-only tools", () => {
 		for (const tool of ["read", "grep", "web_search", "capability_search", "session_search"]) {
 			expect(classifyPlanTurnTool(tool).allow).toBe(true);

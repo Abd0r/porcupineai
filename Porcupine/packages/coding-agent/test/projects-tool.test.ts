@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { createAllToolDefinitions, createReadOnlyToolDefinitions } from "../src/core/tools/index.ts";
 import { createProjectsToolDefinition, type ProjectsToolInput } from "../src/core/tools/projects.ts";
 
 const roots: string[] = [];
@@ -34,6 +35,88 @@ async function run(tool: ReturnType<typeof createProjectsToolDefinition>, args: 
 }
 
 describe("projects tool", () => {
+	it("uses the configured cwd and mutation gate through the real tool registry", async () => {
+		const root = createWorkspace();
+		createProject(root, "lab", "# Lab");
+		const tool = createAllToolDefinitions(root, { write: { confirmMutation: async () => false } }).projects;
+		await expect(
+			tool.execute(
+				"t",
+				{ action: "add_note", query: "lab", title: "No", text: "" },
+				undefined,
+				undefined,
+				undefined as never,
+			),
+		).rejects.toThrow(/denied/);
+		const readonly = createReadOnlyToolDefinitions(root).find((item) => item.name === "projects")!;
+		await expect(
+			readonly.execute(
+				"t",
+				{ action: "add_note", query: "lab", title: "No", text: "" },
+				undefined,
+				undefined,
+				undefined as never,
+			),
+		).rejects.toThrow(/read-only/);
+	});
+
+	it("lets the agent read, add, edit and delete the same project notes", async () => {
+		const root = createWorkspace();
+		createProject(root, "lab", "# Lab");
+		const tool = makeTool(root);
+		const added = JSON.parse(
+			await run(tool, {
+				action: "add_note",
+				query: "lab",
+				title: "Check",
+				text: "[Paper](uploads/paper.pdf)",
+				color: "blue",
+			}),
+		);
+		expect(added.author).toBe("agent");
+		expect(await run(tool, { action: "notes", query: "lab" })).toContain(added.id);
+		const updated = JSON.parse(
+			await run(tool, {
+				action: "update_note",
+				query: "lab",
+				id: added.id,
+				revision: added.revision,
+				title: "Verified",
+				text: "**Done**",
+				color: "sage",
+			}),
+		);
+		expect(updated.text).toBe("**Done**");
+		await run(tool, { action: "delete_note", query: "lab", id: updated.id, revision: updated.revision });
+		expect(JSON.parse(await run(tool, { action: "notes", query: "lab" })).notes).toEqual([]);
+	});
+	it("keeps note content and color when the agent only edits the title", async () => {
+		const root = createWorkspace();
+		createProject(root, "lab", "# Lab");
+		const tool = makeTool(root);
+		const added = JSON.parse(
+			await run(tool, { action: "add_note", query: "lab", title: "First", text: "Keep this", color: "blue" }),
+		);
+		const updated = JSON.parse(
+			await run(tool, {
+				action: "update_note",
+				query: "lab",
+				id: added.id,
+				revision: added.revision,
+				title: "Second",
+			}),
+		);
+		expect(updated).toMatchObject({ title: "Second", text: "Keep this", color: "blue" });
+	});
+	it("honors the file mutation gate for agent note changes", async () => {
+		const root = createWorkspace();
+		createProject(root, "lab", "# Lab");
+		const tool = createProjectsToolDefinition({ cwd: root, confirmMutation: async () => false });
+		await expect(
+			run(tool, { action: "add_note", query: "lab", title: "Blocked", text: "No", color: "amber" }),
+		).rejects.toThrow(/denied/i);
+	});
+
 	it("lists workspaces with state and hygiene hints", async () => {
 		const root = createWorkspace();
 		createProject(
