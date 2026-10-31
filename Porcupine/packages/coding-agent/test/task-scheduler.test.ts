@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BUILTIN_SLASH_COMMANDS } from "../src/core/slash-commands.ts";
 import {
 	isTaskDrainEligible,
@@ -14,6 +14,7 @@ import {
 const roots: string[] = [];
 
 afterEach(() => {
+	vi.restoreAllMocks();
 	for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
 });
 
@@ -63,7 +64,10 @@ describe("PorcupineTaskStore", () => {
 		const task = store.createTask({ title: "Review", prompt: "Review changes." });
 		store.queueTaskRun(task.id);
 
-		// Simulate a fresh process opening the store while the claim is unexecuted.
+		// Simulate the owning process having exited.
+		vi.spyOn(process, "kill").mockImplementation(() => {
+			throw Object.assign(new Error("Exited"), { code: "ESRCH" });
+		});
 		const restored = new PorcupineTaskStore(store.agentDir);
 		const runs = restored.listRuns(task.id);
 		expect(runs).toHaveLength(1);
@@ -192,11 +196,65 @@ describe("PorcupineTaskStore", () => {
 		const claimed = store.claimDueSchedules(new Date(schedule.nextRunAt));
 		const runId = claimed[0]!.claimedRunId!;
 
+		vi.spyOn(process, "kill").mockImplementation(() => {
+			throw Object.assign(new Error("Exited"), { code: "ESRCH" });
+		});
 		const restored = new PorcupineTaskStore(store.agentDir);
 		expect(restored.listRuns(task.id)).toContainEqual(expect.objectContaining({ id: runId, status: "unknown" }));
 		expect(
 			restored.listSchedules().find((candidate: { id: string }) => candidate.id === schedule.id),
 		).not.toHaveProperty("claimedRunId");
+	});
+
+	it("preserves live TUI/GUI claims and permits only one adoption across store instances", () => {
+		const store = createStore();
+		const task = store.createTask({ title: "Shared", prompt: "Check shared state" });
+		const queued = store.queueTaskRun(task.id);
+		const gui = new PorcupineTaskStore(store.agentDir);
+		expect(gui.listRuns()[0]).toMatchObject({ id: queued.id, status: "claimed", ownerPid: process.pid });
+		gui.startRun(task.id, { type: "manual", claimRunId: queued.id });
+		const tui = new PorcupineTaskStore(store.agentDir);
+		expect(tui.listRuns()[0]?.status).toBe("running");
+		expect(() => tui.startRun(task.id, { type: "manual", claimRunId: queued.id })).toThrow();
+		gui.completeRun(queued.id, "Verified shared state");
+		expect(tui.listRuns()[0]?.status).toBe("completed");
+	});
+
+	it("does not start another occurrence of a task while it is already running", () => {
+		const store = createStore();
+		const task = store.createTask({ title: "Shared", prompt: "Check shared state" });
+		const schedule = store.createSchedule({ taskId: task.id, expression: "* * * * *" });
+		store.startRun(task.id, { type: "manual" });
+		expect(store.claimDueSchedules(new Date(schedule.nextRunAt))).toEqual([]);
+		expect(() => store.startRun(task.id, { type: "manual" })).toThrow(/running/);
+	});
+
+	it("preserves live Cron claims across clients and marks dead running owners unknown", () => {
+		const store = createStore();
+		const task = store.createTask({ title: "Cron", prompt: "Verify state" });
+		const schedule = store.createSchedule({ taskId: task.id, expression: "* * * * *" });
+		const [claim] = store.claimDueSchedules(new Date(schedule.nextRunAt));
+		const gui = new PorcupineTaskStore(store.agentDir);
+		expect(gui.listRuns()[0]?.status).toBe("claimed");
+		expect(gui.claimDueSchedules(new Date(schedule.nextRunAt))).toEqual([]);
+		gui.startRun(task.id, { type: "cron", scheduleId: schedule.id, claimRunId: claim!.claimedRunId });
+		vi.spyOn(process, "kill").mockImplementation(() => {
+			throw Object.assign(new Error("Exited"), { code: "ESRCH" });
+		});
+		const restored = new PorcupineTaskStore(store.agentDir);
+		expect(restored.listRuns()[0]?.status).toBe("unknown");
+		expect(restored.getTask(task.id)?.status).toBe("ready");
+		expect(restored.listSchedules()[0]?.claimedRunId).toBeUndefined();
+	});
+
+	it("does not treat a denied process-liveness check as proof of exit", () => {
+		const store = createStore();
+		const task = store.createTask({ title: "Protected owner", prompt: "Verify state" });
+		store.startRun(task.id, { type: "manual" });
+		vi.spyOn(process, "kill").mockImplementation(() => {
+			throw Object.assign(new Error("Denied"), { code: "EPERM" });
+		});
+		expect(new PorcupineTaskStore(store.agentDir).listRuns()[0]?.status).toBe("running");
 	});
 
 	it("returns recurring tasks to ready after a completed claimed run", () => {

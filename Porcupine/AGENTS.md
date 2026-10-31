@@ -125,6 +125,15 @@ runtime, TUI, `AGENTS.md`, `PROMPT.md`, skills, and user documentation.
 - When the user asks a question, answer it first before making edits or running implementation commands.
 - When responding to user feedback or an analysis, explicitly say whether you agree or disagree before saying what you changed.
 
+## TUI and GUI parity
+
+- Every TUI capability requires an equivalent GUI action. Follow `packages/coding-agent/docs/gui-parity.md` and maintain `packages/coding-agent/src/core/surface-contract.ts` for commands and non-command runtime features.
+- Use the shared runtime and stores; do not duplicate session, policy, task or capability state in browser code. Surface-specific presentation is allowed; silently reduced behavior is not parity.
+- New/changed TUI commands must update the contract. `npm run check` audits catalog and TUI dispatch coverage and documentation drift. Regenerate the matrix with `node scripts/check-surface-contract.mjs --write`.
+- Keep partial/missing requirements explicit until implemented and behaviorally verified. A passing coverage audit or an enabled menu item is not proof of feature parity. Never turn an unavailable GUI operation into a successful explanatory command result.
+- `npm run check:surface-parity` is the strict completeness gate and must pass before claiming all TUI features are implemented in the GUI. It is expected to fail while the recorded backlog remains; normal `npm run check` enforces coverage and drift without concealing those gaps.
+- Verify actual GUI interactions and relevant TUI paths, including saved handoff in both directions, failures, cancellation, approvals, isolation and applicable themes/layouts. Record the tests performed and unresolved gaps; do not claim full parity while the contract reports gaps.
+
 ## Code Quality
 
 - Read files in full before wide-ranging changes, before editing files you have not fully inspected, and when asked to investigate or audit. Do not rely on search snippets for broad changes.

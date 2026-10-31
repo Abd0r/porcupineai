@@ -3,6 +3,7 @@ const arrayKeys = new Set([
 	"series",
 	"points",
 	"position",
+	"domain",
 	"from",
 	"to",
 	"size",
@@ -33,7 +34,7 @@ export function prepareVisualArguments(input: unknown, depth = 0): unknown {
 	return Object.fromEntries(
 		Object.entries(input).map(([key, original]) => {
 			let value: unknown = original;
-			if (arrayKeys.has(key) && typeof value === "string" && value.length <= 128000) {
+			if (arrayKeys.has(key) && typeof value === "string" && value.length <= 8 * 1024 * 1024) {
 				try {
 					const decoded: unknown = JSON.parse(value);
 					if (Array.isArray(decoded)) value = decoded;

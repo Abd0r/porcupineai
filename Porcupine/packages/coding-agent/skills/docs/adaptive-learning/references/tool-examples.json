@@ -1,0 +1,5 @@
+[
+  {"tool":"visualize","input":{"kind":"question","componentId":"derivative-written","title":"Explain your reasoning","question":"For \\(x(t)=t^2\\), derive velocity and state its units when x is in metres and t is in seconds.","options":[]}},
+  {"tool":"visualize","input":{"kind":"quiz","componentId":"derivative-quiz","title":"Derivative check","questions":[{"question":"What is \\(\\frac{d}{dx}x^2\\)?","options":["\\(2x\\)","\\(x\\)","\\(x^3\\)"],"correctAnswers":[0],"hint":"Apply the power rule.","explanation":"The power rule gives \\(\\frac{d}{dx}x^n=nx^{n-1}\\), so the derivative is \\(2x\\)."}]}},
+  {"tool":"visualize","input":{"kind":"flashcards","componentId":"motion-review","title":"Motion review","cards":[{"front":"What does velocity measure?","back":"The rate of change of position: \\(v=\\frac{dx}{dt}\\)."},{"front":"What does acceleration measure?","back":"The rate of change of velocity: \\(a=\\frac{dv}{dt}\\)."}]}}
+]

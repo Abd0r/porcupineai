@@ -11,6 +11,7 @@
 			"@porcupineai/ai/*": ["./packages/ai/src/*.ts", "./packages/ai/src/providers/*.ts"],
 			"@porcupineai/ai/dist/*": ["./packages/ai/src/*"],
 			"@porcupineai/agent-core": ["./packages/agent/src/index.ts"],
+			"@porcupineai/agent-core/node": ["./packages/agent/src/node.ts"],
 			"@porcupineai/agent-core/*": ["./packages/agent/src/*"],
 			"@porcupineai/storage-sqlite-node": ["./packages/storage/sqlite-node/src/index.ts"],
 			"@porcupineai/coding-agent": ["./packages/coding-agent/src/index.ts"],

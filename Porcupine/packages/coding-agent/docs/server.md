@@ -178,3 +178,25 @@ Reminders persist as session custom entries, so they survive `/resume`.
 The authenticated workbench also exposes `GET /session/:id/commands` for the live command catalog, and `POST /session/:id/command` with `{ "text": "/usage" }` for execution. Results appear over SSE as `command_result` and replay from the session log. Terminal-only commands return an explicit explanation.
 
 `PUT /session/:id/project` with `{ "name": "project-name" }` associates a conversation with an existing canonical workspace; use `null` to ungroup. `DELETE /session/:id` removes an idle session from discovery and moves its JSONL to local trash. `DELETE /workbench/projects/:name` moves project files to local trash and leaves conversations available. These optional capabilities are advertised by `/workbench`. IDs are resolved against discovered or live sessions, never arbitrary client paths.
+
+
+## Project resources and sticky notes
+
+The sidebar uses one search for chats and projects, single-line names with full-name tooltips, and small initial lists with Show more. Project folders remember whether you expanded them. The project page lists chats and resources beside a compact sticky-note area. Resource clicks open a preview dialog: formatted Markdown (including tables, code and math), raster images and PDFs render locally; other supported files can be downloaded. Markdown resource links resolve relative to that document inside the project. Browser PDF support varies; Open in new tab and Download remain available.
+
+Each project supports up to **20 persistent sticky notes**. Use **＋** beside Sticky notes to add one, or **Open / edit** on a note to read it in full, then Edit note, Save note or Delete note. Choose amber, blue, sage or rose paper. Attach file uploads a resource and inserts an image or file link; deleting the note keeps its attached resources. Note titles allow 120 characters and bodies 8000. Notes support the same safe Markdown renderer as chat; HTML and scripts remain literal text. Notes refresh while the project is visible, without replacing an open editor. Conflicting edits keep the draft and require reopening the latest note.
+
+The agent uses the existing `projects` tool with `query` set to the project directory name:
+
+| Action | Fields |
+| --- | --- |
+| `notes` | `query` — returns notes with IDs and revisions |
+| `add_note` | `query`, `title`, `text`, optional `color` |
+| `update_note` | `query`, `id`, `revision`, changed `title`, `text` or `color` |
+| `delete_note` | `query`, `id`, `revision` |
+
+For images, use `![Caption](uploads/plot.png)`; for PDFs, `[Paper](uploads/paper.pdf)`. The file must already exist inside the project. External HTTP(S) links open separately. Normal file-mutation approval policy applies to agent changes; inspection-only plan turns and read-only tool sets cannot mutate notes.
+
+Authenticated HTTP clients use `GET/POST /workbench/projects/:name/notes` and `PUT/DELETE /workbench/projects/:name/notes/:id`. POST bodies contain `title`, `text` and `color`; PUT includes these plus `revision`, and DELETE needs `revision`. The shared store uses an atomic file replacement and a mutation lock; stale revisions and the 21st note return `409`. Notes stay in the project directory and move with it to project trash.
+
+The active-surface system context includes a compact GUI operating guide only while a browser client is attached. It directs the agent to load `adaptive-gui` through `capability_search` before substantive GUI presentation, and `adaptive-learning` for lessons or practice; already-loaded instructions are reused. It names the visual tools and project-note actions without repeating their complete schemas. TUI-only and detached contexts retain their own guidance.

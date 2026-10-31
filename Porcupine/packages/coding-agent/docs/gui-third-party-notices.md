@@ -16,6 +16,10 @@ Paths below are relative to that upstream repository.
 
 The `visualize` and `visualize_3d` contracts, independent input validation, Canvas rendering, uncertainty tables, and scientific teaching examples are Porcupine implementations. They are not borrowed charting capabilities from DeepSeek Harness.
 
+## PDF.js
+
+PDF previews use Mozilla's [PDF.js](https://github.com/mozilla/pdf.js), pinned through `pdfjs-dist` 6.4.299 under Apache License 2.0. The renderer and worker are served locally. Distribution assets include its LICENSE and the notices shipped with character maps, standard fonts, image decoders and colour profiles. Porcupine provides the preview controls and authenticated document loading; it does not use a remote viewer service.
+
 ## DeepSeek Harness license
 
 MIT License

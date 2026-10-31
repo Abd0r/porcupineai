@@ -23,13 +23,20 @@ import { getAgentDir, VERSION } from "../config.ts";
 import type { AgentSession } from "../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../core/agent-session-runtime.ts";
 import { SessionManager } from "../core/session-manager.ts";
+import { AttendedTaskRunner } from "../server/attended-task-runner.ts";
 import { type ServeApiSession, startServeApi } from "../server/http-api.ts";
 import { describeWorkbenchActivity } from "../server/workbench-activity-description.ts";
 import { prepareWorkbenchAttachments } from "../server/workbench-attachments.ts";
 import { createWorkbenchCommands } from "../server/workbench-commands.ts";
 import { ContextFileStore, WorkbenchError } from "../server/workbench-context-files.ts";
 import { WorkbenchProjectStore } from "../server/workbench-projects.ts";
-import { getSessionProject, moveSessionToTrash, setSessionProject } from "../server/workbench-session-projects.ts";
+import {
+	getSessionPinned,
+	getSessionProject,
+	moveSessionToTrash,
+	setSessionPinned,
+	setSessionProject,
+} from "../server/workbench-session-projects.ts";
 import { createSessionSurfaces } from "../server/workbench-session-surfaces.ts";
 import { serializeWorkbenchHistory } from "../server/workbench-transcript.ts";
 import { openBrowser } from "../utils/open-browser.ts";
@@ -40,6 +47,11 @@ export interface ServeModeOptions {
 	host?: string;
 	/** Optional bearer token. When binding a non-loopback host, a token is required. */
 	token?: string;
+}
+
+export async function listServeSessions(sessionDir: string) {
+	const [all, configured] = await Promise.all([SessionManager.listAll(), SessionManager.listAll(sessionDir)]);
+	return [...new Map([...all, ...configured].map((item) => [item.id, item])).values()];
 }
 
 /**
@@ -148,11 +160,12 @@ export function adaptSessionToServeApi(session: AgentSession, attachmentRoot = g
 				});
 			previousProjectContext = context;
 		}
-		await session.sendUserMessage(content, followUp ? { deliverAs: "followUp" } : undefined);
+		await session.sendUserMessage(content, followUp ? { deliverAs: "steer" } : undefined);
 	};
 
 	return {
 		...createSessionSurfaces(session),
+		artifactRoot: session.sessionManager.getCwd(),
 		getCommands: commands.catalog,
 		runCommand: commands.execute,
 		setClientSurface: (surface) => {
@@ -167,8 +180,13 @@ export function adaptSessionToServeApi(session: AgentSession, attachmentRoot = g
 		id: session.sessionId,
 		sendUserMessage: (text, attachments) => send(text, attachments),
 		queueFollowUp: (text, attachments) => send(text, attachments, true),
-		getFollowUps: () => session.getFollowUpMessages(),
-		removeFollowUp: (index, expected) => session.removeFollowUp(index, expected),
+		getFollowUps: () => [...session.getSteeringMessages(), ...session.getFollowUpMessages()],
+		removeFollowUp: (index, expected) => {
+			const steering = session.getSteeringMessages().length;
+			return index < steering
+				? session.removeSteering(index, expected)
+				: session.removeFollowUp(index - steering, expected);
+		},
 		abort: async () => {
 			await session.abort();
 		},
@@ -176,7 +194,13 @@ export function adaptSessionToServeApi(session: AgentSession, attachmentRoot = g
 		getTimeline: () => serializeWorkbenchHistory(session.sessionManager.getBranch()),
 		getSubagents: subagentSnapshot,
 		onEvent: (listener) => {
-			const events = session.subscribe((event) => listener(event));
+			const events = session.subscribe((event) =>
+				listener(
+					event.type === "queue_update"
+						? { ...event, followUp: [...event.steering, ...event.followUp], steering: [] }
+						: event,
+				),
+			);
 			let previous = JSON.stringify(subagentSnapshot());
 			const subagents = session.onSubagentEvent(() => {
 				const runs = subagentSnapshot(),
@@ -223,28 +247,30 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 	}
 
 	runtime.session.setClientSurface("none");
+	const tasks = new AttendedTaskRunner(runtime.services.agentDir);
 	const additionalRuntimes = new Set<AgentSessionRuntime>();
 	const liveRuntimes = new Map([[runtime.session.sessionId, runtime]]),
 		deleted = new Set<string>();
 	const sessionDir = runtime.session.sessionManager.getSessionDir(),
 		projects = new WorkbenchProjectStore(runtime.cwd);
-	const discover = async () => {
-		const [local, all] = await Promise.all([SessionManager.list(runtime.cwd, sessionDir), SessionManager.listAll()]);
-		return [...new Map([...all, ...local].map((item) => [item.id, item])).values()];
-	};
+	const discover = () => listServeSessions(sessionDir);
 	const attach = async (manager: SessionManager) => {
 		const sibling = await runtime.createSibling(manager);
 		sibling.session.setClientSurface("none");
 		additionalRuntimes.add(sibling);
 		liveRuntimes.set(sibling.session.sessionId, sibling);
 		manager.forceFlushToDisk();
-		return adaptSessionToServeApi(sibling.session, runtime.services.agentDir);
+		return tasks.register(sibling.session, adaptSessionToServeApi(sibling.session, runtime.services.agentDir));
 	};
 
 	const managerFor = async (id: string) => {
 		const live = liveRuntimes.get(id);
 		if (live) {
-			if (!live.session.isIdle || live.session.subagentState.runs.some((run) => run.status === "running"))
+			if (
+				tasks.isBusy(live.session) ||
+				!live.session.isIdle ||
+				live.session.subagentState.runs.some((run) => run.status === "running")
+			)
 				throw new WorkbenchError(409, "Stop the session and its workers before moving or deleting it");
 			return live.session.sessionManager;
 		}
@@ -254,19 +280,32 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 	};
 
 	const handle = await startServeApi({
-		session: adaptSessionToServeApi(runtime.session, runtime.services.agentDir),
+		session: tasks.register(runtime.session, adaptSessionToServeApi(runtime.session, runtime.services.agentDir)),
 		listSessions: async () =>
 			(await discover())
 				.filter((item) => !deleted.has(item.id))
 				.map((item) => ({
 					id: item.id,
 					name: item.name || item.firstMessage.slice(0, 80) || undefined,
+					pinned: getSessionPinned(
+						liveRuntimes.get(item.id)?.session.sessionManager || SessionManager.open(item.path),
+					),
 					project: projects.nameForPath(
 						getSessionProject(
 							liveRuntimes.get(item.id)?.session.sessionManager || SessionManager.open(item.path),
 						),
 					),
 				})),
+		setSessionPinned: async (id, pinned) => {
+			if (deleted.has(id)) throw new WorkbenchError(404, "Saved conversation not found");
+			let manager = liveRuntimes.get(id)?.session.sessionManager;
+			if (!manager) {
+				const saved = (await discover()).find((item) => item.id === id);
+				if (!saved) throw new WorkbenchError(404, "Saved conversation not found");
+				manager = SessionManager.open(saved.path);
+			}
+			setSessionPinned(manager, pinned);
+		},
 		deleteProject: async (name) => {
 			const path = projects.path(name),
 				managers = new Map([...liveRuntimes].map(([id, live]) => [id, live.session.sessionManager]));
@@ -277,7 +316,9 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 				const live = liveRuntimes.get(id);
 				if (
 					live &&
-					(!live.session.isIdle || live.session.subagentState.runs.some((run) => run.status === "running"))
+					(tasks.isBusy(live.session) ||
+						!live.session.isIdle ||
+						live.session.subagentState.runs.some((run) => run.status === "running"))
 				)
 					throw new WorkbenchError(409, "Stop this project's conversations and workers before deleting it");
 			}
@@ -293,6 +334,7 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 				live = liveRuntimes.get(id);
 			moveSessionToTrash(manager);
 			if (live) {
+				tasks.unregister(live.session);
 				await live.dispose();
 				liveRuntimes.delete(id);
 				additionalRuntimes.delete(live);
@@ -311,6 +353,9 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 		version: VERSION,
 		contextFiles: new ContextFileStore(runtime.cwd, runtime.services.agentDir),
 		projects,
+	}).catch(async (error: unknown) => {
+		await tasks.close();
+		throw error;
 	});
 
 	process.stderr.write(`Porcupine serve listening on http://${options.host ?? "127.0.0.1"}:${handle.port()}\n`);
@@ -336,12 +381,18 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 	}
 
 	await new Promise<void>((resolve) => {
-		const onSignal = (): void => resolve();
+		const onSignal = (): void => {
+			process.off("SIGINT", onSignal);
+			process.off("SIGTERM", onSignal);
+			resolve();
+		};
 		process.once("SIGINT", onSignal);
 		process.once("SIGTERM", onSignal);
 	});
 
+	tasks.stop();
 	await handle.close();
+	await tasks.close();
 	for (const sibling of additionalRuntimes) await sibling.dispose();
 	if (!deleted.has(runtime.session.sessionId)) await runtime.dispose();
 	return 0;

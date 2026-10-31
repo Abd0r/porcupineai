@@ -42,6 +42,7 @@ describe("serve web UI", () => {
 		const base = `http://127.0.0.1:${handle.port()}`;
 		for (const [path, type] of [
 			["katex.min.js", "text/javascript"],
+			["mhchem.min.js", "text/javascript"],
 			["katex.min.css", "text/css"],
 			["fonts/KaTeX_Main-Regular.woff2", "font/woff2"],
 		]) {

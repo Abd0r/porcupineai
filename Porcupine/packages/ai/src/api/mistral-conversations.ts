@@ -26,6 +26,7 @@ import { shortHash } from "../utils/hash.ts";
 import { parseStreamingJson, parseStreamingJsonThrottled } from "../utils/json-parse.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { resolveJsonSchemaStrictSampling } from "./constrained-sampling.ts";
+import { normalizeToolParameters } from "./normalize-tool-parameters.ts";
 import { buildBaseOptions } from "./simple-options.ts";
 import { transformMessages } from "./transform-messages.ts";
 
@@ -508,7 +509,7 @@ function toFunctionTools(tools: Tool[]): Array<FunctionTool & { type: "function"
 			function: {
 				name: tool.name,
 				description: tool.description,
-				parameters: stripSymbolKeys(tool.parameters) as Record<string, unknown>,
+				parameters: normalizeToolParameters(stripSymbolKeys(tool.parameters)),
 				strict: strict ?? false,
 			},
 		};

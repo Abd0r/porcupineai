@@ -1,3 +1,4 @@
+import { setImmediate } from "node:timers/promises";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 import { PORCUPINE_WEB_UI } from "../src/server/web-ui.ts";
@@ -28,6 +29,9 @@ class FakeCanvasContext {
 	fillText(text: string): void {
 		this.texts.push(text);
 	}
+	measureText(text: string): { width: number } {
+		return { width: text.length * 8 };
+	}
 	createRadialGradient(): { addColorStop(): void } {
 		return { addColorStop() {} };
 	}
@@ -37,6 +41,16 @@ class FakeElement {
 	readonly dataset: Record<string, string> = {};
 	readonly children: FakeElement[] = [];
 	parentNode?: FakeElement;
+	get parentElement(): FakeElement | undefined {
+		return this.parentNode;
+	}
+	get nextElementSibling(): FakeElement | undefined {
+		return this.parentNode?.children[this.parentNode.children.indexOf(this) + 1];
+	}
+	contains(node?: FakeElement): boolean {
+		return node === this || this.children.some((child) => child.contains(node));
+	}
+	focus(): void {}
 	remove(): void {
 		if (this.parentNode) {
 			const siblings = this.parentNode.children;
@@ -51,6 +65,7 @@ class FakeElement {
 	}
 	readonly attributes = new Map<string, string>();
 	readonly listeners = new Set<string>();
+	readonly handlers = new Map<string, () => void | Promise<void>>();
 	readonly classes = new Set<string>();
 	readonly classList = {
 		add: (name: string) => {
@@ -78,6 +93,7 @@ class FakeElement {
 		this.children.splice(0);
 	}
 	hidden = false;
+	disabled = false;
 	tabIndex = -1;
 	width = 0;
 	height = 0;
@@ -85,9 +101,27 @@ class FakeElement {
 	scrollHeight = 0;
 	role = "";
 	value = "";
+	href = "";
 	clientHeight = 640;
-	querySelectorAll(): FakeElement[] {
-		return [];
+	clientWidth = 640;
+	querySelectorAll(selector?: string): FakeElement[] {
+		return selector === ".permission"
+			? this.children.flatMap(descendants).filter((node) => node.className === "permission")
+			: [];
+	}
+	querySelector(selector: string): FakeElement | null {
+		return (
+			this.children
+				.flatMap(descendants)
+				.find(
+					(node) =>
+						node.tagName === selector ||
+						(selector.startsWith(".") && node.className.split(" ").includes(selector.slice(1))),
+				) ?? null
+		);
+	}
+	reportValidity(): boolean {
+		return true;
 	}
 	readonly tagName: string;
 	private readonly canvasContext: FakeCanvasContext;
@@ -98,11 +132,15 @@ class FakeElement {
 	get lastChild(): FakeElement | undefined {
 		return this.children[this.children.length - 1];
 	}
-	addEventListener(type: string): void {
+	addEventListener(type: string, handler?: () => void): void {
 		this.listeners.add(type);
+		if (handler) this.handlers.set(type, handler);
 	}
 	append(...items: FakeElement[]): void {
-		for (const item of items) item.parentNode = this;
+		for (const item of items) {
+			item.remove();
+			item.parentNode = this;
+		}
 		this.children.push(...items);
 	}
 	appendChild(item: FakeElement): FakeElement {
@@ -111,6 +149,7 @@ class FakeElement {
 		return item;
 	}
 	replaceChildren(...items: FakeElement[]): void {
+		this.text = "";
 		this.children.splice(0, this.children.length, ...items);
 	}
 	setAttribute(name: string, value: string): void {
@@ -129,7 +168,14 @@ class FakeElement {
 		return this.canvasContext;
 	}
 	setPointerCapture(): void {}
-	close(): void {}
+	open = false;
+	showModal(): void {
+		this.open = true;
+	}
+	close(): void {
+		this.open = false;
+		this.handlers.get("close")?.();
+	}
 }
 
 function loadRenderer(mockFetch?: typeof fetch): {
@@ -140,6 +186,9 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	canvasContext: FakeCanvasContext;
 	rich(node: FakeElement, text: string): FakeElement;
 	connect(id: string): Promise<void>;
+	refresh(): Promise<void>;
+	project(name: string): Promise<void>;
+	projects(items: unknown[], chats: unknown[]): void;
 	text(value: unknown): string;
 	mathCalls: Array<{ source: string; displayMode: boolean; trust: boolean }>;
 } {
@@ -220,13 +269,38 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"projects-count",
 		"project-list",
 		"project-new",
-		"project-dialog",
+
+		"project-note-edit",
+		"project-note-reading",
+		"project-note-fields",
+		"project-notes",
+		"project-notes-list",
+		"project-notes-count",
+		"project-note-add",
+		"project-notes-status",
+		"project-note-dialog",
+		"project-note-heading",
+		"project-note-title",
+		"project-note-text",
+		"project-note-color",
+		"project-note-save",
+		"project-note-delete",
+		"project-note-status",
+		"project-note-upload",
+		"project-page",
+		"project-back",
+		"project-pin",
+		"project-chats",
+		"project-description",
+		"project-description-toggle",
+		"new-project-description",
 		"project-title",
 		"project-delete",
 		"project-conversation",
 		"conversation-menu",
 		"conversation-menu-title",
 		"conversation-project",
+		"conversation-pin",
 		"conversation-delete",
 		"conversation-action-error",
 		"project-summary",
@@ -240,12 +314,18 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"new-project-error",
 		"new-project-create",
 		"settings-dialog",
+		"artifact-dialog",
+		"artifact-title",
+		"artifact-content",
+		"artifact-open",
+		"artifact-download",
 		"settings-open",
 		"appearance-theme",
 		"appearance-todos-placement",
 		"appearance-workers-placement",
 		"appearance-mode",
 		"appearance-reasoning",
+		"appearance-motion",
 		"appearance-image",
 		"appearance-remove",
 		"appearance-opacity",
@@ -274,6 +354,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	]) {
 		elements.set(id, new FakeElement("div", canvasContext));
 	}
+	new FakeElement("div", canvasContext).append(elements.get("feed")!);
 	const document = {
 		documentElement: new FakeElement("html", canvasContext),
 		addEventListener(): void {},
@@ -303,6 +384,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	const sandbox = {
 		fetch: mockFetch ?? (async () => Response.json({ supported: false, sessions: [] })),
 		Headers,
+		URL,
 		AbortController,
 		TextDecoder,
 		innerHeight: 960,
@@ -316,6 +398,11 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		setTimeout: () => 0,
 		document,
 		window: {
+			confirm: () => true,
+			createWorkbenchPdfViewer: (host: FakeElement) => {
+				host.append(document.createElement("canvas"));
+				return { ready: Promise.resolve(), destroy: () => {} };
+			},
 			katex: {
 				render(source: string, node: FakeElement, options: { displayMode: boolean; trust: boolean }) {
 					if (source.includes("notacommand")) throw new Error("Unsupported math");
@@ -342,7 +429,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	if (!script) throw new Error("Workbench script is missing");
 	const instrumented = script.replace(
 		/\}\)\(\);\s*$/,
-		"globalThis.__connect=connectEvents;globalThis.__text=textOf;globalThis.__renderVisualization=renderVisual;globalThis.__renderEvent=renderEvent;globalThis.__renderRichText=renderRichText;})();",
+		"globalThis.__refresh=refreshSessions;globalThis.__project=openProject;globalThis.__projects=(items,chats)=>{projectCatalog=items;sessionCatalog=chats;renderProjectNavigation();};globalThis.__connect=connectEvents;globalThis.__text=textOf;globalThis.__renderVisualization=renderVisual;globalThis.__renderEvent=renderEvent;globalThis.__renderRichText=renderRichText;})();",
 	);
 	if (instrumented === script) throw new Error("Could not expose the renderer to its test harness");
 	runInNewContext(instrumented, sandbox);
@@ -356,10 +443,567 @@ function loadRenderer(mockFetch?: typeof fetch): {
 	};
 	const connect = runInNewContext("globalThis.__connect", sandbox) as (id: string) => Promise<void>;
 	const text = runInNewContext("globalThis.__text", sandbox) as (value: unknown) => string;
-	return { render, event, rich, feed, elements, canvasContext, connect, text, mathCalls };
+	const project = runInNewContext("globalThis.__project", sandbox) as (name: string) => Promise<void>;
+	const projects = runInNewContext("globalThis.__projects", sandbox) as (items: unknown[], chats: unknown[]) => void;
+	const refresh = runInNewContext("globalThis.__refresh", sandbox) as () => Promise<void>;
+	return { render, event, rich, feed, elements, canvasContext, connect, text, mathCalls, project, projects, refresh };
 }
 
+describe("project pages", () => {
+	it("lets users expand overflowing descriptions and read the complete Markdown", async () => {
+		const description = `**Full objective**\n\n${"Long detail. ".repeat(60)}**Complete ending**`;
+		const h = loadRenderer(async () => Response.json({ title: "Lab", description, files: [] })),
+			body = h.elements.get("project-description")!;
+		body.scrollHeight = 300;
+		body.clientHeight = 72;
+		await h.project("lab");
+		const toggle = h.elements.get("project-description-toggle")!;
+		expect(toggle.hidden).toBe(false);
+		expect(toggle.getAttribute("aria-expanded")).toBe("false");
+		toggle.handlers.get("click")!();
+		expect(body.dataset.expanded).toBe("true");
+		expect(toggle.textContent).toBe("Show less");
+		expect(descendants(body).some((n) => n.tagName === "strong" && n.textContent === "Complete ending")).toBe(true);
+		toggle.handlers.get("click")!();
+		expect(body.dataset.expanded).toBe("false");
+	});
+
+	it("renders description Markdown safely and keeps it when reopening the same project", async () => {
+		const h = loadRenderer(async () =>
+			Response.json({
+				title: "Lab",
+				description: "**Measure** `samples` [Guide](https://example.com) <script>alert(1)</script>",
+				files: [],
+			}),
+		);
+		for (let i = 0; i < 2; i++) {
+			await h.project("lab");
+			const description = h.elements.get("project-description")!,
+				nodes = descendants(description);
+			expect(nodes.some((n) => n.tagName === "strong" && n.textContent === "Measure")).toBe(true);
+			expect(nodes.some((n) => n.tagName === "code" && n.textContent === "samples")).toBe(true);
+			expect(nodes.some((n) => n.tagName === "a" && n.getAttribute("href") === "https://example.com")).toBe(true);
+			expect(nodes.some((n) => n.tagName === "script")).toBe(false);
+			expect(description.textContent).toContain("<script>alert(1)</script>");
+		}
+	});
+
+	it("inserts safe Markdown links for uploaded filenames with parentheses", async () => {
+		const h = loadRenderer(async (_path, options) =>
+			options?.method === "POST"
+				? Response.json({ path: "uploads/paper (1).pdf" })
+				: Response.json({ title: "Lab", files: [], notes: [] }),
+		);
+		await h.project("lab");
+		h.elements.get("project-note-add")!.handlers.get("click")!();
+		Object.assign(h.elements.get("project-note-upload")!, { files: [{ name: "paper (1).pdf", size: 100 }] });
+		await h.elements.get("project-note-upload")!.handlers.get("change")!();
+		expect(h.elements.get("project-note-text")!.value).toContain("uploads/paper%20%281%29.pdf");
+	});
+
+	it("bounds crowded navigation and searches names beyond the first page", () => {
+		const h = loadRenderer();
+		const projects = Array.from({ length: 40 }, (_, i) => ({
+			name: `project-${i}`,
+			title: `Long project title ${i} with detailed research notes`,
+		}));
+		const chats = Array.from({ length: 100 }, (_, i) => ({
+			id: `chat-${i}`,
+			name: i === 99 ? "A unique long name to discover" : `Conversation ${i}`,
+		}));
+		h.projects(projects, chats);
+		expect(h.elements.get("project-list")!.children.length).toBeLessThanOrEqual(9);
+		const rows = () => descendants(h.elements.get("sessions")!).filter((n) => n.className.startsWith("session-row"));
+		expect(rows()).toHaveLength(20);
+		const search = h.elements.get("session-search")!;
+		search.value = "unique";
+		search.handlers.get("input")!();
+		expect(rows()).toHaveLength(1);
+		expect(rows()[0].textContent).toContain("unique long name");
+		const button = rows()[0].children[0];
+		expect((button as FakeElement & { title: string }).title).toBe("A unique long name to discover");
+		search.value = "research notes";
+		search.handlers.get("input")!();
+		expect(h.elements.get("project-list")!.children.length).toBeLessThanOrEqual(9);
+	});
+	it("loads additional conversations only when requested", () => {
+		const h = loadRenderer();
+		h.projects(
+			[],
+			Array.from({ length: 45 }, (_, i) => ({ id: `chat-${i}`, name: `Conversation ${i}` })),
+		);
+		const more = descendants(h.elements.get("sessions")!).find(
+			(n) => n.tagName === "button" && n.textContent.startsWith("Show more"),
+		)!;
+		expect(more).toBeDefined();
+		more.handlers.get("click")!();
+		expect(
+			descendants(h.elements.get("sessions")!).filter((n) => n.className.startsWith("session-row")),
+		).toHaveLength(40);
+	});
+
+	it("renders rich sticky notes and resolves PDF links inside their project", async () => {
+		const requests: string[] = [];
+		const h = loadRenderer(async (path) => {
+			requests.push(String(path));
+			if (String(path).includes("?raw=1"))
+				return new Response("%PDF-1.7", {
+					headers: { "x-porcupine-preview": "pdf", "x-porcupine-name": "paper.pdf" },
+				});
+			return Response.json({
+				title: "Lab",
+				files: [],
+				notes: [
+					{
+						id: "n",
+						title: "Remember",
+						text: "**Verify** [Paper](uploads/paper.pdf)",
+						color: "blue",
+						author: "agent",
+						revision: "r",
+					},
+				],
+			});
+		});
+		await h.project("lab");
+		const list = h.elements.get("project-notes-list")!;
+		expect(list.textContent).toContain("Remember");
+		expect(descendants(list).some((n) => n.tagName === "strong" && n.textContent === "Verify")).toBe(true);
+		const preview = descendants(list).find((n) => n.tagName === "button" && n.textContent === "Preview / download")!;
+		await preview.handlers.get("click")!();
+		expect(requests).toContain("/workbench/projects/lab/files/uploads/paper.pdf?raw=1");
+		expect(h.elements.get("artifact-content")!.children[0].tagName).toBe("canvas");
+		expect(h.elements.get("artifact-open")!.href).toContain("/workbench/pdf/viewer.html#");
+	});
+	it.each(["amber", "blue", "sage", "rose"])(
+		"keeps a %s note's paper colour when opening and editing",
+		async (color) => {
+			let note = { id: "n", title: "Remember", text: "Draft", color, revision: "r" };
+			const h = loadRenderer(async (_path, options) => {
+				if (options?.method === "PUT") {
+					note = { ...note, ...JSON.parse(String(options.body)), revision: "r2" };
+					return Response.json(note);
+				}
+				return Response.json({ title: "Lab", files: [], notes: [note] });
+			});
+			const open = async () => {
+				await h.project("lab");
+				const button = descendants(h.elements.get("project-notes-list")!).find(
+					(node) => node.tagName === "button" && node.textContent === "Open / edit",
+				)!;
+				await button.handlers.get("click")!();
+			};
+			await open();
+			const dialog = h.elements.get("project-note-dialog")!;
+			expect(dialog.dataset.color).toBe(color);
+			await h.elements.get("project-note-edit")!.handlers.get("click")!();
+			expect(dialog.dataset.color).toBe(color);
+			const next = color === "blue" ? "rose" : "blue";
+			h.elements.get("project-note-color")!.value = next;
+			await h.elements.get("project-note-color")!.handlers.get("change")!();
+			expect(dialog.dataset.color).toBe(next);
+			await h.elements.get("project-note-save")!.handlers.get("click")!();
+			await open();
+			expect(dialog.dataset.color).toBe(next);
+			expect(h.elements.get("project-note-color")!.value).toBe(next);
+		},
+	);
+	it("allows adding notes and preserves the editor draft after a conflict", async () => {
+		let conflict = false;
+		const h = loadRenderer(async (_path, options) => {
+			if (options?.method === "POST")
+				return conflict
+					? Response.json({ error: "This note changed" }, { status: 409 })
+					: Response.json({ id: "n", title: "New", text: "Draft", color: "amber", revision: "r" });
+			return Response.json({ title: "Lab", files: [], notes: [] });
+		});
+		await h.project("lab");
+		await h.elements.get("project-note-add")!.handlers.get("click")!();
+		h.elements.get("project-note-title")!.value = "New";
+		h.elements.get("project-note-text")!.value = "Draft";
+		conflict = true;
+		await h.elements.get("project-note-save")!.handlers.get("click")!();
+		expect(h.elements.get("project-note-dialog")!.open).toBe(true);
+		expect(h.elements.get("project-note-text")!.value).toBe("Draft");
+		expect(h.elements.get("project-note-status")!.textContent).toContain("changed");
+	});
+	it("disables adding when the project already contains twenty notes", async () => {
+		const h = loadRenderer(async () =>
+			Response.json({
+				title: "Lab",
+				files: [],
+				notes: Array.from({ length: 20 }, (_, i) => ({
+					id: String(i),
+					title: `Note ${i}`,
+					text: "",
+					color: "amber",
+				})),
+			}),
+		);
+		await h.project("lab");
+		expect(h.elements.get("project-note-add")!.disabled).toBe(true);
+	});
+	it("renders Markdown resource headings and safe literal HTML", async () => {
+		const h = loadRenderer(async (path) =>
+			String(path).includes("?raw=1")
+				? new Response("# Preview heading\n\n**Bold** <script>alert(1)</script>", {
+						headers: { "x-porcupine-preview": "text", "x-porcupine-name": "guide.md" },
+					})
+				: Response.json({ title: "Lab", files: [{ path: "guide.md", bytes: 20 }] }),
+		);
+		await h.project("lab");
+		await h.elements.get("project-files")!.children[0].handlers.get("click")!();
+		await setImmediate();
+		const host = h.elements.get("artifact-content")!;
+		expect(descendants(host).some((n) => n.className.includes("md-heading"))).toBe(true);
+		expect(descendants(host).some((n) => n.tagName === "script")).toBe(false);
+	});
+
+	it("keeps the current project open when another project's deletion finishes", async () => {
+		let finish!: (response: Response) => void;
+		const h = loadRenderer(async (path, options) => {
+			if (options?.method === "DELETE")
+				return new Promise<Response>((resolve) => {
+					finish = resolve;
+				});
+			return Response.json({
+				title: String(path).endsWith("/b") ? "Project B" : "Project A",
+				files: [],
+				projects: [],
+				sessions: [],
+			});
+		});
+		await h.project("a");
+		const deleting = h.elements.get("project-delete")!.handlers.get("click")!();
+		await h.project("b");
+		finish(Response.json({ ok: true }));
+		await deleting;
+		expect(h.elements.get("project-page")!.hidden).toBe(false);
+		expect(h.elements.get("project-title")!.textContent).toBe("Project B");
+	});
+	it("creates only one chat when the project action is clicked repeatedly", async () => {
+		const pending: Array<(response: Response) => void> = [];
+		const h = loadRenderer(async (path, options) => {
+			if (path === "/session" && options?.method === "POST")
+				return new Promise<Response>((resolve) => pending.push(resolve));
+			return Response.json({ title: "Lab", files: [] });
+		});
+		await h.project("lab");
+		const click = h.elements.get("project-conversation")!.handlers.get("click")!;
+		const first = click(),
+			second = click();
+		const count = pending.length;
+		for (const finish of pending) finish(Response.json({ error: "Try again" }, { status: 503 }));
+		await Promise.all([first, second]);
+		expect(count).toBe(1);
+		const retry = click();
+		expect(pending).toHaveLength(2);
+		pending[1]!(Response.json({ error: "Try again" }, { status: 503 }));
+		await retry;
+	});
+	it("opens the project title, short description, resources and only its own chats", async () => {
+		const h = loadRenderer(async () =>
+			Response.json({
+				title: "Lab notes",
+				description: "Measure the samples.",
+				pinned: true,
+				files: [{ path: "uploads/results.csv", bytes: 20 }],
+			}),
+		);
+		h.projects(
+			[{ name: "lab", title: "Lab notes" }],
+			[
+				{ id: "a", name: "Measurements", project: "lab" },
+				{ id: "b", project: "other" },
+			],
+		);
+		await h.project("lab");
+		expect(h.elements.get("project-page")!.hidden).toBe(false);
+		expect(h.elements.get("project-title")!.textContent).toBe("Lab notes");
+		expect(h.elements.get("project-description")!.textContent).toBe("Measure the samples.");
+		expect(h.elements.get("project-files")!.textContent).toContain("uploads/results.csv");
+		expect(
+			descendants(h.elements.get("project-chats")!).filter((node) => node.className.startsWith("session-row")),
+		).toHaveLength(1);
+		expect(h.elements.get("project-pin")!.getAttribute("aria-pressed")).toBe("true");
+	});
+	it("orders pinned projects first without duplicating their chats", () => {
+		const h = loadRenderer();
+		h.projects(
+			[
+				{ name: "a", title: "A" },
+				{ name: "b", title: "B", pinned: true },
+			],
+			[{ id: "chat", project: "b" }],
+		);
+		expect(h.elements.get("project-list")!.children.map((node) => node.dataset.project)).toEqual(["b", "a"]);
+		expect(
+			descendants(h.elements.get("project-list")!).filter((node) => node.className.startsWith("session-row")),
+		).toHaveLength(1);
+	});
+	it("ignores project details that arrive after returning to the chat", async () => {
+		let finish!: (response: Response) => void;
+		const h = loadRenderer(
+			async () =>
+				new Promise<Response>((resolve) => {
+					finish = resolve;
+				}),
+		);
+		const opening = h.project("lab");
+		h.elements.get("project-back")!.handlers.get("click")!();
+		finish(Response.json({ title: "Stale project", description: "Old result", files: [] }));
+		await opening;
+		expect(h.elements.get("project-page")!.hidden).toBe(true);
+		expect(h.elements.get("project-title")!.textContent).not.toBe("Stale project");
+	});
+});
+
 describe("workbench transport regressions", () => {
+	it("does not settle another chat's approval when an older approval response arrives", async () => {
+		let finish!: (response: Response) => void;
+		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+		const h = loadRenderer(async (path) => {
+			if (String(path).endsWith("/events"))
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streams.push(controller);
+						},
+					}),
+				);
+			if (String(path).includes("/permissions/"))
+				return new Promise<Response>((resolve) => {
+					finish = resolve;
+				});
+			return Response.json({ supported: false });
+		});
+		const first = h.connect("a");
+		await setImmediate();
+		h.event({ type: "permission_request", permissionId: "shared", title: "A approval" });
+		const submitting = descendants(h.feed)
+			.find((node) => node.className === "allow")!
+			.handlers.get("click")!();
+		const second = h.connect("b");
+		await setImmediate();
+		h.event({ type: "permission_request", permissionId: "shared", title: "B approval" });
+		finish(Response.json({}));
+		await submitting;
+		const resolved = h.feed.children.find((node) => node.className === "permission")!.dataset.resolved;
+		for (const stream of streams) stream.close();
+		await Promise.all([first, second]);
+		expect(resolved).not.toBe("true");
+	});
+	it("lets another chat send while the first chat's queue request is pending", async () => {
+		let finish!: (response: Response) => void;
+		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+		const h = loadRenderer(async (path) => {
+			if (String(path).endsWith("/events"))
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streams.push(controller);
+						},
+					}),
+				);
+			if (String(path).endsWith("/follow-up"))
+				return new Promise<Response>((resolve) => {
+					finish = resolve;
+				});
+			return Response.json({ supported: false });
+		});
+		const first = h.connect("a");
+		await setImmediate();
+		h.event({ type: "server_connected", streaming: true, canQueueFollowUps: true });
+		h.elements.get("prompt")!.value = "Queued in A";
+		const submitting = (
+			h.elements.get("prompt-form")!.handlers.get("submit")! as (event: { preventDefault(): void }) => Promise<void>
+		)({ preventDefault() {} });
+		const second = h.connect("b");
+		await setImmediate();
+		h.elements.get("prompt")!.value = "New prompt in B";
+		h.event({ type: "server_connected", streaming: false });
+		const disabled = h.elements.get("send")!.disabled;
+		finish(Response.json({}));
+		await submitting;
+		for (const stream of streams) stream.close();
+		await Promise.all([first, second]);
+		expect(disabled).toBe(false);
+	});
+	it("keeps the latest session pins when an older sidebar refresh finishes late", async () => {
+		let finish!: (response: Response) => void;
+		let calls = 0;
+		const h = loadRenderer(async () =>
+			++calls === 1
+				? new Promise<Response>((resolve) => {
+						finish = resolve;
+					})
+				: Response.json({ sessions: [{ id: "a", name: "Latest chat", pinned: true }] }),
+		);
+		const older = h.refresh();
+		await h.refresh();
+		finish(Response.json({ sessions: [{ id: "a", name: "Old chat", pinned: false }] }));
+		await older;
+		expect(h.elements.get("sessions")!.textContent).toContain("Latest chat");
+		expect(h.elements.get("sessions")!.textContent).toContain("Pinned");
+		expect(h.elements.get("sessions")!.textContent).not.toContain("Old chat");
+	});
+	it("keeps a newer turn working when an earlier message send fails after settlement", async () => {
+		let fail!: (reason: Error) => void;
+		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+		const h = loadRenderer(async (path) => {
+			if (String(path).endsWith("/events"))
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streams.push(controller);
+						},
+					}),
+				);
+			if (String(path).endsWith("/message"))
+				return new Promise<Response>((_resolve, reject) => {
+					fail = reject;
+				});
+			return Response.json({ supported: false });
+		});
+		const connection = h.connect("a");
+		await setImmediate();
+		h.elements.get("prompt")!.value = "Original prompt";
+		const submitting = (
+			h.elements.get("prompt-form")!.handlers.get("submit")! as (event: { preventDefault(): void }) => Promise<void>
+		)({ preventDefault() {} });
+		h.event({ type: "agent_start" });
+		h.event({ type: "agent_end" });
+		h.event({ type: "agent_start" });
+		fail(new Error("Earlier request failed"));
+		await submitting;
+		expect(h.elements.get("status-text")!.textContent).toBe("Working");
+		expect(h.elements.get("prompt")!.value).toBe("Original prompt");
+		for (const stream of streams) stream.close();
+		await connection;
+	});
+	it("does not restore one conversation answer into another conversation with the same card ID", async () => {
+		let finish!: (response: Response) => void;
+		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+		const h = loadRenderer(async (path) => {
+			if (String(path).endsWith("/events"))
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streams.push(controller);
+						},
+					}),
+				);
+			if (String(path).endsWith("/message"))
+				return new Promise<Response>((resolve) => {
+					finish = resolve;
+				});
+			return Response.json({ supported: false });
+		});
+		const first = h.connect("a");
+		await setImmediate();
+		const spec = {
+			version: 2,
+			kind: "quiz",
+			title: "Choose",
+			componentId: "same-id",
+			questions: [{ question: "Choose", options: ["A", "B"], correctAnswers: [0], explanation: "A" }],
+		};
+		h.render(spec);
+		const card = h.feed.children.at(-1)!;
+		Object.assign(descendants(card).find((node) => node.tagName === "input")!, { checked: true });
+		const submitting = (
+			descendants(card)
+				.find((node) => node.tagName === "form")!
+				.handlers.get("submit")! as (event: { preventDefault(): void }) => Promise<void>
+		)({ preventDefault() {} });
+		const second = h.connect("b");
+		await setImmediate();
+		finish(Response.json({}));
+		await submitting;
+		h.render(spec);
+		const current = h.feed.children.at(-1)!;
+		expect(current.textContent).not.toContain("Score:");
+		expect(
+			descendants(current)
+				.find((node) => node.tagName === "button" && node.textContent === "Check answers")!
+				.getAttribute("disabled"),
+		).toBeNull();
+		for (const stream of streams) stream.close();
+		await Promise.all([first, second]);
+	});
+	it("does not resurrect delivered prompts when an older removal response arrives", async () => {
+		let finish!: (response: Response) => void;
+		const h = loadRenderer(
+			async () =>
+				new Promise<Response>((resolve) => {
+					finish = resolve;
+				}),
+		);
+		h.event({ type: "queue_update", followUp: ["Remove this", "Already delivered"] });
+		const panel = descendants(h.elements.get("prompt-form")!).find((node) => node.className === "followup-queue")!;
+		const removing = descendants(panel)
+			.find((node) => node.tagName === "button")!
+			.handlers.get("click")!();
+		h.event({ type: "queue_update", followUp: [] });
+		finish(Response.json({ followUp: ["Already delivered"] }));
+		await removing;
+		expect(panel.hidden).toBe(true);
+		expect(panel.textContent).not.toContain("Already delivered");
+	});
+	it.each(["question", "quiz", "form"])("keeps another chat working when a %s submission fails late", async (kind) => {
+		let rejectSubmission!: (reason: Error) => void;
+		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+		const h = loadRenderer(async (path) => {
+			if (String(path).endsWith("/events"))
+				return new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							streams.push(controller);
+						},
+					}),
+				);
+			if (String(path).endsWith("/message"))
+				return new Promise<Response>((_resolve, reject) => {
+					rejectSubmission = reject;
+				});
+			return Response.json({ supported: false });
+		});
+		const first = h.connect("a");
+		await setImmediate();
+		h.render({
+			version: 2,
+			kind,
+			title: "Answer card",
+			componentId: "answer",
+			...(kind === "question"
+				? { question: "Choose", options: ["A", "B"] }
+				: kind === "quiz"
+					? { questions: [{ question: "Choose", options: ["A", "B"], correctAnswers: [0], explanation: "A" }] }
+					: { fields: [{ label: "Notes", type: "text" }] }),
+		});
+		const card = h.feed.children.at(-1)!,
+			form = descendants(card).find((node) => node.tagName === "form")!;
+		Object.assign(descendants(card).find((node) => node.tagName === "input")!, { checked: true });
+		const submitting =
+			kind === "form"
+				? descendants(card)
+						.find((node) => node.tagName === "button" && node.textContent === "Send to agent")!
+						.handlers.get("click")!()
+				: (form.handlers.get("submit")! as (event: { preventDefault(): void }) => Promise<void>)({
+						preventDefault() {},
+					});
+		expect(rejectSubmission).toBeTypeOf("function");
+		const second = h.connect("b");
+		await setImmediate();
+		h.event({ type: "agent_start" });
+		expect(h.elements.get("status-text")!.textContent).toBe("Working");
+		rejectSubmission(new Error("Submission failed"));
+		await submitting;
+		expect(h.elements.get("status-text")!.textContent).toBe("Working");
+		expect(h.elements.get("stop")!.hidden).toBe(false);
+		for (const stream of streams) stream.close();
+		await Promise.all([first, second]);
+	});
 	it("keeps sub-agent tools internal and updates one task row without tool chatter", () => {
 		const { event, feed, elements } = loadRenderer();
 		const run = {
@@ -502,10 +1146,71 @@ describe("browser teaching visuals", () => {
 		const { render, feed, canvasContext } = loadRenderer();
 		render(diagram);
 		expect(feed.children).toHaveLength(1);
-		expect(canvasContext.texts).toContain("F = ma <script>");
+		expect(canvasContext.texts).not.toContain("F = ma <script>");
 		const nodes = descendants(feed);
+		expect(
+			nodes.some((node) => node.className === "canvas-math-label" && node.textContent.includes("<script>")),
+		).toBe(true);
+		expect(nodes.some((node) => node.tagName === "script")).toBe(false);
 		expect(nodes.some((node) => node.textContent.includes("Force (N)") && node.tagName === "li")).toBe(true);
 		expect(nodes.find((node) => node.tagName === "canvas")?.attributes.get("role")).toBe("img");
+	});
+	it("keeps diagram labels in readable UI text instead of compressing them on canvas", () => {
+		const h = loadRenderer();
+		h.render({
+			...diagram,
+			objects: [
+				{
+					type: "rectangle",
+					position: [15, 10],
+					size: [4, 2],
+					color: "#609bd0",
+					label: "Compare imagined vs real observations",
+				},
+			],
+		});
+		const labels = descendants(h.feed).filter((node) => node.className.includes("canvas-math-label"));
+		expect(
+			labels.some((node) => node.textContent.replace(/\s+/g, " ") === "Compare imagined vs real observations"),
+		).toBe(true);
+		expect(h.canvasContext.texts).not.toContain("Compare imagined vs real observations");
+	});
+	it("gives Markdown tables a named keyboard-scrollable region", () => {
+		const h = loadRenderer();
+		h.rich(
+			h.feed,
+			"| Step | What happens | Today |\n| --- | --- | --- |\n| **Imagine** | Roll the model forward for each candidate action | Same future whatever the action | ",
+		);
+		const region = descendants(h.feed).find((node) => node.className === "table-scroll")!;
+		expect(region.attributes.get("role")).toBe("region");
+		expect(region.attributes.get("aria-label")).toContain("Step");
+		expect(region.tabIndex).toBe(0);
+	});
+	it("expands a diagram without duplicating its labels and restores it when closed", async () => {
+		const h = loadRenderer();
+		h.render(diagram);
+		const nodes = descendants(h.feed);
+		const expand = nodes.find((node) => node.tagName === "button" && node.textContent === "Expand diagram");
+		expect(expand).toBeDefined();
+		await expand!.handlers.get("click")!();
+		const dialog = nodes.find((node) => node.tagName === "dialog")!;
+		const viewport = nodes.find((node) => node.className === "diagram-viewport")!;
+		expect(dialog.open).toBe(true);
+		expect(viewport.parentNode).toBe(dialog);
+		dialog.close();
+		expect(viewport.parentNode).toBe(h.feed.children[0]);
+	});
+	it("closes an expanded diagram when the agent replaces that component", async () => {
+		const h = loadRenderer();
+		h.render({ ...diagram, componentId: "live-diagram" });
+		const nodes = descendants(h.feed);
+		const expand = nodes.find((node) => node.tagName === "button" && node.textContent === "Expand diagram")!;
+		await expand.handlers.get("click")!();
+		const dialog = nodes.find((node) => node.tagName === "dialog")!;
+		h.render({ ...diagram, componentId: "live-diagram", title: "Updated diagram" });
+		expect(dialog.open).toBe(false);
+		expect(h.feed.children).toHaveLength(1);
+		expect(h.feed.children[0].textContent).toContain("Updated diagram");
 	});
 
 	it.each(["line", "scatter", "bar"])("draws %s charts with units and a full accessible data table", (chartType) => {
@@ -580,12 +1285,70 @@ describe("browser 3D scene renderer", () => {
 	it("fails closed for malformed scenes before adding any DOM content", () => {
 		const { render, feed } = loadRenderer();
 		render({ ...scene, objects: [{ type: "mesh", source: "<script>" }] });
-		render({ ...scene, objects: Array.from({ length: 81 }, () => scene.objects[0]) });
+		render({ ...scene, objects: Array.from({ length: 2001 }, () => scene.objects[0]) });
 		expect(feed.children).toHaveLength(0);
 	});
 });
 
 describe("rich message rendering", () => {
+	it("ignores a file response that arrives after its preview was closed", async () => {
+		let finish: ((response: Response) => void) | undefined;
+		const { rich, elements } = loadRenderer(async (path) => {
+			if (String(path).includes("/artifact?"))
+				return new Promise<Response>((resolve) => {
+					finish = resolve;
+				});
+			return Response.json({ supported: false });
+		});
+		const node = rich(new FakeElement("div", new FakeCanvasContext()), "[Report](report.pdf)");
+		const pending = descendants(node)
+			.find((child) => child.tagName === "button")
+			?.handlers.get("click")?.();
+		elements.get("artifact-dialog")?.close();
+		finish!(
+			new Response("%PDF-1.7", { headers: { "content-type": "application/pdf", "x-porcupine-preview": "pdf" } }),
+		);
+		await pending;
+		expect(elements.get("artifact-content")?.children).toHaveLength(0);
+		expect(elements.get("artifact-open")?.attributes.has("href")).toBe(false);
+	});
+	it("renders local files as preview cards, fetches on demand and previews text literally", async () => {
+		const requests: string[] = [];
+		const { rich, connect, elements } = loadRenderer(async (path) => {
+			requests.push(String(path));
+			if (String(path).includes("/artifact?"))
+				return new Response("<script>literal text</script>", {
+					headers: {
+						"content-type": "text/plain",
+						"x-porcupine-preview": "text",
+						"x-porcupine-name": "notes.txt",
+					},
+				});
+			return Response.json({ supported: false });
+		});
+		await connect("files");
+		const node = rich(
+			new FakeElement("div", new FakeCanvasContext()),
+			"[Notes](notes.txt) and ![Plot](plot.png) and [Unsafe](javascript:alert)",
+		);
+		const cards = descendants(node).filter((child) => child.className === "artifact-card");
+		expect(cards).toHaveLength(2);
+		expect(requests.filter((path) => path.includes("/artifact?"))).toHaveLength(0);
+		await descendants(cards[0])
+			.find((child) => child.tagName === "button")
+			?.handlers.get("click")?.();
+		expect(requests).toContain("/session/files/artifact?path=notes.txt");
+		expect(elements.get("artifact-content")?.children[0]?.tagName).toBe("pre");
+		expect(elements.get("artifact-content")?.textContent).toBe("<script>literal text</script>");
+		expect(elements.get("artifact-download")?.hidden).toBe(false);
+		expect(
+			descendants(node)
+				.find((child) => child.textContent === "Unsafe")
+				?.attributes.get("href"),
+		).toBeUndefined();
+		elements.get("artifact-dialog")?.close();
+		expect(elements.get("artifact-content")?.children).toHaveLength(0);
+	});
 	it.each(["| A plain line, not a table", "``` typescript with a title"])(
 		"does not stall on incomplete Markdown: %s",
 		(source) => {
@@ -708,7 +1471,7 @@ describe("inline thinking state", () => {
 			["web_search", { query: "Qubits" }, "web", "Searching Qubits"],
 			["read", { path: "USER.md" }, "reading", "Reading USER.md"],
 			["bash", { command: "npm run check" }, "terminal", "Running checks"],
-			["edit", { path: "Quatrix.ts" }, "editing", "Editing Quatrix.ts"],
+			["edit", { path: "Quatrix.ts" }, "coding", "Editing Quatrix.ts"],
 			["write", { path: "plan.md" }, "writing", "Writing plan.md"],
 		] as const) {
 			event({ type: "tool_execution_start", toolName, args });
@@ -725,6 +1488,10 @@ describe("inline thinking state", () => {
 		});
 		expect(label()).toMatch(/^Thought for \d+ seconds?$/);
 		const body = descendants(feed).find((child) => child.className === "thinking-body");
+		expect(body?.textContent).toBe("");
+		descendants(row)
+			.find((child) => child.className === "thinking-head")
+			?.handlers.get("click")?.();
 		expect(body?.textContent).toContain("compare the three readings");
 		expect(descendants(feed).some((child) => child.textContent === "Compared.")).toBe(true);
 	});
