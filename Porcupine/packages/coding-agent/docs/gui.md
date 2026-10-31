@@ -20,6 +20,10 @@ The Conversations list discovers saved Porcupine sessions using the same session
 
 The interface uses an open conversation column, neutral surfaces, compact controls, and a shared adaptive width for text, figures, and the composer. Its semantic tokens and layout patterns are adapted from the MIT-licensed DeepSeek Harness UI, not its branding or plugin runtime. See [source notes and license](./gui-third-party-notices.md).
 
+## TUI and GUI parity
+
+The [TUI ↔ GUI contract](./gui-parity.md) lists every required command and runtime capability, with explicit implemented/partial/missing status and acceptance criteria. `/parity` inspects that live contract. The command menu labels incomplete GUI support; missing handlers fail explicitly and keep the submitted draft instead of recording a successful operation. Implementation coverage is not a claim of full parity or completed visual/runtime certification.
+
 ## Tasks and Cron
 
 `/task` and `/cron` use the same definitions, schedules and append-only run history as the TUI, under the same agent home. The agent's `tasks` tool manages that same store. For example:

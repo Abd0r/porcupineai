@@ -1,6 +1,13 @@
 import type { AgentSession } from "../core/agent-session.ts";
 import { BUILTIN_SLASH_COMMANDS } from "../core/slash-commands.ts";
 import {
+	COMMAND_SURFACE_REQUIREMENTS,
+	getSurfaceParityReport,
+	type SurfaceImplementation,
+	type SurfaceParity,
+	type SurfaceParityReport,
+} from "../core/surface-contract.ts";
+import {
 	extractTrajectory,
 	formatTraceAll,
 	formatTraceStep,
@@ -12,6 +19,10 @@ import { formatLearningStatus, listLearningEvents, listLearningFeed } from "../p
 import { formatMemoryReport } from "../porcupine/memory-command.ts";
 import { parseInitCommand, writeProjectContext } from "../porcupine/project-init.ts";
 import { formatProjectsCommandOutput } from "../porcupine/project-search.ts";
+import { buildCapabilityTreeFromSession } from "../porcupine/session-capabilities.ts";
+import { formatStacksCommandOutput } from "../porcupine/stacks.ts";
+import { formatSubagentSessionList, formatSubagentSessionView } from "../porcupine/subagent-session-format.ts";
+import { listSubagentSessions } from "../porcupine/subagent-sessions.ts";
 import { PorcupineTaskStore } from "../porcupine/task-scheduler.ts";
 import { getChangelogPath, parseChangelog } from "../utils/changelog.ts";
 import { WorkbenchError } from "./workbench-context-files.ts";
@@ -21,56 +32,35 @@ import { executeWorkbenchTaskCommand } from "./workbench-task-commands.ts";
 export interface WorkbenchCommand {
 	name: string;
 	description: string;
-	availability: "browser" | "terminal" | "turn";
+	availability: "browser" | "unavailable" | "turn";
+	implementation?: SurfaceImplementation;
+	parity?: SurfaceParity;
+	acceptance?: string;
+	gap?: string;
+	hidden?: boolean;
 }
 export interface WorkbenchCommandResult {
 	command: string;
 	text: string;
+	parity?: SurfaceParityReport;
 }
-const LOCAL = new Set(["new", "settings", "resume", "copy", "reasoning-show", "hotkeys"]);
-const ENGINES = new Set([
-	"commands",
-	"help",
-	"guide",
-	"name",
-	"session",
-	"usage",
-	"cost",
-	"reasoning",
-	"thinking",
-	"adaptive",
-	"auto",
-	"modes",
-	"model",
-	"projects",
-	"stacks",
-	"subagents",
-	"memory",
-	"learning",
-	"trace",
-	"changelog",
-	"init",
-	"compact",
-	"kill",
-	"reload",
-	"export",
-	"task",
-	"cron",
-]);
 
 /** Uses the runtime's real registries and engines; never sends unsupported builtins to the model. */
 export function createWorkbenchCommands(session: AgentSession, agentDir: string) {
 	const surfaces = createSessionSurfaces(session);
 	const catalog = (): WorkbenchCommand[] => {
-		const builtins = [
-			{ name: "commands", description: "List commands and their availability" },
-			{ name: "help", description: "List commands and their availability" },
-			...BUILTIN_SLASH_COMMANDS,
-		].map((command) => ({
-			name: command.name,
-			description: command.description,
-			availability:
-				LOCAL.has(command.name) || ENGINES.has(command.name) ? ("browser" as const) : ("terminal" as const),
+		const descriptions = new Map(
+			[
+				{ name: "commands", description: "List commands and their availability" },
+				{ name: "help", description: "List commands and their availability" },
+				{ name: "parity", description: "Inspect the TUI/GUI contract and remaining gaps" },
+				...BUILTIN_SLASH_COMMANDS,
+			].map((command) => [command.name, command.description]),
+		);
+		const builtins = COMMAND_SURFACE_REQUIREMENTS.map((rule) => ({
+			...rule,
+			description: descriptions.get(rule.name) || rule.acceptance,
+			availability: rule.implementation === "missing" ? ("unavailable" as const) : ("browser" as const),
 		}));
 		const dynamic = [
 			...session.extensionRunner.getRegisteredCommands().map((command) => ({
@@ -90,7 +80,12 @@ export function createWorkbenchCommands(session: AgentSession, agentDir: string)
 			...builtins,
 			...dynamic
 				.filter((command) => !names.has(command.name))
-				.map((command) => ({ ...command, availability: "turn" as const })),
+				.map((command) => ({
+					...command,
+					availability: "turn" as const,
+					parity: "partial" as const,
+					gap: "Prompt/template execution is shared; extension-specific browser UI requirements still need verification.",
+				})),
 		];
 	};
 	const execute = async (command: string): Promise<WorkbenchCommandResult> => {
@@ -98,12 +93,18 @@ export function createWorkbenchCommands(session: AgentSession, agentDir: string)
 		if (!match) throw new WorkbenchError(400, "Start a command with /");
 		const name = match[1]!.toLowerCase(),
 			args = match[2]?.trim() || "",
-			found = catalog().find((item) => item.name === name);
+			found =
+				catalog().find((item) => item.name === name) ||
+				(name.startsWith("mcpp:") ? catalog().find((item) => item.name === "mcpp") : undefined);
 		if (!found) throw new WorkbenchError(400, `Unknown command /${name}. Use /commands.`);
 		if (session.isStreaming && name !== "kill") throw new WorkbenchError(409, "Wait for the current turn to finish");
 		let text: string;
-		if (found.availability === "terminal") text = `/${name} requires the Porcupine terminal. ${found.description}.`;
-		else if (found.availability === "turn") {
+		let parity: SurfaceParityReport | undefined;
+		if (found.implementation === "missing")
+			throw new WorkbenchError(501, `/${name} is not wired in the GUI yet. ${found.gap}`);
+		if (found.implementation === "client")
+			throw new WorkbenchError(400, `/${name} is handled by the browser composer and controls.`);
+		if (found.availability === "turn") {
 			await session.prompt(command);
 			text = `Executed /${name}.`;
 		} else
@@ -113,9 +114,13 @@ export function createWorkbenchCommands(session: AgentSession, agentDir: string)
 					text = catalog()
 						.map(
 							(item) =>
-								`/${item.name} — ${item.description}${item.availability === "terminal" ? " (terminal only)" : ""}`,
+								`/${item.name} — ${item.description}${item.parity === "missing" ? " (GUI not wired)" : item.parity === "partial" ? " (partial GUI support)" : ""}`,
 						)
 						.join("\n");
+					break;
+				case "parity":
+					parity = getSurfaceParityReport();
+					text = `TUI/GUI parity is ${parity.ready ? "implemented; runtime and visual certification still required" : "not complete"}.\nContract v${parity.version}: ${parity.commands.length} commands, ${parity.runtime.length} runtime requirements.\nImplementation status is not proof of testing.\n\n${parity.gaps.map((gap) => `${gap.id} [${gap.parity}]\n${gap.gap}`).join("\n\n")}`;
 					break;
 				case "guide":
 					text = formatGuideCommandOutput(command);
@@ -135,11 +140,11 @@ export function createWorkbenchCommands(session: AgentSession, agentDir: string)
 					break;
 				}
 				case "usage":
-				case "cost": {
-					const stats = session.getSessionStats();
-					text = `Input: ${stats.tokens.input}\nOutput: ${stats.tokens.output}\nCache read: ${stats.tokens.cacheRead}\nCache write: ${stats.tokens.cacheWrite}\nTotal tokens: ${stats.tokens.total}\nEstimated cost: $${stats.cost.toFixed(6)}`;
+					text = session.renderUsageCommand();
 					break;
-				}
+				case "cost":
+					text = session.renderCostCommand();
+					break;
 				case "reasoning":
 				case "thinking":
 					if (args) surfaces.configure({ reasoningMode: args as ReasoningMode });
@@ -181,20 +186,26 @@ export function createWorkbenchCommands(session: AgentSession, agentDir: string)
 					text = formatProjectsCommandOutput(session.sessionManager.getCwd(), args);
 					break;
 				case "stacks": {
-					const entries = [
-						...surfaces.getCatalog("skills", args, 0, 100).entries,
-						...surfaces.getCatalog("tools", args, 0, 100).entries,
-					];
-					text =
-						entries.map((entry) => `${entry.kind}: ${entry.name} — ${entry.description}`).join("\n") ||
-						"No matching capabilities.";
+					const active = new Set(session.getActiveToolNames());
+					const tree = buildCapabilityTreeFromSession({
+						tools: session.getAllTools().map((tool) => ({ ...tool, available: active.has(tool.name) })),
+						skills: session.resourceLoader.getSkills().skills.map((skill) => ({ ...skill, available: true })),
+					});
+					text = formatStacksCommandOutput(tree, args);
 					break;
 				}
-				case "subagents":
-					text =
-						session.subagentState.runs.map((run) => `@${run.name}: ${run.task} [${run.status}]`).join("\n") ||
-						"No subagents in this session.";
+				case "subagents": {
+					const saved = await listSubagentSessions(session.sessionManager.getSessionDir());
+					text = args
+						? formatSubagentSessionView(saved, args)
+						: [
+								session.subagentState.runs.map((run) => `@${run.name}: ${run.task} [${run.status}]`).join("\n"),
+								formatSubagentSessionList(saved),
+							]
+								.filter(Boolean)
+								.join("\n\n");
 					break;
+				}
 				case "memory":
 					text = formatMemoryReport(agentDir);
 					break;
@@ -245,13 +256,18 @@ export function createWorkbenchCommands(session: AgentSession, agentDir: string)
 					await session.reload();
 					text = "Resources reloaded for future turns.";
 					break;
-				case "export":
-					text = `Exported session: ${await session.exportToHtml(args || undefined)}`;
+				case "export": {
+					const path = /^(?:"([^"]+)"|'([^']+)'|(\S+))$/.exec(args);
+					if (args && !path)
+						throw new WorkbenchError(400, "Usage: /export [path.html|path.jsonl]; quote paths with spaces");
+					const output = path ? path[1] || path[2] || path[3] : undefined;
+					text = `Exported session: ${output?.toLowerCase().endsWith(".jsonl") ? session.exportToJsonl(output) : await session.exportToHtml(output)}`;
 					break;
+				}
 				default:
-					text = `Open /${name} from the browser controls.`;
+					throw new WorkbenchError(501, `No GUI handler is registered for /${name}.`);
 			}
-		const result = { command, text };
+		const result: WorkbenchCommandResult = { command, text, ...(parity ? { parity } : {}) };
 		session.sessionManager.appendCustomEntry("workbench.command", result);
 		session.sessionManager.forceFlushToDisk();
 		return result;

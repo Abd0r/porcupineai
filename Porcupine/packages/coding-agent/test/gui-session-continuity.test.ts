@@ -64,15 +64,20 @@ describe("TUI to GUI session continuity", () => {
 		expect(sessions.some((session) => session.id === manager.getSessionId())).toBe(true);
 	});
 
-	it("replays TUI history and sends it to the model on the next GUI turn, persisting into the same file", async () => {
+	it("round-trips TUI to GUI to TUI with the same saved history, model context and identity", async () => {
 		const { root, sessionDir, manager } = savedConversation();
 		const faux = registerFauxProvider();
 		let resumedContext = "";
+		let terminalContext = "";
 		faux.setResponses([
 			fauxAssistantMessage("TUI implementation checkpoint"),
 			(context) => {
 				resumedContext = JSON.stringify(context.messages);
 				return fauxAssistantMessage("GUI continuation completed");
+			},
+			(context) => {
+				terminalContext = JSON.stringify(context.messages);
+				return fauxAssistantMessage("TUI round-trip completed");
 			},
 		]);
 		const credentials = AuthStorage.inMemory();
@@ -108,6 +113,7 @@ describe("TUI to GUI session continuity", () => {
 		const adapted = adaptSessionToServeApi(browser.session, root);
 		adapted.setClientSurface?.("web");
 		const handle = await startServeApi({ session: adapted, port: 0, token: "test-continuity" });
+		let browserDisposed = false;
 		try {
 			expect(JSON.stringify(adapted.getTimeline?.())).toContain("TUI implementation checkpoint");
 			const response = await fetch(`http://127.0.0.1:${handle.port()}/session/${adapted.id}/message`, {
@@ -123,9 +129,25 @@ describe("TUI to GUI session continuity", () => {
 			selected.forceFlushToDisk();
 			const reopened = SessionManager.open(manager.getSessionFile()!);
 			expect(JSON.stringify(reopened.buildSessionContext().messages)).toContain("GUI continuation completed");
+			browser.session.dispose();
+			browserDisposed = true;
+			const returned = await createAgentSession({ ...options, sessionManager: reopened });
+			try {
+				returned.session.setClientSurface("tui");
+				await returned.session.prompt("Continue from the GUI in the terminal");
+				expect(returned.session.sessionId).toBe(adapted.id);
+				expect(terminalContext).toContain("TUI implementation checkpoint");
+				expect(terminalContext).toContain("GUI continuation completed");
+				reopened.forceFlushToDisk();
+				expect(
+					JSON.stringify(SessionManager.open(manager.getSessionFile()!).buildSessionContext().messages),
+				).toContain("TUI round-trip completed");
+			} finally {
+				returned.session.dispose();
+			}
 		} finally {
 			await handle.close();
-			browser.session.dispose();
+			if (!browserDisposed) browser.session.dispose();
 			faux.unregister();
 		}
 	});

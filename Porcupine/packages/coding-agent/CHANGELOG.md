@@ -4,6 +4,8 @@
 
 ### Added
 
+- Versioned TUI/GUI capability contract, `/parity` inspection, explicit missing/partial command labels, and a required coverage/documentation drift audit.
+
 - Attended GUI execution of Cron and queued manual/chained tasks, plus `/task` and `/cron` commands using the same durable definitions, schedules and history as the TUI.
 
 - Local PDF.js previews for chat, project and sticky-note PDFs, with page navigation, zoom, password entry, readable page text and a matching standalone tab; no native PDF plug-in or CDN required.
@@ -31,6 +33,8 @@
 - Batch long GUI history restores and expanded reasoning updates; defer collapsed reasoning rendering until opened. Add a saved Reduce motion preference, keyboard model navigation and mobile navigation focus containment.
 
 ### Fixed
+
+- Use shared per-turn usage, model-attributed cost and hierarchical stack engines in GUI commands; support quoted HTML/JSONL export paths and persisted subagent recall by ID. Reject unwired GUI commands without recording success.
 
 - Preserve task claims owned by live processes when another TUI/GUI store opens, and prevent overlapping execution of the same task across clients.
 
