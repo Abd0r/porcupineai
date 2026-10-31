@@ -153,9 +153,8 @@ export class WorkbenchProjectStore {
 							const content = readFileSync(readme, "utf8");
 							const objective = content.match(/^## Objective\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/im)?.[1];
 							description = (objective ?? content.replace(/^# .+\n?/, "").split(/^## /m)[0] ?? "")
-								.replace(/\s+/g, " ")
-								.trim()
-								.slice(0, 360);
+								.replace(/\r\n?/g, "\n")
+								.trim();
 						}
 					} catch {}
 					return [
@@ -215,7 +214,7 @@ export class WorkbenchProjectStore {
 		const heading = (title?.trim() || project).slice(0, 120);
 		writeFileSync(
 			join(directory, "README.md"),
-			`# ${heading.replace(/[\r\n]/g, " ")}\n\n## Objective\n${description.replace(/\s+/g, " ").trim().slice(0, 360)}\n\n## Scope\n- In scope:\n- Out of scope:\n\n## Workspace map\n- \`uploads/\`: documents supplied through the workbench\n`,
+			`# ${heading.replace(/[\r\n]/g, " ")}\n\n## Objective\n${description.replace(/\r\n?/g, "\n").trim()}\n\n## Scope\n- In scope:\n- Out of scope:\n\n## Workspace map\n- \`uploads/\`: documents supplied through the workbench\n`,
 			{ mode: 0o600 },
 		);
 		writeFileSync(

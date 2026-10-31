@@ -61,9 +61,12 @@ export async function handleProjectRequest(
 			if (
 				typeof name !== "string" ||
 				(title !== undefined && typeof title !== "string") ||
-				(description !== undefined && (typeof description !== "string" || description.length > 360))
+				(description !== undefined && (typeof description !== "string" || description.length > 8000))
 			)
-				throw new WorkbenchError(400, "name and title must be strings; description must be at most 360 characters");
+				throw new WorkbenchError(
+					400,
+					"name and title must be strings; description must be at most 8000 characters",
+				);
 			router.json(res, 201, router.projects.create(name, title, description));
 			return true;
 		}

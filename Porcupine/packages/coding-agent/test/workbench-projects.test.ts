@@ -16,6 +16,24 @@ function fixture() {
 const pdf = Buffer.from("%PDF-1.7\nsynthetic test document\n");
 
 describe("workbench project workspaces", () => {
+	it("does not cut a README objective in the middle of Markdown", () => {
+		const { cwd, store } = fixture();
+		store.create("complete");
+		const description = `**Overview**\n\n${"Verified detail. ".repeat(40)}[Full report](uploads/report.pdf)`;
+		writeFileSync(
+			join(cwd, "Project", "complete", "README.md"),
+			`# Complete\n\n## Objective\n${description}\n\n## Scope\nOther content.`,
+		);
+		expect(store.list()[0].description).toBe(description);
+	});
+
+	it("preserves Markdown paragraphs and lists in new project descriptions", () => {
+		const { store } = fixture(),
+			description = "**Compare** samples.\n\n- Verify `units`\n- Track uncertainty";
+		store.create("markdown", "Markdown", description);
+		expect(store.list()[0].description).toBe(description);
+	});
+
 	it("keeps office documents available as downloadable project resources", () => {
 		const { store } = fixture();
 		store.create("paper");
@@ -54,7 +72,7 @@ describe("workbench project workspaces", () => {
 		const reopened = new WorkbenchProjectStore(cwd);
 		expect(reopened.list()[0]).toMatchObject({
 			title: "Paper",
-			description: "Compare measured results. Track uncertainty.",
+			description: "Compare measured results.\nTrack uncertainty.",
 			pinned: true,
 		});
 		reopened.setPinned("paper", false);

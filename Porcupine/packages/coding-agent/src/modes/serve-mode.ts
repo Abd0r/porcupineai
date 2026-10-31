@@ -48,6 +48,11 @@ export interface ServeModeOptions {
 	token?: string;
 }
 
+export async function listServeSessions(sessionDir: string) {
+	const [all, configured] = await Promise.all([SessionManager.listAll(), SessionManager.listAll(sessionDir)]);
+	return [...new Map([...all, ...configured].map((item) => [item.id, item])).values()];
+}
+
 /**
  * Adapt a live AgentSession to the HTTP API's minimal session surface.
  * Exported separately so tests can drive the API against a real session
@@ -246,10 +251,7 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 		deleted = new Set<string>();
 	const sessionDir = runtime.session.sessionManager.getSessionDir(),
 		projects = new WorkbenchProjectStore(runtime.cwd);
-	const discover = async () => {
-		const [local, all] = await Promise.all([SessionManager.list(runtime.cwd, sessionDir), SessionManager.listAll()]);
-		return [...new Map([...all, ...local].map((item) => [item.id, item])).values()];
-	};
+	const discover = () => listServeSessions(sessionDir);
 	const attach = async (manager: SessionManager) => {
 		const sibling = await runtime.createSibling(manager);
 		sibling.session.setClientSurface("none");

@@ -287,6 +287,7 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		"project-pin",
 		"project-chats",
 		"project-description",
+		"project-description-toggle",
 		"new-project-description",
 		"project-title",
 		"project-delete",
@@ -440,6 +441,44 @@ function loadRenderer(mockFetch?: typeof fetch): {
 }
 
 describe("project pages", () => {
+	it("lets users expand overflowing descriptions and read the complete Markdown", async () => {
+		const description = `**Full objective**\n\n${"Long detail. ".repeat(60)}**Complete ending**`;
+		const h = loadRenderer(async () => Response.json({ title: "Lab", description, files: [] })),
+			body = h.elements.get("project-description")!;
+		body.scrollHeight = 300;
+		body.clientHeight = 72;
+		await h.project("lab");
+		const toggle = h.elements.get("project-description-toggle")!;
+		expect(toggle.hidden).toBe(false);
+		expect(toggle.getAttribute("aria-expanded")).toBe("false");
+		toggle.handlers.get("click")!();
+		expect(body.dataset.expanded).toBe("true");
+		expect(toggle.textContent).toBe("Show less");
+		expect(descendants(body).some((n) => n.tagName === "strong" && n.textContent === "Complete ending")).toBe(true);
+		toggle.handlers.get("click")!();
+		expect(body.dataset.expanded).toBe("false");
+	});
+
+	it("renders description Markdown safely and keeps it when reopening the same project", async () => {
+		const h = loadRenderer(async () =>
+			Response.json({
+				title: "Lab",
+				description: "**Measure** `samples` [Guide](https://example.com) <script>alert(1)</script>",
+				files: [],
+			}),
+		);
+		for (let i = 0; i < 2; i++) {
+			await h.project("lab");
+			const description = h.elements.get("project-description")!,
+				nodes = descendants(description);
+			expect(nodes.some((n) => n.tagName === "strong" && n.textContent === "Measure")).toBe(true);
+			expect(nodes.some((n) => n.tagName === "code" && n.textContent === "samples")).toBe(true);
+			expect(nodes.some((n) => n.tagName === "a" && n.getAttribute("href") === "https://example.com")).toBe(true);
+			expect(nodes.some((n) => n.tagName === "script")).toBe(false);
+			expect(description.textContent).toContain("<script>alert(1)</script>");
+		}
+	});
+
 	it("inserts safe Markdown links for uploaded filenames with parentheses", async () => {
 		const h = loadRenderer(async (_path, options) =>
 			options?.method === "POST"
@@ -526,6 +565,39 @@ describe("project pages", () => {
 		expect(requests).toContain("/workbench/projects/lab/files/uploads/paper.pdf?raw=1");
 		expect(h.elements.get("artifact-content")!.children[0].tagName).toBe("iframe");
 	});
+	it.each(["amber", "blue", "sage", "rose"])(
+		"keeps a %s note's paper colour when opening and editing",
+		async (color) => {
+			let note = { id: "n", title: "Remember", text: "Draft", color, revision: "r" };
+			const h = loadRenderer(async (_path, options) => {
+				if (options?.method === "PUT") {
+					note = { ...note, ...JSON.parse(String(options.body)), revision: "r2" };
+					return Response.json(note);
+				}
+				return Response.json({ title: "Lab", files: [], notes: [note] });
+			});
+			const open = async () => {
+				await h.project("lab");
+				const button = descendants(h.elements.get("project-notes-list")!).find(
+					(node) => node.tagName === "button" && node.textContent === "Open / edit",
+				)!;
+				await button.handlers.get("click")!();
+			};
+			await open();
+			const dialog = h.elements.get("project-note-dialog")!;
+			expect(dialog.dataset.color).toBe(color);
+			await h.elements.get("project-note-edit")!.handlers.get("click")!();
+			expect(dialog.dataset.color).toBe(color);
+			const next = color === "blue" ? "rose" : "blue";
+			h.elements.get("project-note-color")!.value = next;
+			await h.elements.get("project-note-color")!.handlers.get("change")!();
+			expect(dialog.dataset.color).toBe(next);
+			await h.elements.get("project-note-save")!.handlers.get("click")!();
+			await open();
+			expect(dialog.dataset.color).toBe(next);
+			expect(h.elements.get("project-note-color")!.value).toBe(next);
+		},
+	);
 	it("allows adding notes and preserves the editor draft after a conflict", async () => {
 		let conflict = false;
 		const h = loadRenderer(async (_path, options) => {

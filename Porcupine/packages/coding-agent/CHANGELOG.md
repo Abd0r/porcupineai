@@ -28,6 +28,12 @@
 
 ### Fixed
 
+- Keep sticky-note paper colours when opening and editing notes, with a live colour preview and saved colour restored on reopening.
+
+- Resume the most recent workspace conversation on default GUI launch, retaining TUI history and context; discover cross-workspace conversations in custom session directories.
+
+- Render project descriptions as safe Markdown, preserve paragraph/list breaks and offer Show more for long descriptions instead of cutting Markdown mid-formatting.
+
 - Scope approval replies and pending queue submissions to their original chats; deny pending approvals on server shutdown and cancel their timers when answered.
 - Preserve newer context-file drafts and selections when saves or loads finish late, and keep the current project open when a different project's deletion completes.
 - Reject project creation through aliased Project roots and bound text preview reads to 256 KiB without splitting UTF-8 characters.

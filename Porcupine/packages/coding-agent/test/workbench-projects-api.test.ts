@@ -29,6 +29,19 @@ async function fixture() {
 	return { cwd, base: `http://127.0.0.1:${handle.port()}`, headers: { authorization: "Bearer project-token" } };
 }
 describe("project workspace API", () => {
+	it("keeps complete Markdown descriptions beyond the old 360-character limit", async () => {
+		const { base, headers } = await fixture(),
+			description = `**Overview**\n\n${"Detail. ".repeat(70)}[Complete report](uploads/report.pdf)`;
+		const response = await fetch(`${base}/workbench/projects`, {
+			method: "POST",
+			headers,
+			body: JSON.stringify({ name: "complete", description }),
+		});
+		expect(response.status).toBe(201);
+		const details = await (await fetch(`${base}/workbench/projects/complete`, { headers })).json();
+		expect(details.description).toBe(description);
+	});
+
 	it("shares rich sticky notes, enforces twenty, and rejects stale edits", async () => {
 		const { base, headers } = await fixture();
 		await fetch(`${base}/workbench/projects`, { method: "POST", headers, body: JSON.stringify({ name: "notes" }) });

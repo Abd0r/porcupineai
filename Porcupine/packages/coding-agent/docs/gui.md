@@ -2,6 +2,8 @@
 
 Run `porcupine -gui` (or `porcupine --gui`) to start a local workbench and open the browser. The launcher selects an available port and creates a token for that run; the browser consumes the launch fragment and removes it from the address bar. Keep the terminal process running. Plain `porcupine` continues to launch the terminal interface. `--port` can select a fixed port. GUI launch is loopback-only; `--serve` remains the explicit server route.
 
+To move from the TUI, finish its current turn and exit, then launch `porcupine --gui` from the same working directory. The GUI resumes the most recently modified conversation there, retaining its session ID, saved history and model context. Use the same `--session-dir` if you configured one. `--session <path-or-id>` or `--session-id <id>` selects a specific conversation; **New conversation** starts fresh. `--gui --name "New work"` also starts fresh, while `--no-session` remains temporary. This is a saved-session handoff, not concurrent ownership by two processes.
+
 `porcupine --serve` serves a local browser workbench at the server root, for example `http://127.0.0.1:4096/`. The existing terminal interface remains available; the workbench is an additional client of the same session API.
 
 Start the server with a token:
@@ -178,7 +180,7 @@ Run `node --import tsx packages/coding-agent/test/workbench-attachments-smoke.ts
 
 ## Conversation organization and commands
 
-Click a project title to open its page: a title, a description of up to three lines, its chats and its resources. **New project** accepts an optional short description, stored as the README objective; existing projects use their README objective or introductory paragraph. **Add resources** accepts multiple supported files and retains the existing upload limits. Select a resource for authenticated PDF, image or text preview, opening or download. **Back to chat** restores the current conversation without discarding its draft or stopping its work.
+Click a project title to open its page: a title, a Markdown description, its chats and its resources. Descriptions initially show three lines; **Show more** reveals the complete content, and **Show less** returns to the compact view. **New project** accepts up to 8000 characters of Markdown, stored as the README objective with paragraph and list breaks preserved; existing projects use their full README objective or introductory paragraph. Local description links open the project's file preview. **Add resources** accepts multiple supported files and retains the existing upload limits. Select a resource for authenticated PDF, image or text preview, opening or download. **Back to chat** restores the current conversation without discarding its draft or stopping its work.
 
 Use **Pin project** on the project page to keep it at the top of Projects. Unpin from the same button. Pins persist atomically in the project’s hidden `.workbench-pin` file across browser and server restarts; they do not change chat pins or project assignments. Project management actions stay in a collapsed disclosure.
 
