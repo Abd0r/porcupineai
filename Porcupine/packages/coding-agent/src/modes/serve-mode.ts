@@ -23,6 +23,7 @@ import { getAgentDir, VERSION } from "../config.ts";
 import type { AgentSession } from "../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../core/agent-session-runtime.ts";
 import { SessionManager } from "../core/session-manager.ts";
+import { AttendedTaskRunner } from "../server/attended-task-runner.ts";
 import { type ServeApiSession, startServeApi } from "../server/http-api.ts";
 import { describeWorkbenchActivity } from "../server/workbench-activity-description.ts";
 import { prepareWorkbenchAttachments } from "../server/workbench-attachments.ts";
@@ -246,6 +247,7 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 	}
 
 	runtime.session.setClientSurface("none");
+	const tasks = new AttendedTaskRunner(runtime.services.agentDir);
 	const additionalRuntimes = new Set<AgentSessionRuntime>();
 	const liveRuntimes = new Map([[runtime.session.sessionId, runtime]]),
 		deleted = new Set<string>();
@@ -258,13 +260,17 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 		additionalRuntimes.add(sibling);
 		liveRuntimes.set(sibling.session.sessionId, sibling);
 		manager.forceFlushToDisk();
-		return adaptSessionToServeApi(sibling.session, runtime.services.agentDir);
+		return tasks.register(sibling.session, adaptSessionToServeApi(sibling.session, runtime.services.agentDir));
 	};
 
 	const managerFor = async (id: string) => {
 		const live = liveRuntimes.get(id);
 		if (live) {
-			if (!live.session.isIdle || live.session.subagentState.runs.some((run) => run.status === "running"))
+			if (
+				tasks.isBusy(live.session) ||
+				!live.session.isIdle ||
+				live.session.subagentState.runs.some((run) => run.status === "running")
+			)
 				throw new WorkbenchError(409, "Stop the session and its workers before moving or deleting it");
 			return live.session.sessionManager;
 		}
@@ -274,7 +280,7 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 	};
 
 	const handle = await startServeApi({
-		session: adaptSessionToServeApi(runtime.session, runtime.services.agentDir),
+		session: tasks.register(runtime.session, adaptSessionToServeApi(runtime.session, runtime.services.agentDir)),
 		listSessions: async () =>
 			(await discover())
 				.filter((item) => !deleted.has(item.id))
@@ -310,7 +316,9 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 				const live = liveRuntimes.get(id);
 				if (
 					live &&
-					(!live.session.isIdle || live.session.subagentState.runs.some((run) => run.status === "running"))
+					(tasks.isBusy(live.session) ||
+						!live.session.isIdle ||
+						live.session.subagentState.runs.some((run) => run.status === "running"))
 				)
 					throw new WorkbenchError(409, "Stop this project's conversations and workers before deleting it");
 			}
@@ -326,6 +334,7 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 				live = liveRuntimes.get(id);
 			moveSessionToTrash(manager);
 			if (live) {
+				tasks.unregister(live.session);
 				await live.dispose();
 				liveRuntimes.delete(id);
 				additionalRuntimes.delete(live);
@@ -344,6 +353,9 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 		version: VERSION,
 		contextFiles: new ContextFileStore(runtime.cwd, runtime.services.agentDir),
 		projects,
+	}).catch(async (error: unknown) => {
+		await tasks.close();
+		throw error;
 	});
 
 	process.stderr.write(`Porcupine serve listening on http://${options.host ?? "127.0.0.1"}:${handle.port()}\n`);
@@ -369,12 +381,18 @@ export async function runServeMode(runtime: AgentSessionRuntime, options: ServeM
 	}
 
 	await new Promise<void>((resolve) => {
-		const onSignal = (): void => resolve();
+		const onSignal = (): void => {
+			process.off("SIGINT", onSignal);
+			process.off("SIGTERM", onSignal);
+			resolve();
+		};
 		process.once("SIGINT", onSignal);
 		process.once("SIGTERM", onSignal);
 	});
 
+	tasks.stop();
 	await handle.close();
+	await tasks.close();
 	for (const sibling of additionalRuntimes) await sibling.dispose();
 	if (!deleted.has(runtime.session.sessionId)) await runtime.dispose();
 	return 0;

@@ -12,9 +12,11 @@ import { formatLearningStatus, listLearningEvents, listLearningFeed } from "../p
 import { formatMemoryReport } from "../porcupine/memory-command.ts";
 import { parseInitCommand, writeProjectContext } from "../porcupine/project-init.ts";
 import { formatProjectsCommandOutput } from "../porcupine/project-search.ts";
+import { PorcupineTaskStore } from "../porcupine/task-scheduler.ts";
 import { getChangelogPath, parseChangelog } from "../utils/changelog.ts";
 import { WorkbenchError } from "./workbench-context-files.ts";
 import { createSessionSurfaces, type ReasoningMode } from "./workbench-session-surfaces.ts";
+import { executeWorkbenchTaskCommand } from "./workbench-task-commands.ts";
 
 export interface WorkbenchCommand {
 	name: string;
@@ -52,6 +54,8 @@ const ENGINES = new Set([
 	"kill",
 	"reload",
 	"export",
+	"task",
+	"cron",
 ]);
 
 /** Uses the runtime's real registries and engines; never sends unsupported builtins to the model. */
@@ -115,6 +119,10 @@ export function createWorkbenchCommands(session: AgentSession, agentDir: string)
 					break;
 				case "guide":
 					text = formatGuideCommandOutput(command);
+					break;
+				case "task":
+				case "cron":
+					text = executeWorkbenchTaskCommand(new PorcupineTaskStore(agentDir), command);
 					break;
 				case "name":
 					if (!args) throw new WorkbenchError(400, "Usage: /name <name>");

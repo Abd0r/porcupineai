@@ -20,6 +20,24 @@ The Conversations list discovers saved Porcupine sessions using the same session
 
 The interface uses an open conversation column, neutral surfaces, compact controls, and a shared adaptive width for text, figures, and the composer. Its semantic tokens and layout patterns are adapted from the MIT-licensed DeepSeek Harness UI, not its branding or plugin runtime. See [source notes and license](./gui-third-party-notices.md).
 
+## Tasks and Cron
+
+`/task` and `/cron` use the same definitions, schedules and append-only run history as the TUI, under the same agent home. The agent's `tasks` tool manages that same store. For example:
+
+```text
+/task add Review :: Check the project and verify the focused tests.
+/cron add task-<id> :: */15 * * * *
+/task show task-<id>
+```
+
+Use `/task run <id>` to queue a manual run; `/cron list`, `/cron pause <id>`, `/cron resume <id>` and `/cron remove <id>` manage routines. `/cron run <id>` queues a manual run of the routine's task without changing its next occurrence. Pausing or cancelling a task pauses its routines; resume the task and its routines separately.
+
+Execution is attended-only. The server checks every 15 seconds and when a conversation attaches or finishes a turn/command. It starts work only with a connected browser and an idle conversation: no streaming, compaction, shell command, queued prompt or running subagent. With several browser conversations attached, the most recently attached conversation receives new task runs; if it is busy, the runner waits rather than choosing another chat. Tasks are global to the agent home, not bound to the conversation or project where they were created. Include explicit workspace paths in tasks that need a particular project.
+
+Runs use that conversation's current model, context, workspace and permission policy, and stream into its normal history. Approvals still go through the GUI. Closing the browser stops new claims; an already running turn continues until completion, Stop or server shutdown. Keep the server open; this is not a daemon. File/script event-trigger checks remain in the TUI.
+
+Atomic store claims prevent the same run from executing twice across TUI and GUI processes. Opening another store preserves live runs. Process exit leaves unfinished runs `unknown`, never silently replayed or called completed; inspect `/task show <id>` and explicitly queue a new run if appropriate. Saved task definitions and schedules remain available when changing interfaces. Conversation handoff still follows the saved-session workflow above; this does not enable two processes to write the same conversation file concurrently.
+
 ## Visual explanations
 
 Diagram preparation accepts both canonical primitives and compact node notation. A compact box uses `id`, `type: "box"`, centre coordinates `x`/`y`, dimensions `w`/`h`, `label` and `fill`. Arrows can reference existing node IDs with `from`/`to`; preparation converts these to boundary coordinates and supplies a neutral line colour when omitted. A missing diagram title is derived from the description or defaults to "2D diagram". Duplicate IDs, unresolved connections, unknown fields and invalid bounds are rejected. Validation reports the selected visual kind, rather than errors for unrelated workspaces. Labels use the active UI font and math renderer at a readable size, wrap complete words, and reserve space around arrow annotations. The canvas fits the supplied content's bounds rather than a fixed square around the origin. Wide diagrams scroll within their card; **Expand diagram** opens a larger view and closes with its button or Escape. Resizing the chat or changing theme recalculates the layout. Supplied shape positions and connections remain unchanged: overlapping geometry still needs a corrected specification.

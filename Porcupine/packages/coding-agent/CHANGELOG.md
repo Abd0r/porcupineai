@@ -4,6 +4,8 @@
 
 ### Added
 
+- Attended GUI execution of Cron and queued manual/chained tasks, plus `/task` and `/cron` commands using the same durable definitions, schedules and history as the TUI.
+
 - Local PDF.js previews for chat, project and sticky-note PDFs, with page navigation, zoom, password entry, readable page text and a matching standalone tab; no native PDF plug-in or CDN required.
 
 - Shared project sticky notes (up to 20) with paper styling, rich Markdown, image/file attachments, read/edit/delete controls and agent note actions with conflict-safe persistence.
@@ -29,6 +31,8 @@
 - Batch long GUI history restores and expanded reasoning updates; defer collapsed reasoning rendering until opened. Add a saved Reduce motion preference, keyboard model navigation and mobile navigation focus containment.
 
 ### Fixed
+
+- Preserve task claims owned by live processes when another TUI/GUI store opens, and prevent overlapping execution of the same task across clients.
 
 - Keep Markdown table columns readable and keyboard-scrollable; render 2D labels in the active UI font, fit diagrams to their content, avoid node/edge-label collisions and offer an expanded diagram view. Chart legends wrap in the UI instead of squeezing series names onto the canvas.
 
