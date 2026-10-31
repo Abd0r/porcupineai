@@ -2222,6 +2222,24 @@ export class AgentSession {
 		return this._followUpMessages;
 	}
 
+	/** Remove a still-pending steering prompt while retaining peer/custom messages and image blocks. */
+	removeSteering(index: number, expected: string): boolean {
+		if (!Number.isInteger(index) || index < 0 || this._steeringMessages[index] !== expected) return false;
+		const queued = this.agent.drainSteeringMessages();
+		const users = queued.filter((message) => message.role === "user");
+		if (
+			users.length !== this._steeringMessages.length ||
+			users.some((message, position) => contentText(message.content, "") !== this._steeringMessages[position])
+		) {
+			for (const message of queued) this.agent.steer(message);
+			return false;
+		}
+		for (const message of queued) if (message !== users[index]) this.agent.steer(message);
+		this._steeringMessages.splice(index, 1);
+		this._emitQueueUpdate();
+		return true;
+	}
+
 	/** Remove a still-pending follow-up without dropping steering messages or images. */
 	removeFollowUp(index: number, expected: string): boolean {
 		if (!Number.isInteger(index) || index < 0 || this._followUpMessages[index] !== expected) return false;

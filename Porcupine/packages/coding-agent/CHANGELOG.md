@@ -1,5 +1,65 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Versioned TUI/GUI capability contract, `/parity` inspection, explicit missing/partial command labels, and a required coverage/documentation drift audit.
+
+- Attended GUI execution of Cron and queued manual/chained tasks, plus `/task` and `/cron` commands using the same durable definitions, schedules and history as the TUI.
+
+- Local PDF.js previews for chat, project and sticky-note PDFs, with page navigation, zoom, password entry, readable page text and a matching standalone tab; no native PDF plug-in or CDN required.
+
+- Shared project sticky notes (up to 20) with paper styling, rich Markdown, image/file attachments, read/edit/delete controls and agent note actions with conflict-safe persistence.
+
+- Dedicated project pages with short README descriptions, project chats, multiple resource uploads, shared file previews and persistent project pinning.
+- Persistent conversation pinning with a compact Pinned sidebar section and pin/unpin actions.
+- Safe mathematical chart expressions and parameterized expression simulations and a bounded numerical 1D Schrödinger model, dense charts with paginated data and CSV export, larger quizzes/decks, molecular bonds and chemistry/physics math notation.
+
+- Bundled Adaptive GUI and Adaptive Learning skills with validated tool examples, surface-aware guidance, user-response handling and sub-agent presentation handoffs.
+- Agent-shared workspace file cards from Markdown links, with inline raster images, PDF/text viewers, authenticated downloads and direct opening from the GUI.
+
+### Changed
+
+- Add a compact GUI-only agent guide with exact Adaptive GUI/Learning skill-loading calls, presentation tools, project-note actions and response handling; remove stale simulation restrictions.
+
+- Keep long chat/project names on one line with full-name tooltips; add unified sidebar search, bounded lists with Show more, compact project counts and remembered folder expansion.
+
+- Render project Markdown resources with formatted headings, tables, code and math; resolve resource links inside their project.
+
+- Default new GUI preferences to Pixel with system colour mode; retain saved appearance, panel placement and Tasks visibility choices.
+- Distinct GUI activity animations for coding, skills, search and collaboration, with a blue neutron-star reasoning indicator. Subagent messages and expandable reports appear in chat without execution accounting headers.
+- Coordinated colour palettes across all five themes in light/dark modes, including raised surfaces, selection, buttons, focus and semantic activity/status accents.
+- Batch long GUI history restores and expanded reasoning updates; defer collapsed reasoning rendering until opened. Add a saved Reduce motion preference, keyboard model navigation and mobile navigation focus containment.
+
+### Fixed
+
+- Use shared per-turn usage, model-attributed cost and hierarchical stack engines in GUI commands; support quoted HTML/JSONL export paths and persisted subagent recall by ID. Reject unwired GUI commands without recording success.
+
+- Preserve task claims owned by live processes when another TUI/GUI store opens, and prevent overlapping execution of the same task across clients.
+
+- Keep Markdown table columns readable and keyboard-scrollable; render 2D labels in the active UI font, fit diagrams to their content, avoid node/edge-label collisions and offer an expanded diagram view. Chart legends wrap in the UI instead of squeezing series names onto the canvas.
+
+- Keep sticky-note paper colours when opening and editing notes, with a live colour preview and saved colour restored on reopening.
+
+- Resume the most recent workspace conversation on default GUI launch, retaining TUI history and context; discover cross-workspace conversations in custom session directories.
+
+- Render project descriptions as safe Markdown, preserve paragraph/list breaks and offer Show more for long descriptions instead of cutting Markdown mid-formatting.
+
+- Scope approval replies and pending queue submissions to their original chats; deny pending approvals on server shutdown and cancel their timers when answered.
+- Preserve newer context-file drafts and selections when saves or loads finish late, and keep the current project open when a different project's deletion completes.
+- Reject project creation through aliased Project roots and bound text preview reads to 256 KiB without splitting UTF-8 characters.
+- Keep the latest sidebar session list when refreshes finish out of order, prevent repeated project-chat creation, and preview `.markdown` resources as text.
+- Preserve newer drafts during slow slash commands, restore failed command text, and isolate delayed card/message responses and answer caches from other chats and newer turns.
+- Ignore stale queue-removal responses after live events have already delivered pending prompts.
+- Anchor floating task panels to the outer conversation corner and bound them above the composer, including mixed side/overlay layouts.
+- Set simulation slider defaults after range constraints so displayed values match the model; improve simulation curve contrast.
+- Deliver GUI queued prompts through steering at the next tool/response boundary instead of waiting for the final answer; preserve queue cancellation, peer notices and attachments.
+- Preserve composer drafts when adding a visual follow-up question, and avoid adding the same question twice.
+- Resolve current workspace package names directly from source during tests and type checking in fresh checkouts.
+- Keep floating task panels above the composer in short viewports, make short connection screens scrollable, and fit input to visual-viewport changes. Pixel highlights the whole active composer instead of its inner textarea.
+- Improve small-text contrast across dark/light theme surfaces and keep context information above the composer rather than below the viewport.
+
 ## [0.1.80] - 2026-10-28
 
 ### Added

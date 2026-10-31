@@ -3,7 +3,7 @@
  *
  * Tasks are local, durable definitions with append-only run history. Cron
  * schedules decide when a task is eligible to run. Execution is attended-only:
- * a task runs on the current interactive session (current model + permission
+ * a task runs on an attended TUI or GUI session (current model + permission
  * policy) and only while the session is open and idle. "run" queues a claimed
  * run for the next idle moment instead of executing inline.
  */
@@ -195,16 +195,16 @@ export function createTasksToolDefinition(
 		name: "tasks",
 		label: "tasks",
 		description:
-			"Durable local tasks and cron routines. action=list shows tasks; action=create saves a task (title + prompt); action=show lists a task with append-only run history; action=run queues a task for the next idle moment (it runs on the current session with its model and permission policy, never inline); action=pause|resume|cancel changes task state (pausing or cancelling a task pauses its attached cron routines). action=patch updates a task's chain links (next/nextOnFail) and/or event trigger; action=chain sets chain links on a task; action=status shows event triggers with their last-seen state. action=schedule_list|schedule_add|schedule_pause|schedule_resume|schedule_remove manage cron routines (five-field UTC expression). Tasks run only while the interactive session is open and idle.",
+			"Durable local tasks and cron routines shared by TUI and GUI. action=list shows tasks; action=create saves a task (title + prompt); action=show lists a task with append-only run history; action=run queues a task for the next idle moment (using the attended session's model and permission policy, never inline); action=pause|resume|cancel changes task state (pausing or cancelling a task pauses its attached cron routines). action=patch updates a task's chain links (next/nextOnFail) and/or event trigger; action=chain sets chain links on a task; action=status shows event triggers with their last-seen state. action=schedule_list|schedule_add|schedule_pause|schedule_resume|schedule_remove manage cron routines (five-field UTC expression). Cron and queued manual/chained tasks run only while a TUI or GUI conversation is open and idle; GUI uses the most recently attached conversation. File/script event checks remain TUI-only.",
 		promptSnippet: "Durable Tasks + Cron routines (create/list/run/schedule/chain/status)",
 		promptGuidelines: [
 			"Use action=run to queue a task when the user asks to run it; it executes after the current turn when the session is idle.",
 			"Tasks are durable local definitions with append-only run history; cron decides when a task is eligible to run.",
 			"Pausing or cancelling a task pauses its attached routines. Recurring tasks return to ready after a terminal run.",
-			"Cron is attended-only: it runs only while the interactive session is open and idle, with the current model and permission policy.",
+			"Cron is attended-only: it runs while a TUI or GUI conversation is open and idle, with that conversation's model and permission policy. GUI requires a connected browser; the most recently attached conversation receives runs. Tasks and schedules are shared globally within the agent home, not bound to their creation conversation or project.",
 			"Run history: a run abandoned by process exit becomes 'unknown' — never claim a task completed without evidence.",
 			"Chaining: setting next runs that task when this completes; nextOnFail runs it on failure. Cycles are rejected.",
-			"Event triggers: patch a task with triggerType=file (path, optional matches regex; runs when the file content changes) or triggerType=script (triggerCommand; runs when that check exits triggerExitCode).",
+			"Event triggers are evaluated in the TUI only: patch a task with triggerType=file (path, optional matches regex; runs when the file content changes) or triggerType=script (triggerCommand; runs when that check exits triggerExitCode). Use Cron for scheduled GUI execution.",
 		],
 		parameters: tasksSchema,
 		async execute(_toolCallId, args) {

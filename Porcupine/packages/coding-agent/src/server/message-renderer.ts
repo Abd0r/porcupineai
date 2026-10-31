@@ -1,5 +1,6 @@
 import { CANVAS_MATH_SCRIPT } from "./canvas-math.ts";
 import { formatLearningMath } from "./learning-math.ts";
+import { WORKBENCH_MATH_MACROS } from "./math-macros.ts";
 /**
  * Message rendering for the browser workbench.
  *
@@ -12,12 +13,20 @@ import { formatLearningMath } from "./learning-math.ts";
 
 export const RICH_TEXT_STYLES = `
 .canvas-label-host { position: relative; min-width: 0; }
-.diagram-viewport .canvas-label-host { min-width: 640px; }
+.diagram-viewport .canvas-label-host { width: max-content; }
 .canvas-math-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .canvas-math-label { position: absolute; font: 12px system-ui; color: var(--plot-text); line-height: 1.3; }
 .diagram-viewport { max-width: 100%; overflow: auto; border-radius: var(--r1); }
-.diagram-canvas { min-width: 640px; height: 480px !important; }
+.diagram-canvas { max-width: none; touch-action: auto; }
+.diagram-viewport { background: var(--canvas); border: var(--unit) solid var(--line-soft); }
+.diagram-viewport .scene-canvas { border: 0; border-radius: 0; }
+.diagram-viewport .canvas-math-label { font: 14px/20px var(--font); color: var(--text); white-space: pre-wrap; overflow-wrap: normal; }
+.diagram-viewport .canvas-math-label[data-kind="edge"],.diagram-viewport .canvas-math-label[data-kind="annotation"] { background: var(--canvas); box-shadow: 0 0 0 4px var(--canvas); }
 .diagram-hint { color: var(--quiet); font-size: var(--small); }
+.diagram-toolbar { display: flex; justify-content: flex-start; margin-bottom: var(--s2); }
+.diagram-dialog { width: min(1400px,calc(100vw - 32px)); padding: 20px; }
+.diagram-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.diagram-dialog .diagram-viewport { max-height: calc(100dvh - 160px); }
 .interactive-visual > button, .interactive-visual form > button, .adaptive-body button { font: inherit; font-size: var(--small); border: 1px solid var(--line); border-radius: var(--r1); padding: var(--s2) var(--s3); background: var(--surface); color: var(--text); cursor: pointer; transition: background .15s ease; }
 .interactive-visual button:hover { background: var(--line-soft); }
 .interactive-visual button:disabled { opacity: .5; cursor: default; }
@@ -52,9 +61,10 @@ export const RICH_TEXT_STYLES = `
 .code-banner .quiet-button { font-size: var(--small); padding: 0 var(--s1); }
 .code-block pre { margin: 0; padding: var(--s3); overflow-x: auto; }
 .code-block code { background: none; padding: 0; color: var(--text); font-size: var(--small); line-height: 1.6; }
-.table-scroll { margin: 0 0 var(--s3); overflow-x: auto; }
+.table-scroll { margin: 0 0 var(--s3); overflow-x: auto; max-width: 100%; overscroll-behavior-x: contain; }
 .table-scroll table { border-collapse: collapse; min-width: 100%; font-variant-numeric: tabular-nums; font-size: var(--small); }
 .table-scroll th, .table-scroll td { padding: var(--s2) var(--s3); text-align: left; border-bottom: var(--unit) solid var(--line-soft); font-weight: 400; }
+.table-scroll :is(th,td) { min-width: 10ch; overflow-wrap: normal; word-break: normal; white-space: normal; vertical-align: top; }
 .table-scroll th { color: var(--text); }
 .math-display { margin: 0 0 var(--s3); overflow-x: auto; padding: var(--s2) 0; }
 .math-expression { color: var(--text); }
@@ -68,6 +78,7 @@ export const RICH_TEXT_STYLES = `
 `;
 export const MESSAGE_RENDERER_SCRIPT = `
 const formatLearningMath=${formatLearningMath.toString()};
+const workbenchMathMacros=${JSON.stringify(WORKBENCH_MATH_MACROS)};
 ${CANVAS_MATH_SCRIPT}
 const mathRenderCache=new Map(),richTextSources=new WeakMap();
 function renderMathLabel(node,text){node.replaceChildren();for(const child of inlineNodes(formatLearningMath(String(text))))node.append(child);return node;}
@@ -76,10 +87,10 @@ function renderMathSafe(tex,display){
   if(!window.katex||tex.length>20000)return mathFallback(tex,display);
   const span=document.createElement('span');span.className='math-expression';
   const cacheKey=String(display)+':'+tex,cached=mathRenderCache.get(cacheKey);if(cached)return cached.cloneNode(true);
-  try{window.katex.render(tex,span,{displayMode:display,output:'htmlAndMathml',trust:false,throwOnError:true,strict:'ignore',maxExpand:1000,maxSize:20,macros:{}});if(tex.length<=2000&&typeof span.cloneNode==='function'){if(mathRenderCache.size>=64)mathRenderCache.delete(mathRenderCache.keys().next().value);mathRenderCache.set(cacheKey,span.cloneNode(true));}return span}catch{return mathFallback(tex,display)}
+  try{window.katex.render(tex,span,{displayMode:display,output:'htmlAndMathml',trust:false,throwOnError:true,strict:'ignore',maxExpand:1000,maxSize:20,macros:{...workbenchMathMacros}});if(tex.length<=2000&&typeof span.cloneNode==='function'){if(mathRenderCache.size>=64)mathRenderCache.delete(mathRenderCache.keys().next().value);mathRenderCache.set(cacheKey,span.cloneNode(true));}return span}catch{return mathFallback(tex,display)}
 }
-function inlineNodes(text){const nodes=[];let rest=text;
-  while(rest){const match=/\\\\\\[[\\s\\S]*?\\\\\\]|\\\\\\([\\s\\S]*?\\\\\\)|\\$\\$[\\s\\S]*?\\$\\$|(?<![\\\\\\d])\\$(?!\\s)(?:\\\\.|[^$\\\\\\n])+(?<!\\s)\\$|\\*\\*[^*]+\\*\\*|\\*[^*\\n]+\\*|\`[^\`\\n]+\`|\\[[^\\]]+]\\([^)\\s]+\\)/.exec(rest);
+function inlineNodes(text,artifactFactory){const nodes=[];let rest=text;
+  while(rest){const match=/\\\\\\[[\\s\\S]*?\\\\\\]|\\\\\\([\\s\\S]*?\\\\\\)|\\$\\$[\\s\\S]*?\\$\\$|(?<![\\\\\\d])\\$(?!\\s)(?:\\\\.|[^$\\\\\\n])+(?<!\\s)\\$|\\*\\*[^*]+\\*\\*|\\*[^*\\n]+\\*|\`[^\`\\n]+\`|!?\\[[^\\]]*]\\([^)\\s]+\\)/.exec(rest);
     if(!match){if(rest)nodes.push(document.createTextNode(rest.replaceAll('\\\\$', '$')));break}
     if(match.index>0)nodes.push(document.createTextNode(rest.slice(0,match.index).replaceAll('\\\\$', '$')));
     const token=match[0];rest=rest.slice(match.index+token.length);
@@ -89,7 +100,7 @@ function inlineNodes(text){const nodes=[];let rest=text;
     else if(token.startsWith("**")){const strong=document.createElement("strong");strong.textContent=token.slice(2,-2);nodes.push(strong)}
     else if(token.startsWith("*")){const em=document.createElement("em");em.textContent=token.slice(1,-1);nodes.push(em)}
     else if(token.startsWith("\`")){const code=document.createElement("code");code.textContent=token.slice(1,-1);nodes.push(code)}
-    else{const link=document.createElement("a");const label=token.slice(1,token.indexOf("]"));const href=token.slice(token.indexOf("](")+2,-1);link.textContent=label;if(/^https?:\\/\\//i.test(href)){link.setAttribute("href",href);link.setAttribute("rel","noopener noreferrer");link.setAttribute("target","_blank")}nodes.push(link)}
+    else{const embedded=token.startsWith('!'),label=token.slice(embedded?2:1,token.indexOf("]")),href=token.slice(token.indexOf("](")+2,-1),artifact=artifactFactory?artifactFactory(label,href,embedded):typeof createWorkbenchArtifact==='function'?createWorkbenchArtifact(label,href,embedded):null;if(artifact){nodes.push(artifact);continue;}const link=document.createElement("a");link.textContent=label||href;if(/^https?:\\/\\//i.test(href)){link.setAttribute("href",href);link.setAttribute("rel","noopener noreferrer");link.setAttribute("target","_blank")}nodes.push(link)}
   }
   return nodes}
 function codeBlock(language,source){const wrap=document.createElement("div");wrap.className="code-block";const banner=document.createElement("div");banner.className="code-banner";const label=document.createElement("span");label.textContent=language||"text";const copy=document.createElement("button");copy.type="button";copy.className="quiet-button";copy.textContent="Copy";copy.addEventListener("click",()=>{void navigator.clipboard?.writeText(source).then(()=>{copy.textContent="Copied"}).catch(()=>{copy.textContent="Copy failed"})});banner.append(label,copy);const pre=document.createElement("pre");const code=document.createElement("code");code.textContent=source;pre.append(code);wrap.append(banner,pre);return wrap}
@@ -104,10 +115,10 @@ function tableCells(line){
   }
   cells.push(cell.trim());return cells;
 }
-function renderTable(lines){const table=document.createElement("div");table.className="table-scroll";const element=document.createElement("table");const rows=lines.filter(line=>!/^\\s*\\|?[\\s:-]+\\|[\\s:|-]*$/.test(line)).map(tableCells);
-  const head=document.createElement("thead");const headRow=document.createElement("tr");for(const cell of rows[0]||[]){const th=document.createElement("th");th.scope="col";for(const node of inlineNodes(cell))th.append(node);headRow.append(th)}head.append(headRow);element.append(head);
-  const body=document.createElement("tbody");for(const row of rows.slice(1)){const tr=document.createElement("tr");for(const cell of row){const td=document.createElement("td");for(const node of inlineNodes(cell))td.append(node);tr.append(td)}body.append(tr)}element.append(body);table.append(element);return table}
-function renderRichText(container,text){
+function renderTable(lines,artifactFactory){const table=document.createElement("div");table.className="table-scroll";table.tabIndex=0;table.setAttribute('role','region');const element=document.createElement("table");const rows=lines.filter(line=>!/^\\s*\\|?[\\s:-]+\\|[\\s:|-]*$/.test(line)).map(tableCells);table.setAttribute('aria-label','Table: '+(rows[0]||[]).join(', '));
+  const head=document.createElement("thead");const headRow=document.createElement("tr");for(const cell of rows[0]||[]){const th=document.createElement("th");th.scope="col";for(const node of inlineNodes(cell,artifactFactory))th.append(node);headRow.append(th)}head.append(headRow);element.append(head);
+  const body=document.createElement("tbody");for(const row of rows.slice(1)){const tr=document.createElement("tr");for(const cell of row){const td=document.createElement("td");for(const node of inlineNodes(cell,artifactFactory))td.append(node);tr.append(td)}body.append(tr)}element.append(body);table.append(element);return table}
+function renderRichText(container,text,artifactFactory){
   const source=String(text);if(richTextSources.get(container)===source)return container;richTextSources.set(container,source);text=formatLearningMath(source);
   container.replaceChildren();container.classList.add("rich");
   const lines=String(text).split("\\n");let index=0;
@@ -120,13 +131,13 @@ function renderRichText(container,text){
       while(index<lines.length){const end=current.indexOf(displayDelimiter[1]);if(end>=0){source.push(current.slice(0,end));const trailing=current.slice(end+displayDelimiter[1].length);if(trailing.trim())lines.splice(index+1,0,trailing);index++;closed=true;break}source.push(current);index++;current=lines[index]||'';}
       const block=document.createElement('div');block.className='math-display';block.append(closed?renderMathSafe(source.join('\\n').trim(),true):mathFallback(source.join('\\n').trim(),true));container.append(block);continue;
     }
-    if(/^\\s*\\|.*\\|\\s*$/.test(line)&&index+1<lines.length&&/^\\s*\\|?[\\s:-]+\\|[\\s:|-]*$/.test(lines[index+1])){const block=[];while(index<lines.length&&/^\\s*\\|/.test(lines[index])){block.push(lines[index]);index+=1}container.append(renderTable(block));continue}
+    if(/^\\s*\\|.*\\|\\s*$/.test(line)&&index+1<lines.length&&/^\\s*\\|?[\\s:-]+\\|[\\s:|-]*$/.test(lines[index+1])){const block=[];while(index<lines.length&&/^\\s*\\|/.test(lines[index])){block.push(lines[index]);index+=1}container.append(renderTable(block,artifactFactory));continue}
     const heading=/^(#{1,4})\\s+(.*)$/.exec(line);
-    if(heading){const element=document.createElement("h3");element.className="md-heading md-h"+heading[1].length;for(const node of inlineNodes(heading[2]))element.append(node);container.append(element);index+=1;continue}
-    if(/^\\s*>\\s?/.test(line)){const quote=document.createElement("blockquote");const block=[];while(index<lines.length&&/^\\s*>\\s?/.test(lines[index])){block.push(lines[index].replace(/^\\s*>\\s?/,""));index+=1}for(const node of inlineNodes(block.join(" ")))quote.append(node);container.append(quote);continue}
-    if(/^\\s*([-*+]|\\d+[.)])\\s+/.test(line)){const ordered=/^\\s*\\d/.test(line);const list=document.createElement(ordered?"ol":"ul");while(index<lines.length&&/^\\s*([-*+]|\\d+[.)])\\s+/.test(lines[index])){const item=document.createElement("li");for(const node of inlineNodes(lines[index].replace(/^\\s*([-*+]|\\d+[.)])\\s+/,"")))item.append(node);list.append(item);index+=1}container.append(list);continue}
+    if(heading){const element=document.createElement("h3");element.className="md-heading md-h"+heading[1].length;for(const node of inlineNodes(heading[2],artifactFactory))element.append(node);container.append(element);index+=1;continue}
+    if(/^\\s*>\\s?/.test(line)){const quote=document.createElement("blockquote");const block=[];while(index<lines.length&&/^\\s*>\\s?/.test(lines[index])){block.push(lines[index].replace(/^\\s*>\\s?/,""));index+=1}for(const node of inlineNodes(block.join(" "),artifactFactory))quote.append(node);container.append(quote);continue}
+    if(/^\\s*([-*+]|\\d+[.)])\\s+/.test(line)){const ordered=/^\\s*\\d/.test(line);const list=document.createElement(ordered?"ol":"ul");while(index<lines.length&&/^\\s*([-*+]|\\d+[.)])\\s+/.test(lines[index])){const item=document.createElement("li");for(const node of inlineNodes(lines[index].replace(/^\\s*([-*+]|\\d+[.)])\\s+/,""),artifactFactory))item.append(node);list.append(item);index+=1}container.append(list);continue}
     if(!line.trim()){index+=1;continue}
-    const paragraph=[];while(index<lines.length&&lines[index].trim()&&!lines[index].trimStart().startsWith('\\\\[')&&!/^\`\`\`/.test(lines[index])&&!/^\\s*\\$\\$/.test(lines[index])&&!/^\\s*\\|/.test(lines[index])&&!/^#{1,4}\\s/.test(lines[index])&&!/^\\s*>/.test(lines[index])&&!/^\\s*([-*+]|\\d+[.)])\\s+/.test(lines[index])){paragraph.push(lines[index]);index+=1}if(!paragraph.length){paragraph.push(lines[index]);index+=1}const element=document.createElement("p");for(const node of inlineNodes(paragraph.join("\\n")))element.append(node);container.append(element);
+    const paragraph=[];while(index<lines.length&&lines[index].trim()&&!lines[index].trimStart().startsWith('\\\\[')&&!/^\`\`\`/.test(lines[index])&&!/^\\s*\\$\\$/.test(lines[index])&&!/^\\s*\\|/.test(lines[index])&&!/^#{1,4}\\s/.test(lines[index])&&!/^\\s*>/.test(lines[index])&&!/^\\s*([-*+]|\\d+[.)])\\s+/.test(lines[index])){paragraph.push(lines[index]);index+=1}if(!paragraph.length){paragraph.push(lines[index]);index+=1}const element=document.createElement("p");for(const node of inlineNodes(paragraph.join("\\n"),artifactFactory))element.append(node);container.append(element);
   }
   return container}
 `;

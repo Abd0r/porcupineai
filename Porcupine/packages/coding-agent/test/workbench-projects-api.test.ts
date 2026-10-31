@@ -29,6 +29,85 @@ async function fixture() {
 	return { cwd, base: `http://127.0.0.1:${handle.port()}`, headers: { authorization: "Bearer project-token" } };
 }
 describe("project workspace API", () => {
+	it("keeps complete Markdown descriptions beyond the old 360-character limit", async () => {
+		const { base, headers } = await fixture(),
+			description = `**Overview**\n\n${"Detail. ".repeat(70)}[Complete report](uploads/report.pdf)`;
+		const response = await fetch(`${base}/workbench/projects`, {
+			method: "POST",
+			headers,
+			body: JSON.stringify({ name: "complete", description }),
+		});
+		expect(response.status).toBe(201);
+		const details = await (await fetch(`${base}/workbench/projects/complete`, { headers })).json();
+		expect(details.description).toBe(description);
+	});
+
+	it("shares rich sticky notes, enforces twenty, and rejects stale edits", async () => {
+		const { base, headers } = await fixture();
+		await fetch(`${base}/workbench/projects`, { method: "POST", headers, body: JSON.stringify({ name: "notes" }) });
+		const endpoint = `${base}/workbench/projects/notes/notes`;
+		const create = (text: string) =>
+			fetch(endpoint, { method: "POST", headers, body: JSON.stringify({ title: "Reminder", text, color: "blue" }) });
+		const added = await create("**Check** ![Plot](uploads/plot.png) [Paper](uploads/paper.pdf)");
+		expect(added.status).toBe(201);
+		const note = await added.json();
+		expect(note).toMatchObject({ title: "Reminder", color: "blue", author: "user" });
+		const update = (revision: string) =>
+			fetch(`${endpoint}/${note.id}`, {
+				method: "PUT",
+				headers,
+				body: JSON.stringify({ revision, title: "Updated", text: "New draft", color: "rose" }),
+			});
+		expect((await update(note.revision)).status).toBe(200);
+		expect((await update(note.revision)).status).toBe(409);
+		for (let i = 1; i < 20; i++) expect((await create(`note ${i}`)).status).toBe(201);
+		expect((await create("twenty first")).status).toBe(409);
+		const notes = (await (await fetch(endpoint, { headers })).json()).notes;
+		expect(notes).toHaveLength(20);
+		expect(
+			(
+				await fetch(`${endpoint}/${notes[0].id}`, {
+					method: "DELETE",
+					headers,
+					body: JSON.stringify({ revision: notes[0].revision }),
+				})
+			).status,
+		).toBe(200);
+		expect((await create("replacement")).status).toBe(201);
+		expect((await fetch(endpoint)).status).toBe(401);
+		expect(
+			(
+				await fetch(endpoint, {
+					method: "POST",
+					headers,
+					body: JSON.stringify({ title: "x", text: "x", color: "script" }),
+				})
+			).status,
+		).toBe(400);
+	});
+
+	it("returns project details and persists validated pins through authenticated HTTP", async () => {
+		const { base, headers } = await fixture();
+		await fetch(`${base}/workbench/projects`, {
+			method: "POST",
+			headers,
+			body: JSON.stringify({ name: "paper", title: "Paper", description: "Compare results." }),
+		});
+		const pin = (body: unknown) =>
+			fetch(`${base}/workbench/projects/paper/pin`, { method: "PUT", headers, body: JSON.stringify(body) });
+		expect((await pin({ pinned: true })).status).toBe(200);
+		const details = await (await fetch(`${base}/workbench/projects/paper`, { headers })).json();
+		expect(details).toMatchObject({
+			title: "Paper",
+			description: "Compare results.",
+			pinned: true,
+			files: expect.any(Array),
+		});
+		expect((await pin({ pinned: "yes" })).status).toBe(400);
+		expect(
+			(await fetch(`${base}/workbench/projects/paper/pin`, { method: "PUT", body: '{"pinned":false}' })).status,
+		).toBe(401);
+	});
 	it("creates, uploads and reads a project document through authenticated HTTP", async () => {
 		const { cwd, base, headers } = await fixture();
 		const created = await fetch(`${base}/workbench/projects`, {
@@ -43,6 +122,9 @@ describe("project workspace API", () => {
 			body: "# Notes\nMeasured capacity fade.\n",
 		});
 		expect(uploaded.status).toBe(201);
+		const raw = await fetch(`${base}/workbench/projects/battery-aging/files/uploads/notes.md?raw=1`, { headers });
+		expect(raw.headers.get("x-porcupine-preview")).toBe("text");
+		expect(await raw.text()).toContain("capacity fade");
 		const document = await fetch(`${base}/workbench/projects/battery-aging/files/uploads/notes.md`, { headers });
 		expect((await document.json()).content).toContain("capacity fade");
 		expect(readFileSync(join(cwd, "Project", "battery-aging", "uploads", "notes.md"), "utf8")).toContain(

@@ -139,6 +139,11 @@ export function classifyPlanTurnTool(toolName: string, args?: unknown): PlanFenc
 			reason: "Plan turn: only read-only bash commands are allowed while drafting the plan.",
 		};
 	}
+	if (name === "projects") {
+		const action = (args as { action?: unknown } | null | undefined)?.action;
+		if (action === undefined || ["list", "search", "view", "notes"].includes(String(action))) return { allow: true };
+		return { allow: false, reason: "Plan turn: project note mutations are disabled while drafting the plan." };
+	}
 	if (READONLY_TOOLS.has(name)) return { allow: true };
 	return { allow: false, reason: `Plan turn: ${toolName} is not allowed while drafting the plan.` };
 }

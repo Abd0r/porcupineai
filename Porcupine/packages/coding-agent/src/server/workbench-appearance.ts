@@ -12,6 +12,7 @@ export const APPEARANCE_DIALOG = `
       <label>Subagents panel<select id="appearance-workers-placement"><option value="side">Side</option><option value="overlay">Overlay on chat</option><option value="hidden">Hidden</option></select></label>
     </div>
     <label class="reasoning-preference" for="appearance-reasoning"><span><strong>Always show reasoning</strong><small>Expand available reasoning in live and saved conversations.</small></span><input id="appearance-reasoning" type="checkbox" role="switch"></label>
+    <label class="reasoning-preference" for="appearance-motion"><span><strong>Reduce motion</strong><small>Use still activity icons and instant transitions.</small></span><input id="appearance-motion" type="checkbox" role="switch"></label>
     <p id="appearance-error" class="error" role="alert" hidden></p>
   </section>
   <section class="settings-section" id="panel-models" role="tabpanel" aria-labelledby="tab-models" data-settings-panel="models" hidden>
@@ -42,9 +43,9 @@ export const APPEARANCE_STYLES = `
 :root[data-theme="static"][data-colour-mode="dark"] { --bg: #111111; --sidebar: #191919; --surface: #262626; --surface-hover: #303030; --canvas: #161616; --text: #f5f5f5; --muted: #cccccc; --quiet: #929292; --accent: #ffffff; --plot-text: #eeeeee; --plot-label: #b5b5b5; --plot-grid: #303030; --plot-axis: #808080; }
 :root[data-theme="static"][data-colour-mode="light"] { --bg: #ffffff; --sidebar: #f5f5f5; --surface: #ededed; --surface-hover: #dddddd; --canvas: #fafafa; --text: #111111; --muted: #555555; --quiet: #666666; --accent: #111111; --plot-text: #111111; --plot-label: #555555; --plot-grid: #dddddd; --plot-axis: #777777; }
 :root[data-theme="tokyo-night"][data-colour-mode="dark"] { --bg: #1a1b26; --sidebar: #16161e; --surface: #24283b; --surface-hover: #303650; --canvas: #1f2335; --text: #c0caf5; --muted: #a9b1d6; --quiet: #929ec6; --accent: #7aa2f7; --accent-ink: #1a1b26; --plot-text: #c0caf5; --plot-label: #a9b1d6; --plot-grid: #343b58; --plot-axis: #7888b1; }
-:root[data-theme="tokyo-night"][data-colour-mode="light"] { --bg: #e6e8f0; --sidebar: #dfe2ee; --surface: #d5dbea; --surface-hover: #c7cfe2; --canvas: #edf0f7; --text: #343b58; --muted: #4c577c; --quiet: #596587; --accent: #34548a; --plot-text: #343b58; --plot-label: #4c577c; --plot-grid: #cdd3e2; --plot-axis: #6d7b9d; }
+:root[data-theme="tokyo-night"][data-colour-mode="light"] { --bg: #e6e8f0; --sidebar: #dfe2ee; --surface: #d5dbea; --surface-hover: #c7cfe2; --canvas: #edf0f7; --text: #343b58; --muted: #4c577c; --quiet: #52607d; --accent: #34548a; --plot-text: #343b58; --plot-label: #4c577c; --plot-grid: #cdd3e2; --plot-axis: #6d7b9d; }
 :root[data-theme="cyberpunk"][data-colour-mode="dark"] { --bg: #101018; --sidebar: #16141f; --surface: #242034; --surface-hover: #342b47; --canvas: #15131e; --text: #f0e9ff; --muted: #c6b4d9; --quiet: #a99ac2; --accent: #61e5de; --accent-ink: #101018; --plot-text: #f0e9ff; --plot-label: #c6b4d9; --plot-grid: #3b2d49; --plot-axis: #8b6da7; --r1: 0px; --r2: 2px; --r3: 4px; }
-:root[data-theme="cyberpunk"][data-colour-mode="light"] { --bg: #fcf6ff; --sidebar: #f0e7f6; --surface: #e7e0f2; --surface-hover: #ded0eb; --canvas: #fffaff; --text: #2e173f; --muted: #634b75; --quiet: #735c87; --accent: #007973; --plot-text: #2e173f; --plot-label: #634b75; --plot-grid: #e1d1eb; --plot-axis: #8b6da7; --r1: 0px; --r2: 2px; --r3: 4px; }
+:root[data-theme="cyberpunk"][data-colour-mode="light"] { --bg: #fcf6ff; --sidebar: #f0e7f6; --surface: #e7e0f2; --surface-hover: #ded0eb; --canvas: #fffaff; --text: #2e173f; --muted: #634b75; --quiet: #735c87; --accent: #006d68; --plot-text: #2e173f; --plot-label: #634b75; --plot-grid: #e1d1eb; --plot-axis: #8b6da7; --r1: 0px; --r2: 2px; --r3: 4px; }
 
 /* Pixel: a 2D retro level. Hard edges, chunky borders, block shadows, 8-bit palette. */
 :root[data-theme="pixel"] {
@@ -66,7 +67,7 @@ export const APPEARANCE_STYLES = `
   --bg: #f4f1e8; --sidebar: #e6e1d2; --surface: #ffffff; --surface-hover: #efe9d9;
   --canvas: #fbf8ef; --line: #2a2a2a; --line-soft: #b9b2a0;
   --text: #1a1a1a; --muted: #4a4a4a; --quiet: #666154;
-  --accent: #1f7a4d; --accent-ink: #ffffff; --danger: #a32626;
+  --accent: #196d43; --accent-ink: #ffffff; --danger: #a32626;
   --plot-text: #1a1a1a; --plot-label: #444; --plot-grid: #cdc6b4; --plot-axis: #6a6455;
 }
 :root[data-theme="pixel"] body {
@@ -89,7 +90,7 @@ export const APPEARANCE_STYLES = `
   border-radius: 0 !important;
   backdrop-filter: none !important;
 }
-:root[data-theme="pixel"] :is(.dream-thread,.dream-spark,.activity-glyph svg *) { animation-timing-function: steps(8,end); }
+:root[data-theme="pixel"] :is(.thinking-glyph,.worker-icon,.activity-glyph) svg * { animation-timing-function: steps(8,end); }
 :root[data-theme="pixel"] .sidebar { background: var(--sidebar); }
 :root[data-theme="pixel"] .session.active { background: rgb(128 128 128 / 18%); border-left: 2px solid var(--quiet); }
 :root[data-theme="pixel"] :is(.new-session,.send,.interactive-visual > button,.followup-queue) { border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--line-soft); }
@@ -158,21 +159,22 @@ export const APPEARANCE_STYLES = `
 `;
 
 export const APPEARANCE_SCRIPT = `
-const appearance={dialog:$('settings-dialog'),open:$('settings-open'),theme:$('appearance-theme'),mode:$('appearance-mode'),reasoning:$('appearance-reasoning'),todos:$('appearance-todos-placement'),workers:$('appearance-workers-placement'),error:$('appearance-error')};
+const appearance={dialog:$('settings-dialog'),open:$('settings-open'),theme:$('appearance-theme'),mode:$('appearance-mode'),reasoning:$('appearance-reasoning'),motion:$('appearance-motion'),todos:$('appearance-todos-placement'),workers:$('appearance-workers-placement'),error:$('appearance-error')};
 const appearanceKey='porcupine.workbench.appearance.v1',appearanceThemes=['workbench','pixel','cyberpunk','static','tokyo-night'];
-let appearancePreferences={theme:'workbench',mode:'dark',showReasoning:false,todosPlacement:'side',workersPlacement:'side'};
-try{const saved=JSON.parse(window.localStorage.getItem(appearanceKey)||'null');if(saved&&appearanceThemes.includes(saved.theme)&&['dark','light','system'].includes(saved.mode))appearancePreferences={theme:saved.theme,mode:saved.mode,showReasoning:saved.showReasoning===true,todosPlacement:['side','overlay','hidden'].includes(saved.todosPlacement)?saved.todosPlacement:'side',workersPlacement:['side','overlay','hidden'].includes(saved.workersPlacement)?saved.workersPlacement:'side'}}catch{}
+let appearancePreferences={theme:'pixel',mode:'system',showReasoning:false,reduceMotion:false,todosPlacement:'side',workersPlacement:'side'};
+try{const saved=JSON.parse(window.localStorage.getItem(appearanceKey)||'null');if(saved&&appearanceThemes.includes(saved.theme)&&['dark','light','system'].includes(saved.mode))appearancePreferences={theme:saved.theme,mode:saved.mode,showReasoning:saved.showReasoning===true,reduceMotion:saved.reduceMotion===true,todosPlacement:['side','overlay','hidden'].includes(saved.todosPlacement)?saved.todosPlacement:'side',workersPlacement:['side','overlay','hidden'].includes(saved.workersPlacement)?saved.workersPlacement:'side'}}catch{}
 function appearanceError(message){appearance.error.textContent=message;appearance.error.hidden=!message}
-function applyAppearance(save=false){const preference=appearancePreferences,mode=preference.mode==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):preference.mode;document.documentElement.setAttribute('data-theme',preference.theme);document.documentElement.setAttribute('data-colour-mode',mode);appearance.theme.value=preference.theme;appearance.mode.value=preference.mode;appearance.reasoning.checked=preference.showReasoning;appearance.todos.value=preference.todosPlacement;appearance.workers.value=preference.workersPlacement;applyPanelPlacements();window.dispatchEvent(new Event('porcupine-theme-change'));if(save)try{window.localStorage.setItem(appearanceKey,JSON.stringify(preference))}catch{appearanceError('Preferences work for this tab, but browser storage is unavailable.')}}
+function applyAppearance(save=false){const preference=appearancePreferences,mode=preference.mode==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):preference.mode;document.documentElement.setAttribute('data-theme',preference.theme);document.documentElement.setAttribute('data-colour-mode',mode);appearance.theme.value=preference.theme;appearance.mode.value=preference.mode;appearance.reasoning.checked=preference.showReasoning;appearance.motion.checked=preference.reduceMotion;document.documentElement.setAttribute('data-reduced-motion',String(preference.reduceMotion));appearance.todos.value=preference.todosPlacement;appearance.workers.value=preference.workersPlacement;applyPanelPlacements();window.dispatchEvent(new Event('porcupine-theme-change'));if(save)try{window.localStorage.setItem(appearanceKey,JSON.stringify(preference))}catch{appearanceError('Preferences work for this tab, but browser storage is unavailable.')}}
 let settingsTab='appearance';
 function selectSettingsTab(key){settingsTab=key;for(const tab of document.querySelectorAll('[data-settings-tab]')){const active=tab.dataset.settingsTab===key;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}for(const panel of document.querySelectorAll('[data-settings-panel]'))panel.hidden=panel.dataset.settingsPanel!==key;}
 const settingsTabs=[...document.querySelectorAll('[data-settings-tab]')];
 for(const tab of settingsTabs){tab.addEventListener('click',()=>selectSettingsTab(tab.dataset.settingsTab));tab.addEventListener('keydown',event=>{let index=settingsTabs.indexOf(tab);if(event.key==='ArrowRight')index=(index+1)%settingsTabs.length;else if(event.key==='ArrowLeft')index=(index+settingsTabs.length-1)%settingsTabs.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=settingsTabs.length-1;else return;event.preventDefault();selectSettingsTab(settingsTabs[index].dataset.settingsTab);settingsTabs[index].focus();});}
 appearance.open.addEventListener('click',()=>{selectSettingsTab(settingsTab);appearance.dialog.showModal();void loadWorkbenchSettings()});
 appearance.theme.addEventListener('change',()=>{appearancePreferences.theme=appearance.theme.value;applyAppearance(true)});
+appearance.motion.addEventListener('change',()=>{appearancePreferences.reduceMotion=appearance.motion.checked;applyAppearance(true)});
 appearance.mode.addEventListener('change',()=>{appearancePreferences.mode=appearance.mode.value;applyAppearance(true)});
 for(const [control,key] of [[appearance.todos,'todosPlacement'],[appearance.workers,'workersPlacement']])control.addEventListener('change',()=>{appearancePreferences[key]=control.value;applyAppearance(true)});
-appearance.reasoning.addEventListener('change',()=>{appearancePreferences.showReasoning=appearance.reasoning.checked;applyAppearance(true);for(const row of ui.feed.querySelectorAll('.thinking')){const head=row.querySelector('.thinking-head'),body=row.querySelector('.thinking-body');if(!head||!body||head.disabled)continue;head.setAttribute('aria-expanded',String(appearancePreferences.showReasoning));body.hidden=!appearancePreferences.showReasoning;}});
+appearance.reasoning.addEventListener('change',()=>{appearancePreferences.showReasoning=appearance.reasoning.checked;applyAppearance(true);for(const row of ui.feed.querySelectorAll('.thinking')){const head=row.querySelector('.thinking-head'),body=row.querySelector('.thinking-body');if(!head||!body||head.disabled)continue;head.setAttribute('aria-expanded',String(appearancePreferences.showReasoning));body.hidden=!appearancePreferences.showReasoning;const thinking=thinkingRows.get(row);if(thinking&&!body.hidden)renderThinkingBody(thinking);}});
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(appearancePreferences.mode==='system')applyAppearance()});
 applyAppearance();
 `;

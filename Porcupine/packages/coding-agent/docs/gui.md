@@ -2,6 +2,8 @@
 
 Run `porcupine -gui` (or `porcupine --gui`) to start a local workbench and open the browser. The launcher selects an available port and creates a token for that run; the browser consumes the launch fragment and removes it from the address bar. Keep the terminal process running. Plain `porcupine` continues to launch the terminal interface. `--port` can select a fixed port. GUI launch is loopback-only; `--serve` remains the explicit server route.
 
+To move from the TUI, finish its current turn and exit, then launch `porcupine --gui` from the same working directory. The GUI resumes the most recently modified conversation there, retaining its session ID, saved history and model context. Use the same `--session-dir` if you configured one. `--session <path-or-id>` or `--session-id <id>` selects a specific conversation; **New conversation** starts fresh. `--gui --name "New work"` also starts fresh, while `--no-session` remains temporary. This is a saved-session handoff, not concurrent ownership by two processes.
+
 `porcupine --serve` serves a local browser workbench at the server root, for example `http://127.0.0.1:4096/`. The existing terminal interface remains available; the workbench is an additional client of the same session API.
 
 Start the server with a token:
@@ -18,9 +20,33 @@ The Conversations list discovers saved Porcupine sessions using the same session
 
 The interface uses an open conversation column, neutral surfaces, compact controls, and a shared adaptive width for text, figures, and the composer. Its semantic tokens and layout patterns are adapted from the MIT-licensed DeepSeek Harness UI, not its branding or plugin runtime. See [source notes and license](./gui-third-party-notices.md).
 
+## TUI and GUI parity
+
+The [TUI ↔ GUI contract](./gui-parity.md) lists every required command and runtime capability, with explicit implemented/partial/missing status and acceptance criteria. `/parity` inspects that live contract. The command menu labels incomplete GUI support; missing handlers fail explicitly and keep the submitted draft instead of recording a successful operation. Implementation coverage is not a claim of full parity or completed visual/runtime certification.
+
+## Tasks and Cron
+
+`/task` and `/cron` use the same definitions, schedules and append-only run history as the TUI, under the same agent home. The agent's `tasks` tool manages that same store. For example:
+
+```text
+/task add Review :: Check the project and verify the focused tests.
+/cron add task-<id> :: */15 * * * *
+/task show task-<id>
+```
+
+Use `/task run <id>` to queue a manual run; `/cron list`, `/cron pause <id>`, `/cron resume <id>` and `/cron remove <id>` manage routines. `/cron run <id>` queues a manual run of the routine's task without changing its next occurrence. Pausing or cancelling a task pauses its routines; resume the task and its routines separately.
+
+Execution is attended-only. The server checks every 15 seconds and when a conversation attaches or finishes a turn/command. It starts work only with a connected browser and an idle conversation: no streaming, compaction, shell command, queued prompt or running subagent. With several browser conversations attached, the most recently attached conversation receives new task runs; if it is busy, the runner waits rather than choosing another chat. Tasks are global to the agent home, not bound to the conversation or project where they were created. Include explicit workspace paths in tasks that need a particular project.
+
+Runs use that conversation's current model, context, workspace and permission policy, and stream into its normal history. Approvals still go through the GUI. Closing the browser stops new claims; an already running turn continues until completion, Stop or server shutdown. Keep the server open; this is not a daemon. File/script event-trigger checks remain in the TUI.
+
+Atomic store claims prevent the same run from executing twice across TUI and GUI processes. Opening another store preserves live runs. Process exit leaves unfinished runs `unknown`, never silently replayed or called completed; inspect `/task show <id>` and explicitly queue a new run if appropriate. Saved task definitions and schedules remain available when changing interfaces. Conversation handoff still follows the saved-session workflow above; this does not enable two processes to write the same conversation file concurrently.
+
 ## Visual explanations
 
-Diagram preparation accepts both canonical primitives and compact node notation. A compact box uses `id`, `type: "box"`, centre coordinates `x`/`y`, dimensions `w`/`h`, `label` and `fill`. Arrows can reference existing node IDs with `from`/`to`; preparation converts these to boundary coordinates and supplies a neutral line colour when omitted. A missing diagram title is derived from the description or defaults to "2D diagram". Duplicate IDs, unresolved connections, unknown fields and invalid bounds are rejected. Validation reports the selected visual kind, rather than errors for unrelated workspaces. Multiline labels render on separate lines; smaller screens can scroll the readable diagram viewport.
+Diagram preparation accepts both canonical primitives and compact node notation. A compact box uses `id`, `type: "box"`, centre coordinates `x`/`y`, dimensions `w`/`h`, `label` and `fill`. Arrows can reference existing node IDs with `from`/`to`; preparation converts these to boundary coordinates and supplies a neutral line colour when omitted. A missing diagram title is derived from the description or defaults to "2D diagram". Duplicate IDs, unresolved connections, unknown fields and invalid bounds are rejected. Validation reports the selected visual kind, rather than errors for unrelated workspaces. Labels use the active UI font and math renderer at a readable size, wrap complete words, and reserve space around arrow annotations. The canvas fits the supplied content's bounds rather than a fixed square around the origin. Wide diagrams scroll within their card; **Expand diagram** opens a larger view and closes with its button or Escape. Resizing the chat or changing theme recalculates the layout. Supplied shape positions and connections remain unchanged: overlapping geometry still needs a corrected specification.
+
+Markdown tables preserve words and a readable minimum column width, with horizontal scrolling inside a keyboard-focusable table region when needed. Chart series names use the wrapping legend below the plot instead of compressed duplicate canvas labels.
 
 ### Interactive workspaces
 
@@ -30,7 +56,7 @@ The following `visualize` kinds extend the same component identity and session r
 | --- | --- |
 | `form` | Text, number, choice and toggle fields; required values and number bounds; submitted values restore |
 | `table` | Search, sortable columns, row selection, optional cell editing; original row identities retained through sorting |
-| `simulation` | Parameter sliders, formula plot, time scrubbing, play/pause/reset; linear, projectile and oscillator models |
+| `simulation` | Parameter sliders, formula plot, time scrubbing, play/pause/reset; linear, projectile, oscillator, expression and numerical quantum1d models |
 | `graph` | Select nodes, inspect their descriptions and follow labelled connections |
 | `timeline` | Previous/next steps and a step scrubber with explanations |
 | `comparison` | Adjustable criterion weights, supplied scores and weighted ranking |
@@ -46,9 +72,9 @@ Example form:
 {"kind":"form","componentId":"experiment-setup","title":"Experiment setup","fields":[{"label":"Trial name","type":"text","required":true},{"label":"Samples","type":"number","min":1,"max":100,"required":true},{"label":"Method","type":"choice","options":["Control","Treatment"]}]}
 ```
 
-Simulation parameter names are fixed: `slope`/`intercept`, `speed`/`angle`/`gravity` (angle in degrees), or `amplitude`/`frequency` (cycles per second). The plotted interval is 0–10 seconds. These are illustrative formula calculators; they do not run a general solver, enforce ground collisions or validate experimental assumptions. Put units and assumptions in parameter labels and the description. Motion uses linear interpolation, normalized 0–100 positions and at most 60 seconds; playback starts only on user action. Video export, arbitrary meshes, executable formulas and document file mutation inside the card are not implemented. Code changes are requested through the agent's normal tool and permission flow. Evidence links and confidence are model-supplied data, not independent source verification. Spaced review runs only while the deck is open; there is no reminder service.
+Built-in simulation parameter names are fixed: `slope`/`intercept`, `speed`/`angle`/`gravity` (angle in degrees), or `amplitude`/`frequency` (cycles per second). For those three presets the plotted interval is 0–10 seconds. These are illustrative formula calculators; they do not run a general solver, enforce ground collisions or validate experimental assumptions. Put units and assumptions in parameter labels and the description. Motion uses linear interpolation, normalized 0–100 positions and at most 60 seconds; playback starts only on user action. Video export, arbitrary meshes, JavaScript formulas and document file mutation inside the card are not implemented. Code changes are requested through the agent's normal tool and permission flow. Evidence links and confidence are model-supplied data, not independent source verification. Spaced review runs only while the deck is open; there is no reminder service.
 
-For a scored quiz, call `visualize` with `kind: "quiz"`, a title and 1–6 questions. Each question supplies `question`, 2–6 `options`, zero-based `correctAnswers`, an `explanation`, and an optional `hint`. More than one correct answer enables multiple selection. Submission reveals an exact-match score and review for every question; answers and review restore from session history. The score checks the supplied answer key, so the agent must verify that key. Written answers continue through the question card for agent evaluation.
+For a scored quiz, call `visualize` with `kind: "quiz"`, a title and 1–100 questions, displayed five per page. Each question supplies `question`, 2–6 `options`, zero-based `correctAnswers`, an `explanation`, and an optional `hint`. More than one correct answer enables multiple selection. Submission reveals an exact-match score and review for every question; answers and review restore from session history. The score checks the supplied answer key, so the agent must verify that key. Written answers continue through the question card for agent evaluation.
 
 The visualization tools prepare JSON-encoded array arguments before runtime validation, including nested coordinates, chart points and series, and 3D objects. Invalid JSON, wrong shapes and bounds still fail validation.
 
@@ -60,13 +86,13 @@ Supply `componentId` to give a 2D visual, chart or question a stable identity. L
 | --- | --- | --- |
 | 2D diagram | `visualize` with `kind: "diagram"` | Rectangles, circles, arrows, lines, and plain-text labels. Useful for force diagrams, process flows, annotated geometry, and conceptual maps. |
 | Chart | `visualize` with `kind: "chart"` | Line, scatter, and grouped bar charts; multiple named series; axis labels and units; optional point annotations and supplied symmetric y uncertainty bars. |
-| Interactive 3D scene | `visualize_3d` | Boxes, spheres, and arrows; drag, keyboard, and button rotation controls. |
+| Interactive 3D scene | `visualize_3d` | Boxes, spheres, arrows and molecular bonds; drag, keyboard, and button rotation controls. |
 
 Each view has a title and optional explanation. Charts expose all supplied values in an accessible data table, retaining full precision even when canvas labels are abbreviated. Diagrams expose object positions and labels as text. The new 2D/chart cards include **Ask about this visual**, which prepares a follow-up prompt without sending it. The model also receives a text fallback from `visualize`, so the explanation remains usable in non-graphical clients.
 
 Attaching the browser activates the configured `visualize` and `visualize_3d` tools for future turns. Explicitly excluded tools remain unavailable. The agent is instructed to choose diagrams for relationships, charts for supplied data, and 3D for spatial structure when useful, without requiring a separate visualization request.
 
-Chat replies and reasoning use locally served KaTeX and fonts for math: `\(...\)` and `$...$` inline, `\[...\]` and `$$...$$` for display equations. Fractions, integrals, aligned equations, cases and matrices use standard KaTeX syntax. Table cells support math, including vertical bars inside expressions. Code fences remain literal. Incomplete or unsupported expressions remain visible; HTML and external-resource commands are untrusted. Canvas figure labels remain plain text.
+Chat replies and reasoning use locally served KaTeX and fonts for math: `\(...\)` and `$...$` inline, `\[...\]` and `$$...$$` for display equations. Fractions, integrals, aligned equations, cases and matrices use standard KaTeX syntax. Table cells support math, including vertical bars inside expressions. Code fences remain literal. Incomplete or unsupported expressions remain visible; HTML and external-resource commands are untrusted. Canvas labels use positioned math overlays when they contain supported notation.
 
 For example, ask: "Teach me Newton's second law with a labelled 2D force diagram" or "Plot these measurements against time with units and the uncertainty I supplied." Diagrams use positive y pointing upwards. Chart x values are numeric; use point labels for discrete category names. Line segments connect samples in the supplied order.
 
@@ -74,9 +100,15 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 
 - Chart supplied data only. Clearly identify illustrative or synthetic examples in the title or description. Do not present model-generated examples as measurements.
 - Put units in `xLabel` and `yLabel`. Optional `error` is an absolute symmetric y uncertainty (`y ± error`), not a percentage. Omitted uncertainty is shown as **Not supplied**, not silently treated as a measured zero.
-- 2D/3D diagrams allow at most 80 objects with coordinates in `[-20, 20]`. Charts allow at most 8 series and 200 points per series, with finite coordinates in `[-1e12, 1e12]`. Uncertainty must be finite and in `[0, 1e12]`.
-- Backend validation and independent browser validation reject unsupported types, extra properties, and out-of-bounds data. The model supplies data, not executable code, HTML, meshes, URLs, or external assets. Formula labels are plain text, not executed expressions or typeset LaTeX.
+- 2D diagrams allow at most 1000 objects and 3D scenes at most 2000 objects with coordinates in `[-20, 20]`. Charts allow at most 16 series, 10000 points per series and 40000 total points, with finite coordinates in `[-1e12, 1e12]`. Uncertainty must be finite and in `[0, 1e12]`.
+- Backend validation and independent browser validation reject unsupported types, extra properties, and out-of-bounds data. The model supplies data, not executable code, HTML, meshes, URLs, or external assets. Formula labels use the shared math renderer. Mathematical chart series may supply `expression`, `domain:[min,max]`, and `samples` instead of points; a bounded arithmetic parser samples them without evaluating JavaScript. It supports explicit multiplication, powers, constants pi/e and standard math functions. Nonfinite or out-of-range samples are rejected. Full data is available in paginated tables and CSV export.
 - Heatmaps, surface plots, chart animation and user-authored drawing are not implemented. The separate motion component supports bounded keyframe animation.
+
+Expression simulations accept `model: "expression"`, `expression: {x:"t",y:"exp(-a*t^2)*cos(t)",duration:20,samples:1000}` and up to 12 named slider parameters. Up to 2000 samples and 3600 seconds are supported. This extends analytical models; it is not an arbitrary PDE solver. Quizzes accept 100 questions, paginated five at a time; flashcards accept 500 cards. 3D molecular geometry uses verified atom spheres and rounded `bond` objects with `from`, `to`, `radius`, and `color`. Geometry and measurements are supplied by the agent, not inferred or chemically validated by the renderer.
+
+### 1D quantum simulation
+
+Use `model: "quantum1d"` with `quantum: {domain:[-8,8],grid:128,timeStep:0.01,duration:4,potential:"x^2/2"}` and slider parameters `mass`, `hbar`, `center`, `width`, `momentum`. The Gaussian packet evolves under the time-independent real potential using Crank–Nicolson, with zero endpoint boundaries. `mass`, `hbar` and `width` must remain positive. Use consistent scaled units and explain them. The view plots probability density and reports its integral; sliders rebuild the initial state, and scrubbing backward recomputes it. Grid size is 64–256, duration at most 10, time step 0.0001–0.02, with at most 4000 steps. Check convergence by refining grid and time step before scientific use. This is a one-dimensional finite-domain solver, not a general PDE or molecular dynamics engine. See the quantum example in the bundled Adaptive GUI examples.
 
 ## Workspace surfaces
 
@@ -90,10 +122,10 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 | Tool activity | Inline expandable rows at the execution point, with real arguments, streaming output, and running/done/failed state. | Session events; tool calls and results replay on reconnect |
 | Context ring | Composer meter of the live context window. Hover or focus shows used / window, percent, the compaction threshold and the sub-agent concurrency limit. | Live session |
 | Session limits | Settings → Session limits writes the real global settings: compaction threshold as a percentage of the active model's window, and `subagent.maxConcurrent` (1-8). | `settings.json` |
-| Sub-agent activity | Shows only active workers with task, semantic activity and animated SVG. Completed workers disappear; raw reports, arguments and logs are excluded. | Live active-worker snapshots |
+| Sub-agent activity | Shows only active workers with task, semantic activity and animated SVG. Completed workers disappear from the panel. Peer messages and expandable reports appear separately in chat, without execution accounting headers. | Live active-worker snapshots; chat messages and reports replay |
 | Todos | Compact objective and pending/active/verifying/done steps at the upper right. Uses structured `plan` snapshots when present, otherwise tracked `goal` steps. Completion reflects verification-gated runtime state. | Plan tool results replay; goal uses session state |
 | Reasoning and Autonomy | Compact SVG controls (hand for Ask, shield for Normal, lightning for Auto; level bars or adaptive sparkle for reasoning) read and write the session's real reasoning mode and Ask/Normal/Auto interaction mode. They are disabled while a turn is running. The available reasoning modes come from the active model. | Session |
-| Appearance | Five themes (Workbench, Pixel, Cyberpunk, Static monochrome, Tokyo Night), dark/light/system colour mode, and **Always show reasoning**. Decorative background uploads have been removed. | Browser only |
+| Appearance | Five themes (Workbench, Pixel, Cyberpunk, Static monochrome, Tokyo Night), defaulting to Pixel with system colour mode, and **Always show reasoning**. Decorative background uploads have been removed. | Browser only |
 
 ### Known limits
 
@@ -105,7 +137,17 @@ For example, ask: "Teach me Newton's second law with a labelled 2D force diagram
 
 ## Interaction and recovery
 
-Appearance settings place Todos and Subagents independently in the side rail, as a floating overlay on chat, or hide them entirely. Hidden panels do not reserve a side column. Active worker summaries disappear on completion; raw worker reports and delegation tool output are not rendered as chat activity.
+Each theme has coordinated backgrounds, raised surfaces, message bubbles, selection and
+focus colours. Workbench uses slate/blue, Pixel uses paper/forest or indigo/mint, Tokyo
+Night uses ink/periwinkle, Cyberpunk uses plum/teal, and Static stays monochrome. Small
+activity accents distinguish coding, reading skills, search and peer communication;
+status labels and icon shapes remain present so colour is never the only cue.
+
+Appearance settings place Todos and Subagents independently in the side rail, as a floating overlay on chat, or hide them entirely. Hidden panels do not reserve a side column. Active worker summaries disappear on completion. Starting/stopping workers and sending/checking messages use compact collaboration rows; failed actions remain visibly failed on replay. Short messages open immediately. Reports start collapsed and expand to Markdown and math, without the step/token accounting header.
+
+Floating panels stay in the outer conversation’s upper-right corner, outside the centred transcript anchor. They remain clear of the header, composer and any open side rail, and scroll independently in short layouts. The Tasks open/closed state persists across reloads. Appearance, colour mode, independent panel placements, and panel disclosure choices retain the user’s last selection in this browser; Pixel/System is only the fallback when no valid preference exists. **Escape** dismisses an open task overlay and returns focus to **Tasks**; an open settings dialog keeps its own Escape behavior. Goal/Plan steps remain above Subagents when both share a panel location. On mobile, the navigation drawer contains keyboard focus and returns it to the navigation toggle when closed.
+
+Chemistry notation uses the locally bundled mhchem extension (`\ce`, `\pu`). Physics macros include `\bra`, `\ket`, two-argument `\braket`, `\ketbra`, `\dv`, `\pdv`, `\abs` and `\norm`. These do not implement a general TeX compiler or arbitrary LaTeX packages; generate and share a PDF for those documents.
 
 Math uses the shared KaTeX path in workspace content and labels, including DOM overlays for canvas diagrams/charts, 3D labels and motion text. Timelines and flashcards recognize a limited set of standalone ASCII formulas such as difference quotients and derivative operators. Explicit LaTeX delimiters remain preferred; prose and code are preserved, and unsupported syntax stays visible. Text inputs, native dropdown values and source editors retain editable source; math-bearing form selections and table text cells also show a rendered preview.
 
@@ -113,13 +155,17 @@ Clipboard file items and clipboard file lists can be pasted into the composer, w
 
 Repeated math expressions reuse a bounded render cache, and unchanged reasoning text skips redundant rendering. The Pixel theme uses sharper controls, neutral selection, stronger focus indicators and improved text contrast; photos retain normal image rendering.
 
-While the agent works, the composer changes **Send** to **Queue follow-up**. Text and file/photo prompts enter the runtime's follow-up queue and run after the current work; slash commands retain their command behavior. A compact list above the composer shows pending prompts and lets users remove an item before it starts. Queue order and images are preserved, and reconnecting reads the live runtime queue. A stale removal is rejected rather than deleting another prompt. Up to 20 prompts may wait. Pending prompts are held in runtime memory, so restarting the server does not restore unsent queued work; delivered prompts enter normal session history.
+While the agent works, the composer changes **Send** to **Queue follow-up**. Text and file/photo prompts use the runtime's steering queue: they enter context at the next model step after the current tool batch or model generation finishes, without waiting for the whole task or final answer. Already-issued tool calls finish safely; queueing does not kill a running command or splice text into an in-flight provider request. Slash commands retain their command behavior. **Queued · sends at next step** shows pending prompts and lets users remove an item before delivery. Queue order and images are preserved, and reconnecting reads the live runtime queue. A stale removal is rejected rather than deleting another prompt; peer reports and separate runtime follow-ups remain intact. Up to 20 prompts may wait. Pending prompts are held in runtime memory, so restarting the server does not restore unsent queued work; delivered prompts enter normal session history.
 
 Settings is divided into Appearance, Models, Limits and Context tabs. The composer grows with the draft, preserves it on a failed send, and rejects duplicate submission while busy. Enter respects IME composition. Each conversation retains its draft for this tab. Token and draft text are not persisted to browser storage.
 
 **Settings → Appearance → Always show reasoning** remembers whether available reasoning should expand automatically. It applies to live and restored blocks; manually collapsing a block is respected during streaming. This is a display preference, separate from the model's reasoning effort. Providers that do not return reasoning text cannot supply a disclosure.
 
-Saved reasoning, code, tool arguments, tool output and edit diffs replay from the selected session branch, including work preceding model-context compaction. Provider signatures and redacted payloads are excluded. Large tool output initially shows a preview with **Show full output**. Historical reasoning has no invented elapsed time. Waiting uses flowing dreaming threads; supplied reasoning uses a pulsing network. Motion stops when activity settles and respects reduced motion.
+Collapsed reasoning retains its latest text without repeatedly typesetting hidden content. Opening it renders the latest version; expanded streaming updates are batched per frame. Long histories restore in ordered batches, yield to the interface, preserve the reading position and cancel stale restoration when another conversation is selected. Live events wait for restoration to finish. The conversation log can receive keyboard focus and is marked busy while streaming or restoring.
+
+**Settings → Appearance → Reduce motion** saves a preference for still activity icons and instant transitions. The operating system's reduced-motion setting is also honored. Pixel highlights the complete composer while it contains focus; individual action buttons retain keyboard focus indicators. On small screens, primary controls have larger touch targets, input text avoids automatic mobile zoom, and the composer follows visible-viewport height changes. The model list supports Arrow Up/Down, Home and End; Enter/Space activates a focused option.
+
+Saved reasoning, code, tool arguments, tool output and edit diffs replay from the selected session branch, including work preceding model-context compaction. Provider signatures and redacted payloads are excluded. Large tool output initially shows a preview with **Show full output**. Historical reasoning has no invented elapsed time. Live reasoning uses a compact blue neutron star with a rotating beam and pulsing core. Coding uses a laptop with typing code; skill reading, file reading, web search, tool use, planning, spawning, messaging and reports have distinct SVG scenes. Pixel uses stepped motion. Motion stops when activity settles and respects reduced motion.
 
 The active agent session replays its messages, tool calls/results, visuals on connection, with current active-worker snapshots. Pending approvals are restored and settled decisions remain inline. The Todos and sub-agent panels update from structured runtime state; the browser never invents a phase from prose. Main-agent activity stays at its execution point with semantic summaries and distinct terminal, web search, reading, writing, editing, dreaming and reasoning SVGs. Expanding a main-agent activity reveals its actual arguments and output. Replayed content does not replay entrance animations. Scrolling upward suspends automatic following until **Latest message** is selected. Reconnecting and switching conversations preserve the reading position. A disconnected stream disables sending and session controls and exposes **Reconnect**. Delayed model-picker and limit responses cannot overwrite another conversation's controls.
 
@@ -135,6 +181,28 @@ Run `node --import tsx packages/coding-agent/test/workbench-replay-smoke.ts` for
 
 ## Chat files and photos
 
+Agents can share workspace files in replies using ordinary Markdown: `[Report](reports/report.pdf)`
+creates a compact file card; `![Plot](images/plot.png)` adds an inline raster-image preview.
+Absolute paths inside the conversation workspace and `sandbox:/` destinations also work.
+Percent-encode spaces in destinations. **Preview / download** opens a viewer with image,
+PDF or literal text content, **Open in new tab**, and **Download**. Other formats, including
+Office documents, archives, HTML and SVG, remain downloadable files. PDFs use the bundled
+PDF.js renderer, worker, fonts and character maps served locally; the browser's native PDF
+viewer and external CDNs are not required. Chat files, project resources and sticky-note links
+share this renderer. Previous/next, page number, fit-width/zoom, password entry and a readable
+page-text disclosure are available. **Open in new tab** uses the same renderer and retains
+the selected appearance; that tab continues working after the original preview closes.
+Closing a preview cancels rendering and releases its worker. Corrupt or unsupported PDFs
+show an error while keeping the original available for download. Page rendering is bounded
+to eight million pixels to limit memory use on mobile; the PDF's own colours remain unchanged.
+
+Shared files must be regular files inside the conversation's original working directory,
+at most 25 MiB each. Hidden paths, symlinks and outside-workspace paths are refused.
+Project assignment does not change this directory. File requests use the session's bearer
+authentication; credentials are never embedded in a download URL. Inline images load as
+they enter view. Text previews show up to 256 KiB. Replayed links read the current file;
+they are not versioned copies, and missing files show an error with a retry path.
+
 Use **＋** beside the composer, paste a photo, or drop files onto the composer. Review previews and removable filename chips before sending. Attach up to eight files, 12 MiB total, with or without text. Failed sends restore both text and attachments. Draft attachments stay in tab memory per conversation and disappear on page reload.
 
 Original files are saved under the agent directory’s `attachments/<session-hash>/` with unique filenames. The agent receives their local paths for ordinary file tools. Supported photos are processed through Porcupine’s image pipeline and sent as real image blocks; photo thumbnails also survive saved conversation replay. Vision interpretation depends on the selected model. Other documents require appropriate agent tools; uploading a PDF does not promise automatic extraction. Files are untrusted input and do not change permissions.
@@ -143,8 +211,16 @@ Run `node --import tsx packages/coding-agent/test/workbench-attachments-smoke.ts
 
 ## Conversation organization and commands
 
+Click a project title to open its page: a title, a Markdown description, its chats and its resources. Descriptions initially show three lines; **Show more** reveals the complete content, and **Show less** returns to the compact view. **New project** accepts up to 8000 characters of Markdown, stored as the README objective with paragraph and list breaks preserved; existing projects use their full README objective or introductory paragraph. Local description links open the project's file preview. **Add resources** accepts multiple supported files and retains the existing upload limits. Select a resource for authenticated PDF, image or text preview, opening or download. **Back to chat** restores the current conversation without discarding its draft or stopping its work.
+
+Use **Pin project** on the project page to keep it at the top of Projects. Unpin from the same button. Pins persist atomically in the project’s hidden `.workbench-pin` file across browser and server restarts; they do not change chat pins or project assignments. Project management actions stay in a collapsed disclosure.
+
+Use **⋯ → Pin conversation** to keep a chat in the sidebar’s **Pinned** section. Unpin it from the same menu. Pins persist with session metadata across server restarts, keep the existing project association, and can be changed while the agent works. Pinned chats appear once, and search includes them.
+
 Drag a conversation onto a Project folder, or use its **⋯ → Project** selector. Choose **No project** to ungroup it. The same menu can delete any idle conversation. Busy sessions and their workers must stop before a move or deletion. Deleted session JSONL files move to their session directory’s `.trash/`; project folders move to `.porcupine-trash/projects/` beneath the workspace. Files remain recoverable, but the GUI has no restore button yet.
 
 Type `/` for a searchable command menu, use arrows to select, Tab to complete, Enter to execute, and Escape to dismiss. `/commands` or `/help` lists the live registry, including extension commands, prompt templates and explicit skills. Browser controls handle `/new`, `/settings`, `/resume`, `/model`, `/modes`, `/reasoning`, `/copy` and `/reasoning-show`. Runtime engines handle naming, usage/cost, resource reload, compaction, project/capability search, memory, learning, trace, guide, context generation and HTML export. Command results are saved without adding command-output noise to model context. Commands that still depend on terminal UI or lifecycle services are marked **terminal only** and return an explanation; they are never forwarded as ordinary model prompts.
+
+Commands consume their submitted text immediately and preserve anything typed while the command runs. Failed commands restore their text alongside the newer draft. Delayed message/card responses cannot clear another chat’s working state or copy an answer into its component cache, and older queue-removal responses cannot resurrect prompts already delivered by live events.
 
 Run `node --import tsx packages/coding-agent/test/workbench-organization-smoke.ts` for real project metadata persistence, drag/drop, accessible moves, deletion, slash command completion, session setting changes and command replay.

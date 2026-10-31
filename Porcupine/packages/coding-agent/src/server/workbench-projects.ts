@@ -1,11 +1,17 @@
 import { randomUUID } from "node:crypto";
 import {
+	closeSync,
+	constants,
+	fstatSync,
 	lstatSync,
 	mkdirSync,
+	openSync,
 	readdirSync,
 	readFileSync,
+	readSync,
 	realpathSync,
 	renameSync,
+	rmSync,
 	statSync,
 	writeFileSync,
 } from "node:fs";
@@ -14,7 +20,22 @@ import { discoverProjects } from "../porcupine/project-search.ts";
 import { WorkbenchError } from "./workbench-context-files.ts";
 
 const TEXT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".csv", ".json", ".yaml", ".yml", ".toml", ".log"]);
-const BINARY_EXTENSIONS = new Set([".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".zip"]);
+const BINARY_EXTENSIONS = new Set([
+	".pdf",
+	".png",
+	".jpg",
+	".jpeg",
+	".webp",
+	".gif",
+	".zip",
+	".docx",
+	".xlsx",
+	".pptx",
+	".odt",
+	".ods",
+	".odp",
+	".rtf",
+]);
 const MAX_TEXT_BYTES = 256 * 1024;
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 const MAX_FILES = 400;
@@ -26,6 +47,8 @@ export interface ProjectSummary {
 	title: string;
 	state: string;
 	statusSummary?: string;
+	description?: string;
+	pinned?: boolean;
 	files: number;
 	updatedAt: string;
 }
@@ -58,6 +81,16 @@ export class WorkbenchProjectStore {
 	constructor(cwd: string) {
 		this.cwd = realpathSync(cwd);
 		this.root = join(this.cwd, "Project");
+	}
+	setPinned(name: string, pinned: boolean): void {
+		const directory = this.projectPath(name);
+		const temporary = join(directory, `.workbench-pin-${randomUUID()}`);
+		try {
+			writeFileSync(temporary, JSON.stringify(pinned), { flag: "wx", mode: 0o600 });
+			renameSync(temporary, join(directory, ".workbench-pin"));
+		} finally {
+			rmSync(temporary, { force: true });
+		}
 	}
 	private projectPath(name: string): string {
 		if (!name.trim() || name.startsWith(".") || /[\\/\x00-\x1f]/.test(name) || Buffer.byteLength(name) > 240)
@@ -103,10 +136,33 @@ export class WorkbenchProjectStore {
 					const directory = this.projectPath(project.name),
 						files: ProjectFile[] = [];
 					this.walk(directory, files);
+					let pinned = false,
+						description = "";
+					try {
+						const pin = join(directory, ".workbench-pin");
+						if (lstatSync(pin).isFile() && realpathSync(pin) === pin && statSync(pin).size <= 8)
+							pinned = readFileSync(pin, "utf8") === "true";
+					} catch {}
+					try {
+						const readme = join(directory, "README.md");
+						if (
+							lstatSync(readme).isFile() &&
+							realpathSync(readme) === readme &&
+							statSync(readme).size <= MAX_TEXT_BYTES
+						) {
+							const content = readFileSync(readme, "utf8");
+							const objective = content.match(/^## Objective\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/im)?.[1];
+							description = (objective ?? content.replace(/^# .+\n?/, "").split(/^## /m)[0] ?? "")
+								.replace(/\r\n?/g, "\n")
+								.trim();
+						}
+					} catch {}
 					return [
 						{
 							name: project.name,
 							title: project.title,
+							description,
+							pinned,
 							state: project.state || "unknown",
 							statusSummary: project.statusSummary,
 							files: files.length,
@@ -142,10 +198,12 @@ export class WorkbenchProjectStore {
 		renameSync(directory, trashPath);
 		return { trashPath };
 	}
-	create(name: string, title?: string): ProjectSummary {
+	create(name: string, title?: string, description = ""): ProjectSummary {
 		const project = slug(name);
 		const directory = join(this.root, project);
 		mkdirSync(this.root, { recursive: true });
+		if (lstatSync(this.root).isSymbolicLink() || realpathSync(this.root) !== this.root)
+			throw new WorkbenchError(403, "Refusing an aliased Project workspace");
 		try {
 			mkdirSync(directory);
 		} catch (error) {
@@ -156,7 +214,7 @@ export class WorkbenchProjectStore {
 		const heading = (title?.trim() || project).slice(0, 120);
 		writeFileSync(
 			join(directory, "README.md"),
-			`# ${heading}\n\n## Objective\n\n## Scope\n- In scope:\n- Out of scope:\n\n## Workspace map\n- \`uploads/\`: documents supplied through the workbench\n`,
+			`# ${heading.replace(/[\r\n]/g, " ")}\n\n## Objective\n${description.replace(/\r\n?/g, "\n").trim()}\n\n## Scope\n- In scope:\n- Out of scope:\n\n## Workspace map\n- \`uploads/\`: documents supplied through the workbench\n`,
 			{ mode: 0o600 },
 		);
 		writeFileSync(
@@ -182,14 +240,29 @@ export class WorkbenchProjectStore {
 			throw new WorkbenchError(403, "Only regular project files can be opened");
 		const extension = extname(target).toLowerCase();
 		if (TEXT_EXTENSIONS.has(extension)) {
-			const content = readFileSync(target, "utf8");
+			const descriptor = openSync(target, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+			let content: string;
+			try {
+				if (!fstatSync(descriptor).isFile())
+					throw new WorkbenchError(403, "Only regular project files can be opened");
+				const buffer = Buffer.alloc(Math.min(stat.size, MAX_TEXT_BYTES));
+				let length = 0;
+				while (length < buffer.length) {
+					const count = readSync(descriptor, buffer, length, buffer.length - length, length);
+					if (!count) break;
+					length += count;
+				}
+				content = new TextDecoder().decode(buffer.subarray(0, length), { stream: stat.size > MAX_TEXT_BYTES });
+			} finally {
+				closeSync(descriptor);
+			}
 			return {
 				path: relative(directory, target),
 				bytes: stat.size,
 				kind: "text",
 				updatedAt: stat.mtime.toISOString(),
-				content: content.slice(0, MAX_TEXT_BYTES),
-				truncated: content.length > MAX_TEXT_BYTES,
+				content,
+				truncated: stat.size > MAX_TEXT_BYTES,
 			};
 		}
 		if (BINARY_EXTENSIONS.has(extension))
