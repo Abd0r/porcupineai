@@ -4,6 +4,8 @@ Run `porcupine -gui` (or `porcupine --gui`) to start a local workbench and open 
 
 To move from the TUI, finish its current turn and exit, then launch `porcupine --gui` from the same working directory. The GUI resumes the most recently modified conversation there, retaining its session ID, saved history and model context. Use the same `--session-dir` if you configured one. `--session <path-or-id>` or `--session-id <id>` selects a specific conversation; **New conversation** starts fresh. `--gui --name "New work"` also starts fresh, while `--no-session` remains temporary. This is a saved-session handoff, not concurrent ownership by two processes.
 
+Ask/Normal/Auto and adaptive reasoning are stored in the conversation's active branch, so the same choices return when reopening it in either client. Explicit mode selections are saved even before the first assistant response. Adaptive effort from a completed turn is restored and clamped to the selected model; it does not overwrite the default effort for other conversations. New conversations use their own defaults. A malformed policy record restores Ask with adaptive reasoning disabled rather than reviving older Auto authority. Existing sessions without policy records use the configured defaults on their first resume after this update.
+
 `porcupine --serve` serves a local browser workbench at the server root, for example `http://127.0.0.1:4096/`. The existing terminal interface remains available; the workbench is an additional client of the same session API.
 
 Start the server with a token:

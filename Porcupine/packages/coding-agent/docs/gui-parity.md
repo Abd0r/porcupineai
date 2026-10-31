@@ -94,7 +94,7 @@ Contract v1: **61 commands**, **18 runtime requirements**. Full implementation p
 
 | Runtime capability | GUI status | Acceptance criteria | Remaining work |
 | --- | --- | --- | --- |
-| session-handoff | partial | Preserve session ID, branch, history, model context and policy in both directions across a saved-session handoff. | Saved history/context/identity round-trip is verified; conversation-local interaction policy and adaptive state still need durable handoff and acceptance coverage. |
+| session-handoff | implemented | Preserve session ID, branch, history, model context and policy in both directions across a saved-session handoff. |  |
 | streaming | implemented | Render structured reasoning, text, tools, failures and completion in chronological order; replay retains supplied evidence. |  |
 | steering | implemented | Inject queued prompts at the next safe model/tool boundary, retain FIFO and attachment data, and reject stale cancellation. |  |
 | permissions | implemented | Share Ask/Normal/Auto guards, scope decisions to their session and nonce, and deny pending approvals on shutdown. |  |

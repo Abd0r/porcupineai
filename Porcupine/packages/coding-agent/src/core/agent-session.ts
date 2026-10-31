@@ -338,6 +338,30 @@ function estimateMessagesTokens(messages: AgentMessage[]): number {
 
 /** Standard thinking levels */
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high"];
+const SESSION_POLICY_ENTRY = "porcupine.session-policy";
+const POLICY_THINKING_LEVELS: readonly string[] = [...THINKING_LEVELS, "xhigh", "max"];
+
+function isPolicyThinkingLevel(value: unknown): value is ThinkingLevel {
+	return typeof value === "string" && POLICY_THINKING_LEVELS.includes(value);
+}
+
+interface SessionPolicy {
+	version: 1;
+	interactionMode: "ask" | "normal" | "auto";
+	adaptive: boolean;
+	adaptiveLastResolved?: ThinkingLevel;
+}
+
+function isSessionPolicy(value: unknown): value is SessionPolicy {
+	if (!value || typeof value !== "object") return false;
+	const data = value as Record<string, unknown>;
+	return (
+		data.version === 1 &&
+		(data.interactionMode === "ask" || data.interactionMode === "normal" || data.interactionMode === "auto") &&
+		typeof data.adaptive === "boolean" &&
+		(data.adaptiveLastResolved === undefined || isPolicyThinkingLevel(data.adaptiveLastResolved))
+	);
+}
 
 // ============================================================================
 // AgentSession Class
@@ -795,6 +819,7 @@ export class AgentSession {
 		this._excludedToolNames = config.excludedToolNames ? new Set(config.excludedToolNames) : undefined;
 		this._baseToolsOverride = config.baseToolsOverride;
 		this._sessionStartEvent = config.sessionStartEvent ?? { type: "session_start", reason: "startup" };
+		this._restoreSessionPolicy();
 
 		// WoT live-delivery hooks: sub→sub steers into the peer's context instantly
 		// when the peer has a live steerer; sub→main injects into the main context
@@ -836,6 +861,7 @@ export class AgentSession {
 
 		// Traceability: record the assembled prompt (model-visible == logged).
 		this._recordSystemPromptIfChanged("session-start");
+		this._persistSessionPolicy(false);
 	}
 
 	get modelRuntime(): ModelRuntime {
@@ -1870,7 +1896,12 @@ export class AgentSession {
 				});
 				const clamped = clampAdaptiveToAvailable(resolved, this.getAvailableThinkingLevels());
 				this._adaptiveLastResolved = clamped;
-				this.agent.state.thinkingLevel = clamped;
+				if (this.agent.state.thinkingLevel !== clamped) {
+					this.agent.state.thinkingLevel = clamped;
+					this.sessionManager.appendThinkingLevelChange(clamped);
+					this._emit({ type: "thinking_level_changed", level: clamped });
+				}
+				this._persistSessionPolicy(false);
 			}
 
 			// Build messages array (custom message if any, then user message)
@@ -2503,6 +2534,58 @@ export class AgentSession {
 	/** Set the interaction mode for this session. */
 	setInteractionMode(mode: "ask" | "normal" | "auto"): void {
 		this._interactionMode = mode;
+		this._persistSessionPolicy();
+		this._refreshPolicyPrompt();
+	}
+
+	private _refreshPolicyPrompt(): void {
+		this._baseSystemPrompt = this._rebuildSystemPrompt(this.getActiveToolNames());
+		this.agent.state.systemPrompt = this._systemPromptOverride ?? this._baseSystemPrompt;
+		this._recordSystemPromptIfChanged("policy");
+	}
+
+	/** Policy belongs to the active branch, never to global preferences or model context. */
+	private _persistSessionPolicy(flush = true): void {
+		const policy: SessionPolicy = {
+			version: 1,
+			interactionMode: this._interactionMode,
+			adaptive: this._adaptiveReasoning,
+			...(this._adaptiveLastResolved === undefined ? {} : { adaptiveLastResolved: this._adaptiveLastResolved }),
+		};
+		const latest = this.sessionManager
+			.getBranch()
+			.reverse()
+			.find((entry) => entry.type === "custom" && entry.customType === SESSION_POLICY_ENTRY);
+		if (latest?.type !== "custom" || JSON.stringify(latest.data) !== JSON.stringify(policy)) {
+			this.sessionManager.appendCustomEntry(SESSION_POLICY_ENTRY, policy);
+		}
+		// The normal journal defers its first flush until an assistant responds.
+		// A user choice must survive closing the client before that first response.
+		if (flush) this.sessionManager.forceFlushToDisk();
+	}
+
+	private _restoreSessionPolicy(): void {
+		this._interactionMode = this.settingsManager.getDefaultInteractionMode();
+		this._adaptiveReasoning = false;
+		this._adaptiveLastResolved = undefined;
+		const latest = this.sessionManager
+			.getBranch()
+			.reverse()
+			.find((entry) => entry.type === "custom" && entry.customType === SESSION_POLICY_ENTRY);
+		if (latest?.type !== "custom") return;
+		if (!isSessionPolicy(latest.data)) {
+			// Corrupt/unknown records must not revive older Auto authority.
+			this._interactionMode = "ask";
+			return;
+		}
+		this._interactionMode = latest.data.interactionMode;
+		this._adaptiveReasoning = latest.data.adaptive;
+		if (this._adaptiveReasoning && latest.data.adaptiveLastResolved !== undefined) {
+			this._adaptiveLastResolved = this._clampThinkingLevel(
+				latest.data.adaptiveLastResolved,
+				this.getAvailableThinkingLevels(),
+			);
+		}
 	}
 
 	/** Enable or disable the inspection-only plan-turn fence. */
@@ -2594,14 +2677,13 @@ export class AgentSession {
 
 	/** `/auto on|off` — drives the canonical interaction mode so the gate follows. */
 	setAutoMode(enabled: boolean): boolean {
-		this._interactionMode = enabled ? "auto" : "normal";
+		this.setInteractionMode(enabled ? "auto" : "normal");
 		return this.isAutoModeEnabled;
 	}
 
 	/** Toggle Auto Mode and return the resulting state. */
 	toggleAutoMode(): boolean {
-		this._interactionMode = this._interactionMode === "auto" ? "normal" : "auto";
-		return this.isAutoModeEnabled;
+		return this.setAutoMode(!this.isAutoModeEnabled);
 	}
 
 	/** Set the interactive confirm callback (Ask / flagged-Normal prompts). */
@@ -2631,13 +2713,13 @@ export class AgentSession {
 	setAdaptiveReasoning(enabled: boolean): boolean {
 		this._adaptiveReasoning = enabled;
 		if (!enabled) this._adaptiveLastResolved = undefined;
+		this._persistSessionPolicy();
 		return enabled;
 	}
 
 	/** Toggle adaptive reasoning and return the resulting state. */
 	toggleAdaptiveReasoning(): boolean {
-		this._adaptiveReasoning = !this._adaptiveReasoning;
-		return this._adaptiveReasoning;
+		return this.setAdaptiveReasoning(!this._adaptiveReasoning);
 	}
 
 	// =========================================================================
@@ -2659,11 +2741,13 @@ export class AgentSession {
 	 */
 	setReasoningMode(mode: ThinkingLevel | "adaptive"): ThinkingLevel | "adaptive" {
 		if (mode === "adaptive") {
-			this._adaptiveReasoning = true;
+			this.setAdaptiveReasoning(true);
 			return "adaptive";
 		}
 		this._adaptiveReasoning = false;
+		this._adaptiveLastResolved = undefined;
 		this.setThinkingLevel(mode);
+		this._persistSessionPolicy();
 		return this.thinkingLevel;
 	}
 
@@ -2676,8 +2760,7 @@ export class AgentSession {
 	}
 
 	/**
-	 * Snapshot ephemeral session UI policy (modes / reasoning) that is not fully
-	 * reconstructed from the session JSONL alone. Used by `/refresh`.
+	 * Snapshot live session policy for an in-process `/refresh` replacement.
 	 */
 	snapshotEphemeralSessionState(): {
 		interactionMode: "ask" | "normal" | "auto";
@@ -2710,19 +2793,26 @@ export class AgentSession {
 			snapshot.autoModeEnabled || snapshot.interactionMode === "auto" ? "auto" : snapshot.interactionMode;
 		if (snapshot.reasoningMode === "adaptive") {
 			this._adaptiveReasoning = true;
-			this._adaptiveLastResolved = snapshot.adaptiveLastResolved;
-			const concrete = snapshot.adaptiveLastResolved ?? snapshot.thinkingLevel;
+			this._adaptiveLastResolved =
+				snapshot.adaptiveLastResolved === undefined
+					? undefined
+					: this._clampThinkingLevel(snapshot.adaptiveLastResolved, this.getAvailableThinkingLevels());
+			const concrete = this._adaptiveLastResolved ?? snapshot.thinkingLevel;
 			if (concrete) {
-				this.agent.state.thinkingLevel = concrete;
+				this.agent.state.thinkingLevel = this._clampThinkingLevel(concrete, this.getAvailableThinkingLevels());
 			}
 		} else {
 			this._adaptiveReasoning = false;
 			this._adaptiveLastResolved = undefined;
 			// Session JSONL usually already restored thinking; prefer the live snapshot if it differs.
 			if (snapshot.thinkingLevel && this.agent.state.thinkingLevel !== snapshot.thinkingLevel) {
-				this.agent.state.thinkingLevel = snapshot.thinkingLevel;
+				this.agent.state.thinkingLevel = this._clampThinkingLevel(
+					snapshot.thinkingLevel,
+					this.getAvailableThinkingLevels(),
+				);
 			}
 		}
+		this._refreshPolicyPrompt();
 	}
 
 	/**
@@ -4160,7 +4250,16 @@ export class AgentSession {
 			const sessionContext = this.sessionManager.buildSessionContext();
 			this.agent.state.messages = sessionContext.messages;
 
-			// Emit session_tree event
+			// Restore the selected branch's policy before notifying clients.
+			this._restoreSessionPolicy();
+			this.agent.state.thinkingLevel = this._clampThinkingLevel(
+				isPolicyThinkingLevel(sessionContext.thinkingLevel) ? sessionContext.thinkingLevel : "off",
+				this.getAvailableThinkingLevels(),
+			);
+			// Record the selected branch even when navigation is followed immediately by exit.
+			this.sessionManager.appendCustomEntry("porcupine.branch-selection", { targetId });
+			this.sessionManager.forceFlushToDisk();
+			this._refreshPolicyPrompt();
 			await this._extensionRunner.emit({
 				type: "session_tree",
 				newLeafId: this.sessionManager.getLeafId(),

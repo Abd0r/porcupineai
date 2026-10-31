@@ -292,10 +292,9 @@ export const COMMAND_SURFACE_REQUIREMENTS: readonly CommandSurfaceRequirement[] 
 export const RUNTIME_SURFACE_REQUIREMENTS: readonly RuntimeSurfaceRequirement[] = [
 	{
 		id: "session-handoff",
-		parity: "partial",
+		parity: "implemented",
 		acceptance:
 			"Preserve session ID, branch, history, model context and policy in both directions across a saved-session handoff.",
-		gap: "Saved history/context/identity round-trip is verified; conversation-local interaction policy and adaptive state still need durable handoff and acceptance coverage.",
 	},
 	{
 		id: "streaming",

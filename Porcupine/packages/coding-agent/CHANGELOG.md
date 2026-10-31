@@ -34,6 +34,8 @@
 
 ### Fixed
 
+- Persist branch-local autonomy and adaptive reasoning through TUI/GUI handoffs, refresh and forks; restore selected branches on exit and clamp refreshed reasoning to model support without changing another chat's default effort.
+
 - Use shared per-turn usage, model-attributed cost and hierarchical stack engines in GUI commands; support quoted HTML/JSONL export paths and persisted subagent recall by ID. Reject unwired GUI commands without recording success.
 
 - Preserve task claims owned by live processes when another TUI/GUI store opens, and prevent overlapping execution of the same task across clients.
