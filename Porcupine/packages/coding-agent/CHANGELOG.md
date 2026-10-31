@@ -4,6 +4,8 @@
 
 ### Added
 
+- Local PDF.js previews for chat, project and sticky-note PDFs, with page navigation, zoom, password entry, readable page text and a matching standalone tab; no native PDF plug-in or CDN required.
+
 - Shared project sticky notes (up to 20) with paper styling, rich Markdown, image/file attachments, read/edit/delete controls and agent note actions with conflict-safe persistence.
 
 - Dedicated project pages with short README descriptions, project chats, multiple resource uploads, shared file previews and persistent project pinning.
@@ -27,6 +29,8 @@
 - Batch long GUI history restores and expanded reasoning updates; defer collapsed reasoning rendering until opened. Add a saved Reduce motion preference, keyboard model navigation and mobile navigation focus containment.
 
 ### Fixed
+
+- Keep Markdown table columns readable and keyboard-scrollable; render 2D labels in the active UI font, fit diagrams to their content, avoid node/edge-label collisions and offer an expanded diagram view. Chart legends wrap in the UI instead of squeezing series names onto the canvas.
 
 - Keep sticky-note paper colours when opening and editing notes, with a live colour preview and saved colour restored on reopening.
 

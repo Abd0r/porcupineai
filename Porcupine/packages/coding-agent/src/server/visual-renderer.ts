@@ -1,9 +1,11 @@
 import { ADAPTIVE_RENDERER_SCRIPT } from "./adaptive-renderer.ts";
+import { layoutDiagram } from "./diagram-layout.ts";
 import { QUIZ_RENDERER_SCRIPT } from "./quiz-renderer.ts";
 /** Browser-only declarative 2D/chart renderer. Embedded in the same-origin workbench script. */
 export const VISUAL_RENDERER_SCRIPT = String.raw`
 ${QUIZ_RENDERER_SCRIPT}
 ${ADAPTIVE_RENDERER_SCRIPT}
+const layoutDiagram=${layoutDiagram.toString()};
 function componentRevision(value){const text=JSON.stringify(value);if(text.length<=120000)return text;let a=2166136261,b=2246822519;for(let i=0;i<text.length;i++){a=Math.imul(a^text.charCodeAt(i),16777619);b=Math.imul(b^text.charCodeAt(i),3266489917);}return 'large:'+text.length+':'+(a>>>0).toString(16)+':'+(b>>>0).toString(16);}
 const visualObservers=new Map(),componentCards=new Map(),componentAnswers=new Map();
 function componentAnswerText(content){const text=textOf(content);if(text.length>240000||!text.startsWith('[Adaptive UI response]\n'))return null;try{const value=JSON.parse(text.slice(23));if(!isRecord(value)||!validText(value.componentId,200)||typeof value.title!=='string'||value.title.length>100||typeof value.revision!=='string'||value.revision.length>120000||!Array.isArray(value.answers)||value.answers.length>100||!value.answers.every(answer=>typeof answer==='string'&&answer.length<=120000))return null;return value}catch{return null}}
@@ -11,7 +13,7 @@ function restoreComponentAnswer(content){const answer=componentAnswerText(conten
 function componentUserText(content){const answer=componentAnswerText(content);if(!answer)return userMessageText(content);if(answer.kind==='quiz')return 'Submitted quiz: '+answer.title;if(answer.kind){try{const state=JSON.parse(answer.answers[0]);if(answer.kind==='form'&&Array.isArray(state.values))return answer.title+'\n'+state.values.map(field=>String(field.label)+': '+String(field.value)).join('\n');if(answer.kind==='table')return 'Shared table: '+answer.title+' · '+(Array.isArray(state.selected)?state.selected.length:0)+' rows selected';return 'Shared '+answer.kind+' workspace: '+answer.title}catch{}}return 'Answer to '+answer.title+'\n'+answer.answers.join('; ')}
 
 function clearVisuals(){for(const item of visualObservers.values())if(item.observer)item.observer.disconnect();visualObservers.clear();for(const item of componentCards.values())if(item.dispose)item.dispose();componentCards.clear();componentAnswers.clear()}
-function observeVisual(canvas,draw){const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>{if(visualObservers.has(canvas))draw()}):null;visualObservers.set(canvas,{draw,observer});if(observer)observer.observe(canvas)}
+function observeVisual(canvas,draw,target=canvas){const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>{if(visualObservers.has(canvas))draw()}):null;visualObservers.set(canvas,{draw,observer});if(observer)observer.observe(target)}
 function redrawVisuals(){for(const item of visualObservers.values())item.draw()}
 window.addEventListener('porcupine-theme-change',redrawVisuals);
 window.addEventListener('resize',redrawVisuals);
@@ -81,19 +83,26 @@ function renderVisual(visual,callId){
   const ask=visualElement('button','Ask about this visual');ask.type='button';ask.className='stop';ask.addEventListener('click',()=>{const question='Explain "'+visual.title+'" step by step, including its labels and assumptions.';if(!ui.prompt.value.includes(question))ui.prompt.value=ui.prompt.value.trim()?ui.prompt.value+'\n\n'+question:question;resizeComposer();ui.prompt.focus()});card.append(ask);
   mountComponent();scrollFeed();
   const ctx=canvas.getContext('2d');if(!ctx)return;const mathLabels=createCanvasMathLabels(canvas);let colors=plotColors(canvas);
+  if(visual.kind==='diagram'){
+    const viewport=canvas.parentNode.parentNode,hint=viewport.nextElementSibling,toolbar=visualElement('div'),expand=visualElement('button','Expand diagram'),dialog=visualElement('dialog'),header=visualElement('header'),close=visualElement('button','Close diagram');toolbar.className='diagram-toolbar';expand.type='button';expand.className='quiet-button';expand.setAttribute('aria-haspopup','dialog');toolbar.append(expand);card.insertBefore(toolbar,viewport);dialog.className='settings-dialog diagram-dialog';dialog.setAttribute('aria-label',visual.title);close.type='button';close.className='quiet-button';header.append(visualElement('h2',visual.title),close);dialog.append(header);card.append(dialog);
+    expand.addEventListener('click',()=>{dialog.append(viewport);dialog.showModal();draw();});close.addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>{card.insertBefore(viewport,hint);draw();expand.focus();});if(identity)componentCards.get(identity).dispose=()=>{if(dialog.open)dialog.close();};
+  }
   function figureText(text,x,y,width){if(!mathLabels.draw(text,x,y,width))ctx.fillText(text,x,y,width);}
   function line(x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
-  function diagramLabel(text,x,y,width){if(mathLabels.draw(text,x,y,width))return;const lines=String(text).split('\n');ctx.textBaseline='middle';for(let i=0;i<lines.length;i++)figureText(lines[i],x,y+(i-(lines.length-1)/2)*14,width);ctx.textBaseline='alphabetic';}
   function draw(){
     mathLabels.begin();colors=plotColors(canvas);
-    const rect=canvas.getBoundingClientRect(),w=Math.max(1,rect.width),h=Math.max(1,rect.height),ratio=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,w,h);ctx.font='12px system-ui';ctx.textAlign='center';ctx.lineWidth=2;
+    const style=window.getComputedStyle(canvas),font=style.getPropertyValue('--font').trim()||'system-ui';ctx.font='14px '+font;
+    const layout=visual.kind==='diagram'?layoutDiagram(visual.objects,canvas.parentNode.parentNode.clientWidth||640,text=>ctx.measureText(text).width):null;
+    if(layout){canvas.style.width=layout.width+'px';canvas.style.height=layout.height+'px';}
+    const rect=canvas.getBoundingClientRect(),w=layout?layout.width:Math.max(1,rect.width),h=layout?layout.height:Math.max(1,rect.height),ratio=Math.min(window.devicePixelRatio||1,2,8192/w,8192/h);canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,w,h);ctx.font='12px '+font;ctx.textAlign='center';ctx.lineWidth=2;
     if(visual.kind==='diagram'){
-      let extent=4;for(const o of visual.objects){if(o.from)extent=Math.max(extent,...o.from.map(Math.abs),...o.to.map(Math.abs));else extent=Math.max(extent,...o.position.map((n,i)=>Math.abs(n)+(o.radius||((o.size&&o.size[i]/2)||0))))}
-      const scale=Math.max(1,Math.min(w-50,h-50))/(extent*2),xy=p=>[w/2+p[0]*scale,h/2-p[1]*scale];
+      const scale=layout.scale,xy=p=>[layout.originX+p[0]*scale,layout.originY-p[1]*scale];
       for(const o of visual.objects){ctx.strokeStyle=o.color;ctx.fillStyle=o.color;
-        if(o.from){const a=xy(o.from),b=xy(o.to);line(...a,...b);if(o.type==='arrow'){const angle=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.beginPath();ctx.moveTo(...b);ctx.lineTo(b[0]-9*Math.cos(angle-.45),b[1]-9*Math.sin(angle-.45));ctx.lineTo(b[0]-9*Math.cos(angle+.45),b[1]-9*Math.sin(angle+.45));ctx.closePath();ctx.fill()}if(o.label)diagramLabel(o.label,(a[0]+b[0])/2,(a[1]+b[1])/2-10,w-20);
-        }else{const p=xy(o.position);if(o.type==='rectangle'){ctx.globalAlpha=.3;ctx.fillRect(p[0]-o.size[0]*scale/2,p[1]-o.size[1]*scale/2,o.size[0]*scale,o.size[1]*scale);ctx.globalAlpha=1;const sx=o.size[0]*scale/2,sy=o.size[1]*scale/2;line(p[0]-sx,p[1]-sy,p[0]+sx,p[1]-sy);line(p[0]+sx,p[1]-sy,p[0]+sx,p[1]+sy);line(p[0]+sx,p[1]+sy,p[0]-sx,p[1]+sy);line(p[0]-sx,p[1]+sy,p[0]-sx,p[1]-sy)}else if(o.type==='circle'){ctx.beginPath();ctx.arc(...p,o.radius*scale,0,Math.PI*2);ctx.stroke()}if(o.type==='text'||o.label){if(o.type!=='text')ctx.fillStyle=colors.text;diagramLabel(o.type==='text'?o.text:o.label,p[0],p[1],Math.max(60,o.size?o.size[0]*scale-6:w-20))}}
+        if(o.from){const a=xy(o.from),b=xy(o.to);line(...a,...b);if(o.type==='arrow'){const angle=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.beginPath();ctx.moveTo(...b);ctx.lineTo(b[0]-9*Math.cos(angle-.45),b[1]-9*Math.sin(angle-.45));ctx.lineTo(b[0]-9*Math.cos(angle+.45),b[1]-9*Math.sin(angle+.45));ctx.closePath();ctx.fill()}
+        }else{const p=xy(o.position);if(o.type==='rectangle'){ctx.globalAlpha=.16;ctx.fillRect(p[0]-o.size[0]*scale/2,p[1]-o.size[1]*scale/2,o.size[0]*scale,o.size[1]*scale);ctx.globalAlpha=1;const sx=o.size[0]*scale/2,sy=o.size[1]*scale/2;line(p[0]-sx,p[1]-sy,p[0]+sx,p[1]-sy);line(p[0]+sx,p[1]-sy,p[0]+sx,p[1]+sy);line(p[0]+sx,p[1]+sy,p[0]-sx,p[1]+sy);line(p[0]-sx,p[1]+sy,p[0]-sx,p[1]-sy)}else if(o.type==='circle'){ctx.beginPath();ctx.arc(...p,o.radius*scale,0,Math.PI*2);ctx.stroke()}}
       }
+      for(const label of layout.labels)mathLabels.draw(label.text,label.x,label.y,label.width,{plain:true,kind:label.kind});
+      const viewport=canvas.parentNode.parentNode,hint=viewport.nextElementSibling;if(hint)hint.hidden=layout.width<=viewport.clientWidth+1;
       mathLabels.end();return;
     }
     const points=visual.series.flatMap(s=>s.points),xs=points.map(p=>p.x),ys=points.flatMap(p=>[p.y-(p.error||0),p.y+(p.error||0)]);
@@ -108,7 +117,7 @@ function renderVisual(visual,callId){
     const xr=range(xs),yr=range(ys),left=Math.min(80,w*.25),right=w-20,top=38,bottom=h-52,plotW=Math.max(1,right-left),plotH=Math.max(1,bottom-top),px=x=>left+(x-xr[0])/(xr[1]-xr[0])*plotW,py=y=>bottom-(y-yr[0])/(yr[1]-yr[0])*plotH;
     ctx.fillStyle=colors.text;figureText(visual.yLabel,w/2,18,w-16);figureText(visual.xLabel,w/2,h-8,w-16);
     const format=n=>n===0?'0':(Math.abs(n)>=1e5||Math.abs(n)<.001)?n.toExponential(1):Number(n.toPrecision(4)).toString();
-    ctx.font='10px system-ui';ctx.lineWidth=1;
+    ctx.font='11px '+font;ctx.lineWidth=1;
     for(let i=0;i<=4;i++){const x=xr[0]+(xr[1]-xr[0])*i/4,y=yr[0]+(yr[1]-yr[0])*i/4;ctx.strokeStyle=colors.grid;line(px(x),top,px(x),bottom);line(left,py(y),right,py(y));ctx.fillStyle=colors.label;ctx.textAlign='center';figureText(format(x),px(x),bottom+16,plotW/4);ctx.textAlign='right';figureText(format(y),left-7,py(y)+3,left-10)}
     ctx.strokeStyle=colors.axis;line(left,top,left,bottom);line(left,bottom,right,bottom);
     const uniqueX=[...new Set(points.map(p=>p.x))].sort((a,b)=>a-b);let gap=plotW;for(let i=1;i<uniqueX.length;i++)gap=Math.min(gap,px(uniqueX[i])-px(uniqueX[i-1]));const barWidth=Math.max(.1,Math.min(28,gap*.7/visual.series.length));
@@ -120,8 +129,8 @@ function renderVisual(visual,callId){
       }
     }
     // The table retains full precision and labels when the canvas is dense.
-    let legendX=left;for(const s of visual.series){ctx.fillStyle=s.color;ctx.textAlign='left';figureText(s.name,legendX,h-27,plotW/visual.series.length-4);legendX+=plotW/visual.series.length}
+    // The wrapping DOM legend below the chart retains complete series names.
   }
-  observeVisual(canvas,()=>{draw();mathLabels.end()});draw();mathLabels.end();
+  observeVisual(canvas,()=>{draw();mathLabels.end()},visual.kind==='diagram'?canvas.parentNode.parentNode:canvas);draw();mathLabels.end();
 }
 `;

@@ -29,6 +29,9 @@ class FakeCanvasContext {
 	fillText(text: string): void {
 		this.texts.push(text);
 	}
+	measureText(text: string): { width: number } {
+		return { width: text.length * 8 };
+	}
 	createRadialGradient(): { addColorStop(): void } {
 		return { addColorStop() {} };
 	}
@@ -98,7 +101,9 @@ class FakeElement {
 	scrollHeight = 0;
 	role = "";
 	value = "";
+	href = "";
 	clientHeight = 640;
+	clientWidth = 640;
 	querySelectorAll(selector?: string): FakeElement[] {
 		return selector === ".permission"
 			? this.children.flatMap(descendants).filter((node) => node.className === "permission")
@@ -394,6 +399,10 @@ function loadRenderer(mockFetch?: typeof fetch): {
 		document,
 		window: {
 			confirm: () => true,
+			createWorkbenchPdfViewer: (host: FakeElement) => {
+				host.append(document.createElement("canvas"));
+				return { ready: Promise.resolve(), destroy: () => {} };
+			},
 			katex: {
 				render(source: string, node: FakeElement, options: { displayMode: boolean; trust: boolean }) {
 					if (source.includes("notacommand")) throw new Error("Unsupported math");
@@ -563,7 +572,8 @@ describe("project pages", () => {
 		const preview = descendants(list).find((n) => n.tagName === "button" && n.textContent === "Preview / download")!;
 		await preview.handlers.get("click")!();
 		expect(requests).toContain("/workbench/projects/lab/files/uploads/paper.pdf?raw=1");
-		expect(h.elements.get("artifact-content")!.children[0].tagName).toBe("iframe");
+		expect(h.elements.get("artifact-content")!.children[0].tagName).toBe("canvas");
+		expect(h.elements.get("artifact-open")!.href).toContain("/workbench/pdf/viewer.html#");
 	});
 	it.each(["amber", "blue", "sage", "rose"])(
 		"keeps a %s note's paper colour when opening and editing",
@@ -1136,10 +1146,71 @@ describe("browser teaching visuals", () => {
 		const { render, feed, canvasContext } = loadRenderer();
 		render(diagram);
 		expect(feed.children).toHaveLength(1);
-		expect(canvasContext.texts).toContain("F = ma <script>");
+		expect(canvasContext.texts).not.toContain("F = ma <script>");
 		const nodes = descendants(feed);
+		expect(
+			nodes.some((node) => node.className === "canvas-math-label" && node.textContent.includes("<script>")),
+		).toBe(true);
+		expect(nodes.some((node) => node.tagName === "script")).toBe(false);
 		expect(nodes.some((node) => node.textContent.includes("Force (N)") && node.tagName === "li")).toBe(true);
 		expect(nodes.find((node) => node.tagName === "canvas")?.attributes.get("role")).toBe("img");
+	});
+	it("keeps diagram labels in readable UI text instead of compressing them on canvas", () => {
+		const h = loadRenderer();
+		h.render({
+			...diagram,
+			objects: [
+				{
+					type: "rectangle",
+					position: [15, 10],
+					size: [4, 2],
+					color: "#609bd0",
+					label: "Compare imagined vs real observations",
+				},
+			],
+		});
+		const labels = descendants(h.feed).filter((node) => node.className.includes("canvas-math-label"));
+		expect(
+			labels.some((node) => node.textContent.replace(/\s+/g, " ") === "Compare imagined vs real observations"),
+		).toBe(true);
+		expect(h.canvasContext.texts).not.toContain("Compare imagined vs real observations");
+	});
+	it("gives Markdown tables a named keyboard-scrollable region", () => {
+		const h = loadRenderer();
+		h.rich(
+			h.feed,
+			"| Step | What happens | Today |\n| --- | --- | --- |\n| **Imagine** | Roll the model forward for each candidate action | Same future whatever the action | ",
+		);
+		const region = descendants(h.feed).find((node) => node.className === "table-scroll")!;
+		expect(region.attributes.get("role")).toBe("region");
+		expect(region.attributes.get("aria-label")).toContain("Step");
+		expect(region.tabIndex).toBe(0);
+	});
+	it("expands a diagram without duplicating its labels and restores it when closed", async () => {
+		const h = loadRenderer();
+		h.render(diagram);
+		const nodes = descendants(h.feed);
+		const expand = nodes.find((node) => node.tagName === "button" && node.textContent === "Expand diagram");
+		expect(expand).toBeDefined();
+		await expand!.handlers.get("click")!();
+		const dialog = nodes.find((node) => node.tagName === "dialog")!;
+		const viewport = nodes.find((node) => node.className === "diagram-viewport")!;
+		expect(dialog.open).toBe(true);
+		expect(viewport.parentNode).toBe(dialog);
+		dialog.close();
+		expect(viewport.parentNode).toBe(h.feed.children[0]);
+	});
+	it("closes an expanded diagram when the agent replaces that component", async () => {
+		const h = loadRenderer();
+		h.render({ ...diagram, componentId: "live-diagram" });
+		const nodes = descendants(h.feed);
+		const expand = nodes.find((node) => node.tagName === "button" && node.textContent === "Expand diagram")!;
+		await expand.handlers.get("click")!();
+		const dialog = nodes.find((node) => node.tagName === "dialog")!;
+		h.render({ ...diagram, componentId: "live-diagram", title: "Updated diagram" });
+		expect(dialog.open).toBe(false);
+		expect(h.feed.children).toHaveLength(1);
+		expect(h.feed.children[0].textContent).toContain("Updated diagram");
 	});
 
 	it.each(["line", "scatter", "bar"])("draws %s charts with units and a full accessible data table", (chartType) => {

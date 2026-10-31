@@ -34,6 +34,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { stripAnsi } from "../utils/ansi.ts";
 import { serveMathAsset } from "./math-assets.ts";
+import { servePdfAsset } from "./pdf-assets.ts";
 import { PORCUPINE_WEB_UI } from "./web-ui.ts";
 import { readWorkbenchArtifact } from "./workbench-artifacts.ts";
 import { validateWorkbenchAttachments, type WorkbenchAttachment } from "./workbench-attachments.ts";
@@ -386,7 +387,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					"content-length": Buffer.byteLength(PORCUPINE_WEB_UI),
 					"cache-control": "no-store",
 					"content-security-policy":
-						"default-src 'none'; img-src blob: data:; frame-src blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+						"default-src 'none'; img-src blob: data:; frame-src blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'self'; font-src 'self' blob: data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
 					"x-content-type-options": "nosniff",
 					"x-frame-options": "DENY",
 					"referrer-policy": "no-referrer",
@@ -396,6 +397,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			}
 
 			if (method === "GET" && serveMathAsset(path, res)) return;
+			if (method === "GET" && servePdfAsset(path, res)) return;
 			if (!requireAuth(req)) {
 				json(res, 401, { error: "unauthorized" });
 				return;

@@ -13,12 +13,20 @@ import { WORKBENCH_MATH_MACROS } from "./math-macros.ts";
 
 export const RICH_TEXT_STYLES = `
 .canvas-label-host { position: relative; min-width: 0; }
-.diagram-viewport .canvas-label-host { min-width: 640px; }
+.diagram-viewport .canvas-label-host { width: max-content; }
 .canvas-math-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .canvas-math-label { position: absolute; font: 12px system-ui; color: var(--plot-text); line-height: 1.3; }
 .diagram-viewport { max-width: 100%; overflow: auto; border-radius: var(--r1); }
-.diagram-canvas { min-width: 640px; height: 480px !important; }
+.diagram-canvas { max-width: none; touch-action: auto; }
+.diagram-viewport { background: var(--canvas); border: var(--unit) solid var(--line-soft); }
+.diagram-viewport .scene-canvas { border: 0; border-radius: 0; }
+.diagram-viewport .canvas-math-label { font: 14px/20px var(--font); color: var(--text); white-space: pre-wrap; overflow-wrap: normal; }
+.diagram-viewport .canvas-math-label[data-kind="edge"],.diagram-viewport .canvas-math-label[data-kind="annotation"] { background: var(--canvas); box-shadow: 0 0 0 4px var(--canvas); }
 .diagram-hint { color: var(--quiet); font-size: var(--small); }
+.diagram-toolbar { display: flex; justify-content: flex-start; margin-bottom: var(--s2); }
+.diagram-dialog { width: min(1400px,calc(100vw - 32px)); padding: 20px; }
+.diagram-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.diagram-dialog .diagram-viewport { max-height: calc(100dvh - 160px); }
 .interactive-visual > button, .interactive-visual form > button, .adaptive-body button { font: inherit; font-size: var(--small); border: 1px solid var(--line); border-radius: var(--r1); padding: var(--s2) var(--s3); background: var(--surface); color: var(--text); cursor: pointer; transition: background .15s ease; }
 .interactive-visual button:hover { background: var(--line-soft); }
 .interactive-visual button:disabled { opacity: .5; cursor: default; }
@@ -53,9 +61,10 @@ export const RICH_TEXT_STYLES = `
 .code-banner .quiet-button { font-size: var(--small); padding: 0 var(--s1); }
 .code-block pre { margin: 0; padding: var(--s3); overflow-x: auto; }
 .code-block code { background: none; padding: 0; color: var(--text); font-size: var(--small); line-height: 1.6; }
-.table-scroll { margin: 0 0 var(--s3); overflow-x: auto; }
+.table-scroll { margin: 0 0 var(--s3); overflow-x: auto; max-width: 100%; overscroll-behavior-x: contain; }
 .table-scroll table { border-collapse: collapse; min-width: 100%; font-variant-numeric: tabular-nums; font-size: var(--small); }
 .table-scroll th, .table-scroll td { padding: var(--s2) var(--s3); text-align: left; border-bottom: var(--unit) solid var(--line-soft); font-weight: 400; }
+.table-scroll :is(th,td) { min-width: 10ch; overflow-wrap: normal; word-break: normal; white-space: normal; vertical-align: top; }
 .table-scroll th { color: var(--text); }
 .math-display { margin: 0 0 var(--s3); overflow-x: auto; padding: var(--s2) 0; }
 .math-expression { color: var(--text); }
@@ -106,7 +115,7 @@ function tableCells(line){
   }
   cells.push(cell.trim());return cells;
 }
-function renderTable(lines,artifactFactory){const table=document.createElement("div");table.className="table-scroll";const element=document.createElement("table");const rows=lines.filter(line=>!/^\\s*\\|?[\\s:-]+\\|[\\s:|-]*$/.test(line)).map(tableCells);
+function renderTable(lines,artifactFactory){const table=document.createElement("div");table.className="table-scroll";table.tabIndex=0;table.setAttribute('role','region');const element=document.createElement("table");const rows=lines.filter(line=>!/^\\s*\\|?[\\s:-]+\\|[\\s:|-]*$/.test(line)).map(tableCells);table.setAttribute('aria-label','Table: '+(rows[0]||[]).join(', '));
   const head=document.createElement("thead");const headRow=document.createElement("tr");for(const cell of rows[0]||[]){const th=document.createElement("th");th.scope="col";for(const node of inlineNodes(cell,artifactFactory))th.append(node);headRow.append(th)}head.append(headRow);element.append(head);
   const body=document.createElement("tbody");for(const row of rows.slice(1)){const tr=document.createElement("tr");for(const cell of row){const td=document.createElement("td");for(const node of inlineNodes(cell,artifactFactory))td.append(node);tr.append(td)}body.append(tr)}element.append(body);table.append(element);return table}
 function renderRichText(container,text,artifactFactory){

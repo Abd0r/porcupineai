@@ -75,6 +75,17 @@ describe("workspace artifacts", () => {
 			},
 		});
 		try {
+			const renderer = await fetch(`http://127.0.0.1:${handle.port()}/workbench/pdf/viewer.mjs`);
+			expect(renderer.status).toBe(200);
+			expect(renderer.headers.get("content-type")).toContain("javascript");
+			expect(await renderer.text()).toContain("createWorkbenchPdfViewer");
+			const worker = await fetch(`http://127.0.0.1:${handle.port()}/workbench/pdf/pdf.worker.mjs`);
+			expect(worker.status).toBe(200);
+			const viewerPage = await fetch(`http://127.0.0.1:${handle.port()}/workbench/pdf/viewer.html`);
+			expect(viewerPage.status).toBe(200);
+			expect(viewerPage.headers.get("content-type")).toContain("text/html");
+			for (const path of ["package.json", "../auth.json", "wasm/../../auth.json"])
+				expect((await fetch(`http://127.0.0.1:${handle.port()}/workbench/pdf/${path}`)).status).not.toBe(200);
 			const url = `http://127.0.0.1:${handle.port()}/session/files/artifact?path=report.pdf`;
 			expect((await fetch(url)).status).toBe(401);
 			const response = await fetch(url, { headers: { authorization: "Bearer test-secret" } });

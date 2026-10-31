@@ -22,7 +22,9 @@ The interface uses an open conversation column, neutral surfaces, compact contro
 
 ## Visual explanations
 
-Diagram preparation accepts both canonical primitives and compact node notation. A compact box uses `id`, `type: "box"`, centre coordinates `x`/`y`, dimensions `w`/`h`, `label` and `fill`. Arrows can reference existing node IDs with `from`/`to`; preparation converts these to boundary coordinates and supplies a neutral line colour when omitted. A missing diagram title is derived from the description or defaults to "2D diagram". Duplicate IDs, unresolved connections, unknown fields and invalid bounds are rejected. Validation reports the selected visual kind, rather than errors for unrelated workspaces. Multiline labels render on separate lines; smaller screens can scroll the readable diagram viewport.
+Diagram preparation accepts both canonical primitives and compact node notation. A compact box uses `id`, `type: "box"`, centre coordinates `x`/`y`, dimensions `w`/`h`, `label` and `fill`. Arrows can reference existing node IDs with `from`/`to`; preparation converts these to boundary coordinates and supplies a neutral line colour when omitted. A missing diagram title is derived from the description or defaults to "2D diagram". Duplicate IDs, unresolved connections, unknown fields and invalid bounds are rejected. Validation reports the selected visual kind, rather than errors for unrelated workspaces. Labels use the active UI font and math renderer at a readable size, wrap complete words, and reserve space around arrow annotations. The canvas fits the supplied content's bounds rather than a fixed square around the origin. Wide diagrams scroll within their card; **Expand diagram** opens a larger view and closes with its button or Escape. Resizing the chat or changing theme recalculates the layout. Supplied shape positions and connections remain unchanged: overlapping geometry still needs a corrected specification.
+
+Markdown tables preserve words and a readable minimum column width, with horizontal scrolling inside a keyboard-focusable table region when needed. Chart series names use the wrapping legend below the plot instead of compressed duplicate canvas labels.
 
 ### Interactive workspaces
 
@@ -162,8 +164,15 @@ creates a compact file card; `![Plot](images/plot.png)` adds an inline raster-im
 Absolute paths inside the conversation workspace and `sandbox:/` destinations also work.
 Percent-encode spaces in destinations. **Preview / download** opens a viewer with image,
 PDF or literal text content, **Open in new tab**, and **Download**. Other formats, including
-Office documents, archives, HTML and SVG, remain downloadable files. PDF display depends
-on the browser's built-in viewer; open/download remain available if embedding is unsupported.
+Office documents, archives, HTML and SVG, remain downloadable files. PDFs use the bundled
+PDF.js renderer, worker, fonts and character maps served locally; the browser's native PDF
+viewer and external CDNs are not required. Chat files, project resources and sticky-note links
+share this renderer. Previous/next, page number, fit-width/zoom, password entry and a readable
+page-text disclosure are available. **Open in new tab** uses the same renderer and retains
+the selected appearance; that tab continues working after the original preview closes.
+Closing a preview cancels rendering and releases its worker. Corrupt or unsupported PDFs
+show an error while keeping the original available for download. Page rendering is bounded
+to eight million pixels to limit memory use on mobile; the PDF's own colours remain unchanged.
 
 Shared files must be regular files inside the conversation's original working directory,
 at most 25 MiB each. Hidden paths, symlinks and outside-workspace paths are refused.
