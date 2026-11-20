@@ -7,9 +7,9 @@
  *   Invalid schema for function 'visualize': [{"minimum":-20,"maximum":20,"type":"number"}, ...]
  *   is not of types "boolean", "object"
  *
- * The 2020-12 spelling of the same constraint is `prefixItems: [a, b]` with `items: false`, which is also
- * valid draft-07 (`items` may be a boolean there) and is ignored rather than rejected by validators that do
- * not know the keyword. Converting one into the other keeps the tuple's meaning and satisfies both.
+ * Use a single item schema instead of positional keywords: in draft-07, `items: false` with an
+ * ignored `prefixItems` rejects every nonempty array. Homogeneous tuples keep their item constraints
+ * exactly; heterogeneous tuples advertise the union, while local tool validation still checks positions.
  *
  * The coercion to `type: "object"` for a union of object members is separate: some validators require an
  * explicit type even when every branch already declares one.
@@ -23,9 +23,20 @@ export function normalizeToolParameters(schema: unknown): Record<string, unknown
 		const output: Record<string, unknown> = { ...source };
 
 		if (Array.isArray(source.items)) {
-			// draft-07 positional tuple: items becomes prefixItems, and items may then only be a boolean
-			output.prefixItems = (source.items as unknown[]).map(normalizeNode);
-			output.items = false;
+			const items = source.items.map(normalizeNode);
+			if (source.additionalItems === false) {
+				output.maxItems =
+					typeof source.maxItems === "number" ? Math.min(source.maxItems, items.length) : items.length;
+			} else if (typeof source.maxItems !== "number" || source.maxItems > items.length) {
+				items.push(normalizeNode(source.additionalItems ?? true));
+			}
+			delete output.additionalItems;
+			const alternatives = [...new Map(items.map((item) => [JSON.stringify(item), item])).values()];
+			output.items = alternatives.includes(true)
+				? {}
+				: alternatives.length <= 1
+					? (alternatives[0] ?? false)
+					: { anyOf: alternatives };
 		} else if (source.items !== undefined) {
 			output.items = normalizeNode(source.items);
 		}

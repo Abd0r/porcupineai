@@ -127,6 +127,16 @@ data: {"type":"permission_request","permissionId":"perm-...","title":"...","mess
 A heartbeat comment (`: ping`) is sent every 15 seconds to keep the connection
 alive.
 
+The browser opts into paged history with `?history=paged`. For sessions with saved
+history, `server_connected` includes up to 120 recent replay events and a numeric
+`historyBefore` cursor. Existing SSE clients still receive the legacy snapshot.
+
+### GET /session/:id/history?before=<cursor>
+
+With the usual bearer authorization, returns `{ timeline, historyBefore }` with
+up to 120 preceding replay events in chronological order. Pass the cursor from
+the connection or previous page. A cursor of `0` means no older events remain.
+
 ### POST /session/:id/permissions/:permissionId/response
 
 Programmatically answer a pending permission request surfaced over SSE (the
@@ -184,7 +194,7 @@ The authenticated workbench also exposes `GET /session/:id/commands` for the liv
 
 The sidebar uses one search for chats and projects, single-line names with full-name tooltips, and small initial lists with Show more. Project folders remember whether you expanded them. The project page lists chats and resources beside a compact sticky-note area. Resource clicks open a preview dialog: formatted Markdown (including tables, code and math), raster images and PDFs render locally; other supported files can be downloaded. Markdown resource links resolve relative to that document inside the project. Browser PDF support varies; Open in new tab and Download remain available.
 
-Each project supports up to **20 persistent sticky notes**. Use **＋** beside Sticky notes to add one, or **Open / edit** on a note to read it in full, then Edit note, Save note or Delete note. Choose amber, blue, sage or rose paper. Attach file uploads a resource and inserts an image or file link; deleting the note keeps its attached resources. Note titles allow 120 characters and bodies 8000. Notes support the same safe Markdown renderer as chat; HTML and scripts remain literal text. Notes refresh while the project is visible, without replacing an open editor. Conflicting edits keep the draft and require reopening the latest note.
+Each project supports up to **20 persistent sticky notes**. Use **＋** beside Sticky notes to add one, or **Open / edit** on a note to read it in full, then Edit note, Save note or Delete note. Choose amber, blue, sage or rose paper. Attach file uploads a resource and inserts an image or file link; deleting the note keeps its attached resources. Note titles allow 120 characters and bodies 8000. Notes support the same safe Markdown renderer as chat; HTML and scripts remain literal text. Notes refresh while the project is visible, without replacing an open editor. Conflicting edits keep the draft and let you review the saved version before retrying.
 
 The agent uses the existing `projects` tool with `query` set to the project directory name:
 

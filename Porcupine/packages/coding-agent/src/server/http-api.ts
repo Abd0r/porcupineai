@@ -49,7 +49,7 @@ import type {
 	SessionSurfaces,
 	SurfaceControl,
 } from "./workbench-session-surfaces.ts";
-import type { WorkbenchReplayEvent } from "./workbench-transcript.ts";
+import { serializeWorkbenchTimeline, type WorkbenchReplayEvent } from "./workbench-transcript.ts";
 
 /** Minimal session surface the HTTP API drives. */
 export interface ServeApiSession
@@ -129,6 +129,14 @@ export interface ServeApiHandle {
 }
 
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
+const HISTORY_PAGE_SIZE = 120;
+
+function fullSessionTimeline(session: ServeApiSession): WorkbenchReplayEvent[] {
+	if (typeof session.getTimeline === "function") return session.getTimeline() ?? [];
+	const transcript = session.getTranscript?.();
+	if (!transcript) return [];
+	return serializeWorkbenchTimeline(transcript.map((message) => ({ role: message.role, content: message.content })));
+}
 const SSE_HEARTBEAT_MS = 15_000;
 const PERMISSION_TIMEOUT_MS = 60_000;
 
@@ -666,12 +674,32 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					json(res, 404, { error: `no such session: ${eventsMatch[1]}` });
 					return;
 				}
+				const pagedHistory = url.searchParams.get("history") === "paged";
 				res.writeHead(200, sseHeaders());
-				writeSse(
-					res,
-					`data: ${JSON.stringify({ type: "server_connected", sessionId: entry.session.id, streaming: entry.session.isStreaming(), canQueueFollowUps: Boolean(entry.session.queueFollowUp), followUp: entry.session.getFollowUps?.() || [], timeline: entry.session.getTimeline?.(), messages: entry.session.getTimeline ? undefined : entry.session.getTranscript?.(), subagents: entry.session.getSubagents?.(), permissions: [...entry.permissionRequests.values()] })}\n\n`,
-					entry.sseClients,
-				);
+				const connectedPayload: Record<string, unknown> = {
+					type: "server_connected",
+					sessionId: entry.session.id,
+					streaming: entry.session.isStreaming(),
+					canQueueFollowUps: Boolean(entry.session.queueFollowUp),
+					followUp: entry.session.getFollowUps?.() || [],
+					subagents: entry.session.getSubagents?.(),
+					permissions: [...entry.permissionRequests.values()],
+				};
+				if (pagedHistory) {
+					if (
+						typeof entry.session.getTimeline === "function" ||
+						typeof entry.session.getTranscript === "function"
+					) {
+						const timeline = fullSessionTimeline(entry.session);
+						const start = Math.max(0, timeline.length - HISTORY_PAGE_SIZE);
+						connectedPayload.timeline = timeline.slice(start);
+						connectedPayload.historyBefore = start;
+					}
+				} else {
+					connectedPayload.timeline = entry.session.getTimeline?.();
+					connectedPayload.messages = entry.session.getTimeline ? undefined : entry.session.getTranscript?.();
+				}
+				writeSse(res, `data: ${JSON.stringify(connectedPayload)}\n\n`, entry.sseClients);
 				entry.sseClients.add(res);
 				if (entry.webAttached++ === 0) entry.session.setClientSurface?.("web");
 				let closed = false;
@@ -683,6 +711,33 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				};
 				req.on("close", onClose);
 				res.on("close", onClose);
+				return;
+			}
+
+			const historyMatch = /^\/session\/([^/]+)\/history$/.exec(path);
+			if (method === "GET" && historyMatch) {
+				const entry = allSessions.get(decodeURIComponent(historyMatch[1]!));
+				if (!entry) {
+					json(res, 404, { error: `no such session: ${historyMatch[1]}` });
+					return;
+				}
+				const timeline = fullSessionTimeline(entry.session);
+				const beforeParam = url.searchParams.get("before");
+				if (beforeParam === null) {
+					json(res, 400, { error: "before cursor is required" });
+					return;
+				}
+				if (!/^-?\d+$/.test(beforeParam)) {
+					json(res, 400, { error: "before cursor must be an integer" });
+					return;
+				}
+				const before = Number(beforeParam);
+				if (!Number.isInteger(before) || before < 0 || before > timeline.length) {
+					json(res, 400, { error: "before cursor is out of range" });
+					return;
+				}
+				const start = Math.max(0, before - HISTORY_PAGE_SIZE);
+				json(res, 200, { timeline: timeline.slice(start, before), historyBefore: start });
 				return;
 			}
 

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readWorkbenchArtifact } from "./workbench-artifacts.ts";
 import { WorkbenchError } from "./workbench-context-files.ts";
-import { ProjectNoteStore } from "./workbench-project-notes.ts";
+import { type ProjectNote, ProjectNoteStore } from "./workbench-project-notes.ts";
 import { PROJECT_UPLOAD_LIMIT, type WorkbenchProjectStore } from "./workbench-projects.ts";
 
 export function readRawBody(req: IncomingMessage, limit = PROJECT_UPLOAD_LIMIT): Promise<Buffer> {
@@ -141,11 +141,21 @@ export async function handleProjectRequest(
 			return true;
 		}
 		const files = router.projects.files(name);
+		const noteStore = new ProjectNoteStore(router.projects.path(name));
+		let notes: ProjectNote[] = [];
+		let notesError: string | undefined;
+		try {
+			notes = noteStore.list();
+		} catch (error) {
+			if (!(error instanceof WorkbenchError) || error.statusCode !== 409) throw error;
+			notesError = error.message;
+		}
 		router.json(res, 200, {
 			...router.projects.list().find((project) => project.name === name),
 			name,
 			files,
-			notes: new ProjectNoteStore(router.projects.path(name)).list(),
+			notes,
+			notesError,
 		});
 		return true;
 	}

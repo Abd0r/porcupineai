@@ -15,14 +15,14 @@ for(const type of ['wheel','touchstart','pointerdown','keydown'])ui.feed.addEven
 ui.feed.addEventListener('scroll',()=>{followOutput=nearBottom();$('jump-latest').hidden=followOutput;});
 $('jump-latest').addEventListener('click',()=>{followOutput=true;scrollFeed(true);$('jump-latest').hidden=true;});
 function setConnection(value){connected=value;ui.status.textContent=value?(streaming?'Working':'Ready'):'Disconnected';ui.status.dataset.state=value?(streaming?'working':'ready'):'offline';$('reconnect').hidden=value;ui.stop.disabled=!value;updateSend();updateControlDisabled();}
-function rememberView(){if(!sessionId)return;conversationViews.set(sessionId,{nodes:[...ui.feed.children],draft:ui.prompt.value,scroll:ui.feed.scrollTop,follow:followOutput});}
+function rememberView(){if(!sessionId)return;conversationViews.set(sessionId,{draft:ui.prompt.value,scroll:ui.feed.scrollTop,follow:followOutput});}
 function resetSessionView(id){
   replaying=false;replayEpoch=connectionEpoch;ui.feed.dataset.replaying='false';
   flushAssistantRender();rememberView();
   if(liveThinking){stopThinking(liveThinking);liveThinking=null;}
   renderFollowUps();canQueueFollowUps=false;clearVisuals();toolRuns.clear();streamingAssistant=null;resetActivity();
   lastContext=null;ringUi.ring.hidden=true;ringUi.fill.style.strokeDashoffset=String(RING_CIRCUMFERENCE);ringUi.tip.textContent='Context usage unavailable';
-  limitsUi.status.textContent='';hideCommandMenu();modelUi.dialog.close();modelEpoch++;stackInspection++;surfaceUi.dialog.close();sessionId=id;const cached=conversationViews.get(id);ui.feed.replaceChildren(...(cached?cached.nodes:[]));ui.prompt.value=cached?cached.draft:'';
+  limitsUi.status.textContent='';hideCommandMenu();modelUi.dialog.close();modelEpoch++;stackInspection++;surfaceUi.dialog.close();sessionId=id;const cached=conversationViews.get(id);setWorkbenchHistory();ui.feed.replaceChildren();ui.prompt.value=cached?cached.draft:'';
   ui.welcome.hidden=ui.feed.children.length>0;ui.feed.scrollTop=cached?cached.scroll:0;followOutput=cached?cached.follow:true;$('jump-latest').hidden=followOutput;renderAttachments();resizeComposer();
   for(const button of document.querySelectorAll('.session')){button.classList.toggle('active',button.dataset.sessionId===id);button.setAttribute('aria-current',button.dataset.sessionId===id?'page':'false');}
   ui.title.textContent=sessionNames.get(id)||'Conversation '+id.slice(-8);
@@ -39,7 +39,7 @@ async function connectEvents(id){
     await json('/session',{method:'POST',body:JSON.stringify({id})});
     if(epoch!==connectionEpoch)return;
     void refreshSessionSurfaces(id);void refreshContext(id);void refreshCommands(id);
-    const response=await api('/session/'+encodeURIComponent(id)+'/events',{signal:controller.signal});
+    const response=await api('/session/'+encodeURIComponent(id)+'/events?history=paged',{signal:controller.signal});
     if(!response.ok)throw new Error('Could not open session events ('+response.status+')');
     if(!response.body)throw new Error('Streaming is unavailable in this browser.');
     if(epoch!==connectionEpoch)return;
@@ -74,10 +74,10 @@ function showToolStart(event){
   const output=document.createElement('pre');output.textContent=JSON.stringify(event.args||{},null,2);row.append(summary,output);ui.feed.append(row);
   const more=document.createElement('button');more.type='button';more.className='quiet-button tool-output-more';more.hidden=true;row.append(more);
   const run={row,state,output,icon,more,args:output.textContent,resultText:'',expanded:false,tail:false};more.addEventListener('click',()=>{run.expanded=!run.expanded;setToolOutput(run,run.resultText,run.tail)});
-  toolRuns.set(event.toolCallId||event.toolName,run);scrollFeed();
+  const key=event.toolCallId||event.toolName;toolRuns.set(key,run);const completion=unmatchedHistoryResults.get(key);if(completion){unmatchedHistoryResults.delete(key);showToolEnd(completion);}else if(loadingEarlierHistory){state.textContent='Awaiting result';row.dataset.state='pending';}scrollFeed();
 }
 function showToolUpdate(event){const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;setToolOutput(run,toolResultText(event.partialResult),true);scrollFeed();}
-function showToolEnd(event){if(collaborationTool(event,'end'))return;if(liveThinking&&!replaying)setThinkingLabel('Working');const run=toolRuns.get(event.toolCallId||event.toolName);if(!run)return;run.row.dataset.state=event.isError?'failed':'done';run.state.textContent=event.isError?'Failed':'Done';const svg=document.createElementNS(MATH_NS,'svg'),path=document.createElementNS(MATH_NS,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');path.setAttribute('d',event.isError?'m7 7 10 10M17 7 7 17':'m5 12 4 4L19 6');svg.append(path);run.icon.replaceChildren(svg);setToolOutput(run,toolResultText(event.result));toolRuns.delete(event.toolCallId||event.toolName);}
+function showToolEnd(event){if(collaborationTool(event,'end'))return;if(liveThinking&&!replaying)setThinkingLabel('Working');const key=event.toolCallId||event.toolName,run=toolRuns.get(key);if(!run){if(historyBefore&&event.toolCallId){if(unmatchedHistoryResults.size>=historyPageSize)unmatchedHistoryResults.delete(unmatchedHistoryResults.keys().next().value);unmatchedHistoryResults.set(key,event);}return;}run.row.dataset.state=event.isError?'failed':'done';run.state.textContent=event.isError?'Failed':'Done';const svg=document.createElementNS(MATH_NS,'svg'),path=document.createElementNS(MATH_NS,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');path.setAttribute('d',event.isError?'m7 7 10 10M17 7 7 17':'m5 12 4 4L19 6');svg.append(path);run.icon.replaceChildren(svg);setToolOutput(run,toolResultText(event.result));toolRuns.delete(event.toolCallId||event.toolName);}
 function filterSessions(){navigationLimits.clear();renderProjectNavigation();}
 
 async function refreshSessions(selectFirst=false){

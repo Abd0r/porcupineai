@@ -228,6 +228,7 @@ describe("AgentSession bash and persistence characterization", () => {
 			// start, and each agent step logs a request_header dispatch envelope
 			// (the faux harness calls prepareNextTurn per continuation).
 			"system_prompt",
+			"custom", // Branch policy is durable metadata, not a model-visible message.
 			"custom_message",
 			"message",
 			"message",
@@ -236,6 +237,11 @@ describe("AgentSession bash and persistence characterization", () => {
 			"message",
 			"request_header",
 		]);
+		expect(entries[1]).toMatchObject({
+			type: "custom",
+			customType: "porcupine.session-policy",
+			data: { version: 1, interactionMode: harness.session.interactionMode, adaptive: false },
+		});
 		expect(harness.session.messages.map((message) => message.role)).toEqual([
 			"custom",
 			"user",

@@ -79,7 +79,7 @@ describe("attended GUI task execution", () => {
 		},
 	);
 
-	it("uses the last attached conversation, waits if it is busy, and stops after disconnect", async () => {
+	it("moves new tasks from the last attached conversation back to the previous one on disconnect", async () => {
 		const { h, store, runner, api, task } = await fixture();
 		const second: Harness = await createHarness();
 		cleanups.push(second.cleanup);
@@ -94,7 +94,7 @@ describe("attended GUI task execution", () => {
 		store.queueTaskRun(task.id);
 		await runner.tick();
 		expect(second.faux.callCount).toBe(1);
-		expect(h.faux.callCount).toBe(0);
+		expect(h.faux.callCount).toBe(1);
 	});
 
 	it("runs from the host timer and removes it on shutdown", async () => {
@@ -227,5 +227,67 @@ describe("attended GUI task execution", () => {
 		await running;
 		expect(store.listRuns()[0]?.status).toBe("failed");
 		expect(h.session.interactionMode).toBe("normal");
+	});
+
+	it("falls back to the most recently still-attached browser after the newest disconnects", async () => {
+		const { h, store, runner, api, task } = await fixture();
+		const second: Harness = await createHarness();
+		cleanups.push(second.cleanup);
+		const secondApi = runner.register(second.session, adaptSessionToServeApi(second.session, h.tempDir));
+		const third: Harness = await createHarness();
+		cleanups.push(third.cleanup);
+		const thirdApi = runner.register(third.session, adaptSessionToServeApi(third.session, h.tempDir));
+		api.setClientSurface?.("web");
+		secondApi.setClientSurface?.("web");
+		thirdApi.setClientSurface?.("web");
+		store.queueTaskRun(task.id);
+		await runner.tick();
+		expect(third.faux.callCount).toBe(1);
+		thirdApi.setClientSurface?.("none");
+		const nextTask = store.createTask({ title: "Follow-up", prompt: "Continue." });
+		store.queueTaskRun(nextTask.id);
+		await runner.tick();
+		expect(second.faux.callCount).toBe(1);
+		expect(third.faux.callCount).toBe(1);
+	});
+
+	it("rejects queueing a prompt during an active scheduled task with a clear 409", async () => {
+		const { h, store, runner, api, task } = await fixture([{ text: "Scheduled result", delayMs: 50 }]);
+		api.setClientSurface?.("web");
+		store.queueTaskRun(task.id);
+		const started = new Promise<void>((resolve) => {
+			const unsubscribe = h.session.subscribe((event) => {
+				if (event.type !== "agent_start") return;
+				unsubscribe();
+				resolve();
+			});
+		});
+		const running = runner.tick();
+		await started;
+		expect(h.session.isStreaming).toBe(true);
+		await expect(api.queueFollowUp?.("User follow-up")).rejects.toMatchObject({
+			statusCode: 409,
+			message: expect.stringMatching(/scheduled task/i),
+		});
+		await running;
+		expect(store.listRuns()[0]?.status).toBe("completed");
+		expect(store.listRuns()[0]?.result).toBe("Scheduled result");
+	});
+
+	it("does not choose an older attached browser when the newest is busy", async () => {
+		const { h, store, runner, api, task } = await fixture([{ text: "User work", delayMs: 20 }, "Scheduled work"]);
+		const second: Harness = await createHarness({ responses: ["Other work"] });
+		cleanups.push(second.cleanup);
+		const secondApi = runner.register(second.session, adaptSessionToServeApi(second.session, h.tempDir));
+		api.setClientSurface?.("web");
+		secondApi.setClientSurface?.("web");
+		const prompt = secondApi.sendUserMessage("Busy work");
+		store.queueTaskRun(task.id);
+		await runner.tick();
+		expect(h.faux.callCount).toBe(0);
+		expect(second.faux.callCount).toBe(0);
+		await prompt;
+		await runner.tick();
+		expect(store.listRuns()[0]?.status).toBe("completed");
 	});
 });

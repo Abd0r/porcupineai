@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -84,6 +84,25 @@ describe("project workspace API", () => {
 				})
 			).status,
 		).toBe(400);
+	});
+
+	it("keeps project details and resources available when the notes file is invalid", async () => {
+		const { cwd, base, headers } = await fixture();
+		await fetch(`${base}/workbench/projects`, {
+			method: "POST",
+			headers,
+			body: JSON.stringify({ name: "paper", description: "Compare results." }),
+		});
+		writeFileSync(join(cwd, "Project", "paper", ".workbench-notes.json"), "[");
+		const details = await fetch(`${base}/workbench/projects/paper`, { headers });
+		expect(details.status).toBe(200);
+		expect(await details.json()).toMatchObject({
+			description: "Compare results.",
+			files: expect.arrayContaining([expect.objectContaining({ path: "README.md" })]),
+			notes: [],
+			notesError: expect.stringMatching(/notes are invalid/i),
+		});
+		expect((await fetch(`${base}/workbench/projects/paper/notes`, { headers })).status).toBe(409);
 	});
 
 	it("returns project details and persists validated pins through authenticated HTTP", async () => {

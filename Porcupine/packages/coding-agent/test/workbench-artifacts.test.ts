@@ -1,10 +1,11 @@
 import { mkdir, mkdtemp, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runInNewContext } from "node:vm";
 import { afterEach, describe, expect, it } from "vitest";
 import { startServeApi } from "../src/server/http-api.ts";
 import { readWorkbenchArtifact } from "../src/server/workbench-artifacts.ts";
-import { workbenchArtifactPath } from "../src/server/workbench-artifacts-ui.ts";
+import { ARTIFACT_SCRIPT, workbenchArtifactPath } from "../src/server/workbench-artifacts-ui.ts";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -106,6 +107,33 @@ describe("workspace artifacts", () => {
 			await handle.close();
 		}
 	});
+	it("encodes the directory and filename of a linked resource in nested Markdown", () => {
+		let requested = "";
+		const node = () => ({
+			append() {},
+			setAttribute() {},
+			removeAttribute() {},
+			replaceChildren() {},
+			showModal() {},
+			addEventListener(event: string, callback: () => void) {
+				if (event === "click") callback();
+			},
+		});
+		runInNewContext(
+			`${ARTIFACT_SCRIPT}\ncreateWorkbenchArtifact('Image', 'image%201.png', false, 'demo', 'docs#archive');`,
+			{
+				$: node,
+				document: { createElement: node },
+				sessionId: "demo-chat",
+				api: (url: string) => {
+					requested = url;
+					return new Promise(() => {});
+				},
+			},
+		);
+		expect(requested).toBe("/workbench/projects/demo/files/docs%23archive/image%201.png?raw=1");
+	});
+
 	it("recognises local attachment links and rejects executable, remote and data URLs", () => {
 		for (const path of [
 			"report.pdf",

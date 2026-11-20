@@ -17,6 +17,7 @@ export class AttendedTaskRunner {
 	private wakeup: ReturnType<typeof setTimeout> | undefined;
 	private readonly registrations = new Map<AgentSession, { entry: AttachedSession; unsubscribe: () => void }>();
 	private selected: AttachedSession | undefined;
+	private readonly webEntries: AttachedSession[] = [];
 	private active: AttachedSession | undefined;
 	private pending: Promise<void> | undefined;
 	private closed = false;
@@ -39,9 +40,19 @@ export class AttendedTaskRunner {
 			setClientSurface: (surface) => {
 				api.setClientSurface?.(surface);
 				if (surface === "web") {
+					const index = this.webEntries.indexOf(entry);
+					if (index >= 0) this.webEntries.splice(index, 1);
+					this.webEntries.push(entry);
 					this.selected = entry;
 					this.wake();
-				} else if (this.selected === entry) this.selected = undefined;
+				} else {
+					const index = this.webEntries.indexOf(entry);
+					if (index >= 0) this.webEntries.splice(index, 1);
+					if (this.selected === entry) {
+						this.selected = this.webEntries[this.webEntries.length - 1];
+						if (this.selected) this.wake();
+					}
+				}
 			},
 			isStreaming: () => this.active === entry || api.isStreaming(),
 			getControls: api.getControls
@@ -96,8 +107,8 @@ export class AttendedTaskRunner {
 			},
 			queueFollowUp: api.queueFollowUp
 				? async (text, attachments) => {
-						if (this.active === entry && !session.isStreaming)
-							throw new WorkbenchError(409, "Wait for the scheduled task to start before queueing a prompt");
+						if (this.active === entry)
+							throw new WorkbenchError(409, "A scheduled task is running; queue the prompt after it finishes");
 						entry.foreground++;
 						try {
 							await api.queueFollowUp!(text, attachments);
@@ -214,7 +225,15 @@ export class AttendedTaskRunner {
 	}
 
 	unregister(session: AgentSession): void {
-		if (this.selected?.session === session) this.selected = undefined;
+		const registration = this.registrations.get(session);
+		if (registration) {
+			const index = this.webEntries.indexOf(registration.entry);
+			if (index >= 0) this.webEntries.splice(index, 1);
+		}
+		if (this.selected?.session === session) {
+			this.selected = this.webEntries[this.webEntries.length - 1];
+			if (this.selected) this.wake();
+		}
 		this.registrations.get(session)?.unsubscribe();
 		this.registrations.delete(session);
 	}
@@ -223,6 +242,7 @@ export class AttendedTaskRunner {
 	stop(): void {
 		this.closed = true;
 		this.selected = undefined;
+		this.webEntries.length = 0;
 		clearInterval(this.timer);
 		clearTimeout(this.wakeup);
 		for (const { unsubscribe } of this.registrations.values()) unsubscribe();

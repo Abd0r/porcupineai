@@ -1,11 +1,12 @@
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import { describe, expect, it } from "vitest";
 import { normalizeToolParameters } from "../src/api/normalize-tool-parameters.ts";
 
 // Regression guard for a provider rejection seen in real use:
 //   Invalid schema for function 'visualize': [{"minimum":-20,"maximum":20,"type":"number"}, ...]
 //   is not of types "boolean", "object"
-// TypeBox emits draft-07 tuples as `items: [a, b]`; OpenAI-compatible validators require `items` to be a
-// boolean or an object, so the array form has to become `prefixItems` with `items: false`.
+// Some provider schema validators require `items` to be a boolean or an object.
 
 function collectItems(node: unknown, found: unknown[] = []): unknown[] {
 	if (!node || typeof node !== "object") return found;
@@ -21,28 +22,36 @@ function collectItems(node: unknown, found: unknown[] = []): unknown[] {
 }
 
 describe("normalizeToolParameters", () => {
-	it("converts a draft-07 tuple into prefixItems with a boolean items", () => {
+	it("accepts valid coordinates without draft-2020-12 tuple keywords", () => {
 		const normalized = normalizeToolParameters({
 			type: "object",
 			properties: {
-				position: {
-					type: "array",
-					items: [
-						{ type: "number", minimum: -20, maximum: 20 },
-						{ type: "number", minimum: -20, maximum: 20 },
-					],
-				},
+				position: Type.Tuple([
+					Type.Number({ minimum: -20, maximum: 20 }),
+					Type.Number({ minimum: -20, maximum: 20 }),
+				]),
 			},
 			required: ["position"],
 		});
 		const position = (normalized.properties as Record<string, Record<string, unknown>>).position;
-		expect(position.items).toBe(false);
-		expect(position.prefixItems).toEqual([
-			{ type: "number", minimum: -20, maximum: 20 },
-			{ type: "number", minimum: -20, maximum: 20 },
-		]);
+		const schema = Type.Unsafe(normalized);
+		expect(Value.Check(schema, { position: [0, 1] })).toBe(true);
+		expect(Value.Check(schema, { position: [0, 21] })).toBe(false);
+		expect(Value.Check(schema, { position: [0] })).toBe(false);
+		expect(Value.Check(schema, { position: [0, 1, 2] })).toBe(false);
+		expect(position.items).toEqual({ type: "number", minimum: -20, maximum: 20 });
+		expect(position.prefixItems).toBeUndefined();
 		// nothing may be left in the array form anywhere in the schema
 		expect(collectItems(normalized).some(Array.isArray)).toBe(false);
+	});
+
+	it("advertises both types for heterogeneous tuples and preserves their length", () => {
+		const original = Type.Tuple([Type.Number(), Type.String()]);
+		const schema = Type.Unsafe(normalizeToolParameters(original));
+		expect(Value.Check(schema, [2, "label"])).toBe(true);
+		expect(Value.Check(schema, [2, false])).toBe(false);
+		expect(Value.Check(schema, [2, "label", 3])).toBe(false);
+		expect(Value.Check(original, ["label", 2])).toBe(false);
 	});
 
 	it("leaves a homogeneous array untouched", () => {

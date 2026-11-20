@@ -9,7 +9,7 @@ const layoutDiagram=${layoutDiagram.toString()};
 function componentRevision(value){const text=JSON.stringify(value);if(text.length<=120000)return text;let a=2166136261,b=2246822519;for(let i=0;i<text.length;i++){a=Math.imul(a^text.charCodeAt(i),16777619);b=Math.imul(b^text.charCodeAt(i),3266489917);}return 'large:'+text.length+':'+(a>>>0).toString(16)+':'+(b>>>0).toString(16);}
 const visualObservers=new Map(),componentCards=new Map(),componentAnswers=new Map();
 function componentAnswerText(content){const text=textOf(content);if(text.length>240000||!text.startsWith('[Adaptive UI response]\n'))return null;try{const value=JSON.parse(text.slice(23));if(!isRecord(value)||!validText(value.componentId,200)||typeof value.title!=='string'||value.title.length>100||typeof value.revision!=='string'||value.revision.length>120000||!Array.isArray(value.answers)||value.answers.length>100||!value.answers.every(answer=>typeof answer==='string'&&answer.length<=120000))return null;return value}catch{return null}}
-function restoreComponentAnswer(content){const answer=componentAnswerText(content);if(!answer)return;componentAnswers.set(answer.componentId,answer);const card=componentCards.get(answer.componentId);if(card&&card.restore)card.restore(answer)}
+function restoreComponentAnswer(content){const answer=componentAnswerText(content);if(!answer||protectedHistoryAnswers?.has(answer.componentId))return;componentAnswers.set(answer.componentId,answer);const card=componentCards.get(answer.componentId);if(card&&card.restore)card.restore(answer)}
 function componentUserText(content){const answer=componentAnswerText(content);if(!answer)return userMessageText(content);if(answer.kind==='quiz')return 'Submitted quiz: '+answer.title;if(answer.kind){try{const state=JSON.parse(answer.answers[0]);if(answer.kind==='form'&&Array.isArray(state.values))return answer.title+'\n'+state.values.map(field=>String(field.label)+': '+String(field.value)).join('\n');if(answer.kind==='table')return 'Shared table: '+answer.title+' · '+(Array.isArray(state.selected)?state.selected.length:0)+' rows selected';return 'Shared '+answer.kind+' workspace: '+answer.title}catch{}}return 'Answer to '+answer.title+'\n'+answer.answers.join('; ')}
 
 function clearVisuals(){for(const item of visualObservers.values())if(item.observer)item.observer.disconnect();visualObservers.clear();for(const item of componentCards.values())if(item.dispose)item.dispose();componentCards.clear();componentAnswers.clear()}
@@ -45,6 +45,7 @@ function renderVisual(visual,callId){
   if(visual&&visual.version===1){renderVisualization(visual);return}
   if(!validVisual(visual)){if(visual){const error=visualElement('p','This visual could not be displayed. Ask the agent to correct its data.');error.setAttribute('role','status');ui.feed.append(error)}return;}
   const identity=visual.componentId||callId;
+  if(protectedHistoryCards?.has(identity))return;
   const previous=identity&&componentCards.get(identity);
   if(previous){if(previous.dispose)previous.dispose();for(const canvas of previous.card.querySelectorAll('canvas')){const item=visualObservers.get(canvas);if(item&&item.observer)item.observer.disconnect();visualObservers.delete(canvas)}}
   ui.welcome.hidden=true;
