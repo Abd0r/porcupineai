@@ -21,7 +21,7 @@ historyControls.className='history-controls';historyControls.setAttribute('aria-
 for(const button of [earlierHistoryButton,newerHistoryButton]){button.type='button';button.className='quiet-button';}
 earlierHistoryButton.textContent='Load older history';newerHistoryButton.textContent='Newer history';historyStatus.setAttribute('role','status');
 historyControls.append(earlierHistoryButton,newerHistoryButton,historyStatus);historyGap.className='notice';historyGap.textContent='Newer pages are available above. Recent conversation follows.';
-let historyEvents=[],historyBefore=0,historyCursor=0,remoteHistory=false,archiveRows=[],newerHistoryCursors=[],historyRequest=0,loadingEarlierHistory=false,protectedHistoryCards,protectedHistoryAnswers;
+let historyEvents=[],historyBefore=0,historyCursor=0,remoteHistory=false,archiveRows=[],newerHistoryCursors=[],historyRequest=0,loadingEarlierHistory=false;
 const unmatchedHistoryResults=new Map();
 function setWorkbenchHistory(events=[],before){
   historyRequest++;historyControls.remove();historyGap.remove();archiveRows=[];newerHistoryCursors=[];unmatchedHistoryResults.clear();

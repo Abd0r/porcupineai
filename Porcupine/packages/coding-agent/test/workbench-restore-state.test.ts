@@ -3,7 +3,7 @@ import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 import { PORCUPINE_WEB_UI } from "../src/server/web-ui.ts";
 import { WORKBENCH_CLIENT_SCRIPT } from "../src/server/workbench-client.ts";
-import { replayWorkbenchTimeline } from "../src/server/workbench-replay.ts";
+import { REPLAY_SCRIPT } from "../src/server/workbench-replay.ts";
 
 function restoreHarness(following = false) {
 	const start = PORCUPINE_WEB_UI.indexOf("async function restoreWorkbenchConnection(event){"),
@@ -34,7 +34,7 @@ function restoreHarness(following = false) {
 		streamingAssistant: null,
 		ui: { feed, welcome: { hidden: false } },
 		toolRuns: new Map(),
-		replayWorkbenchTimeline,
+		document: { createElement: () => ({ setAttribute() {}, append() {}, addEventListener() {}, remove() {} }) },
 		$: (id: string) => {
 			if (!elements.has(id)) elements.set(id, { textContent: "", hidden: false });
 			return elements.get(id);
@@ -58,7 +58,7 @@ function restoreHarness(following = false) {
 		},
 	};
 	const promise: Promise<void> = runInNewContext(
-		`${PORCUPINE_WEB_UI.slice(start, end)}\nrestoreWorkbenchConnection({timeline:Array.from({length:120},(_,i)=>i),subagents:[],streaming:false})`,
+		`${REPLAY_SCRIPT}\n${PORCUPINE_WEB_UI.slice(start, end)}\nrestoreWorkbenchConnection({timeline:Array.from({length:120},(_,i)=>i),subagents:[],streaming:false})`,
 		context,
 	);
 	return {

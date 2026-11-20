@@ -7,6 +7,7 @@ ${QUIZ_RENDERER_SCRIPT}
 ${ADAPTIVE_RENDERER_SCRIPT}
 const layoutDiagram=${layoutDiagram.toString()};
 function componentRevision(value){const text=JSON.stringify(value);if(text.length<=120000)return text;let a=2166136261,b=2246822519;for(let i=0;i<text.length;i++){a=Math.imul(a^text.charCodeAt(i),16777619);b=Math.imul(b^text.charCodeAt(i),3266489917);}return 'large:'+text.length+':'+(a>>>0).toString(16)+':'+(b>>>0).toString(16);}
+let protectedHistoryCards,protectedHistoryAnswers;
 const visualObservers=new Map(),componentCards=new Map(),componentAnswers=new Map();
 function componentAnswerText(content){const text=textOf(content);if(text.length>240000||!text.startsWith('[Adaptive UI response]\n'))return null;try{const value=JSON.parse(text.slice(23));if(!isRecord(value)||!validText(value.componentId,200)||typeof value.title!=='string'||value.title.length>100||typeof value.revision!=='string'||value.revision.length>120000||!Array.isArray(value.answers)||value.answers.length>100||!value.answers.every(answer=>typeof answer==='string'&&answer.length<=120000))return null;return value}catch{return null}}
 function restoreComponentAnswer(content){const answer=componentAnswerText(content);if(!answer||protectedHistoryAnswers?.has(answer.componentId))return;componentAnswers.set(answer.componentId,answer);const card=componentCards.get(answer.componentId);if(card&&card.restore)card.restore(answer)}

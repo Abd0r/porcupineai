@@ -51,6 +51,11 @@ class FakeElement {
 		return node === this || this.children.some((child) => child.contains(node));
 	}
 	focus(): void {}
+	after(item: FakeElement): void {
+		const parent = this.parentNode;
+		if (parent) parent.insertBefore(item, parent.children[parent.children.indexOf(this) + 1] ?? null);
+	}
+
 	remove(): void {
 		if (this.parentNode) {
 			const siblings = this.parentNode.children;
@@ -763,7 +768,7 @@ describe("workbench transport regressions", () => {
 		let finish!: (response: Response) => void;
 		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
 		const h = loadRenderer(async (path) => {
-			if (String(path).endsWith("/events"))
+			if (new URL(String(path), "http://localhost").pathname.endsWith("/events"))
 				return new Response(
 					new ReadableStream<Uint8Array>({
 						start(controller) {
@@ -797,7 +802,7 @@ describe("workbench transport regressions", () => {
 		let finish!: (response: Response) => void;
 		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
 		const h = loadRenderer(async (path) => {
-			if (String(path).endsWith("/events"))
+			if (new URL(String(path), "http://localhost").pathname.endsWith("/events"))
 				return new Response(
 					new ReadableStream<Uint8Array>({
 						start(controller) {
@@ -851,7 +856,7 @@ describe("workbench transport regressions", () => {
 		let fail!: (reason: Error) => void;
 		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
 		const h = loadRenderer(async (path) => {
-			if (String(path).endsWith("/events"))
+			if (new URL(String(path), "http://localhost").pathname.endsWith("/events"))
 				return new Response(
 					new ReadableStream<Uint8Array>({
 						start(controller) {
@@ -885,7 +890,7 @@ describe("workbench transport regressions", () => {
 		let finish!: (response: Response) => void;
 		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
 		const h = loadRenderer(async (path) => {
-			if (String(path).endsWith("/events"))
+			if (new URL(String(path), "http://localhost").pathname.endsWith("/events"))
 				return new Response(
 					new ReadableStream<Uint8Array>({
 						start(controller) {
@@ -954,7 +959,7 @@ describe("workbench transport regressions", () => {
 		let rejectSubmission!: (reason: Error) => void;
 		const streams: Array<ReadableStreamDefaultController<Uint8Array>> = [];
 		const h = loadRenderer(async (path) => {
-			if (String(path).endsWith("/events"))
+			if (new URL(String(path), "http://localhost").pathname.endsWith("/events"))
 				return new Response(
 					new ReadableStream<Uint8Array>({
 						start(controller) {
@@ -1055,7 +1060,8 @@ describe("workbench transport regressions", () => {
 		const wire = `data: ${JSON.stringify({ type: "message_end", message: { role: "user", content: "Real event" } })}\n\n`;
 		const encoder = new TextEncoder();
 		const { connect, feed } = loadRenderer(async (path) => {
-			if (!String(path).endsWith("/events")) return Response.json({ supported: false });
+			if (!new URL(String(path), "http://localhost").pathname.endsWith("/events"))
+				return Response.json({ supported: false });
 			return new Response(
 				new ReadableStream({
 					start(controller) {
