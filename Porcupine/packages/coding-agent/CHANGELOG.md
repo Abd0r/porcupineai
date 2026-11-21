@@ -4,6 +4,8 @@
 
 ### Added
 
+- Keep long GUI histories responsive: open with the newest 120 replay events, fetch older pages on demand with **Load older history**, and step back with **Newer history** while keeping drafts, scroll position and saved history intact.
+
 - Versioned TUI/GUI capability contract, `/parity` inspection, explicit missing/partial command labels, and a required coverage/documentation drift audit.
 
 - Attended GUI execution of Cron and queued manual/chained tasks, plus `/task` and `/cron` commands using the same durable definitions, schedules and history as the TUI.
@@ -33,6 +35,16 @@
 - Batch long GUI history restores and expanded reasoning updates; defer collapsed reasoning rendering until opened. Add a saved Reduce motion preference, keyboard model navigation and mobile navigation focus containment.
 
 ### Fixed
+
+- Serve paged GUI history through `?history=paged` and `GET /session/:id/history`, keeping the legacy SSE snapshot for other clients.
+
+- Accept valid positional tool arguments under both draft-07 and 2020-12 provider schema validators.
+
+- Keep scheduled GUI tasks running after the newest browser tab closes, and reject chat follow-ups during an active scheduled run instead of recording them as the task result.
+
+- Preserve a sticky-note draft across a conflict by showing the saved version for review before retrying, and keep the rest of a project page usable when its notes file is unreadable.
+
+- Encode the full directory and filename of nested Markdown resource links.
 
 - Persist branch-local autonomy and adaptive reasoning through TUI/GUI handoffs, refresh and forks; restore selected branches on exit and clamp refreshed reasoning to model support without changing another chat's default effort.
 
