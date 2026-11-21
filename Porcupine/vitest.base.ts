@@ -14,6 +14,19 @@ export const workspaceSourcePaths = {
 export default defineConfig({
 	resolve: {
 		alias: [
+			{ find: /^@porcupineai\/ai$/, replacement: workspaceSourcePaths.aiIndex },
+			{ find: /^@porcupineai\/ai\/compat$/, replacement: workspaceSourcePaths.aiCompat },
+			{ find: /^@porcupineai\/ai\/oauth$/, replacement: workspaceSourcePaths.aiOAuth },
+			{
+				find: /^@porcupineai\/ai\/providers\/(.+)$/,
+				replacement: `${workspaceSourcePaths.aiProviders}/$1.ts`,
+			},
+			{ find: /^@porcupineai\/agent-core$/, replacement: workspaceSourcePaths.agentIndex },
+			{
+				find: /^@porcupineai\/agent-core\/node$/,
+				replacement: fileURLToPath(new URL("./packages/agent/src/node.ts", import.meta.url)),
+			},
+			{ find: /^@porcupineai\/tui$/, replacement: workspaceSourcePaths.tuiIndex },
 			{ find: /^@earendil-works\/porcupine-ai$/, replacement: workspaceSourcePaths.aiIndex },
 			{ find: /^@earendil-works\/porcupine-ai\/compat$/, replacement: workspaceSourcePaths.aiCompat },
 			{ find: /^@earendil-works\/porcupine-ai\/oauth$/, replacement: workspaceSourcePaths.aiOAuth },

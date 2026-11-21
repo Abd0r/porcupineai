@@ -418,6 +418,15 @@ export class PorcupineTaskStore {
 			if (abandoned.length === 0) return;
 			const now = new Date().toISOString();
 			for (const run of abandoned) {
+				if (run.ownerPid !== undefined) {
+					try {
+						process.kill(run.ownerPid, 0);
+						continue;
+					} catch (error) {
+						// EPERM (or an inconclusive check) is not evidence of process exit.
+						if ((error as NodeJS.ErrnoException).code !== "ESRCH") continue;
+					}
+				}
 				run.status = "unknown";
 				run.completedAt = now;
 				run.error = "Porcupine exited before this task run finished.";
@@ -568,6 +577,8 @@ export class PorcupineTaskStore {
 			if (task.status === "paused" || task.status === "cancelled") {
 				throw new Error(`Task ${task.id} is ${task.status}.`);
 			}
+			if (this.data.runs.some((run) => run.taskId === taskId && run.status === "running"))
+				throw new Error(`Task ${task.id} is already running.`);
 			const now = new Date().toISOString();
 			let run: PorcupineTaskRun;
 			if (trigger.claimRunId) {
@@ -618,6 +629,7 @@ export class PorcupineTaskStore {
 				createdAt: now,
 				claimedAt: now,
 				startedAt: now,
+				ownerPid: process.pid,
 			};
 			this.data.runs.push(run);
 			return run;
@@ -667,6 +679,7 @@ export class PorcupineTaskStore {
 						createdAt: now,
 						claimedAt: now,
 						startedAt: now,
+						ownerPid: process.pid,
 					};
 					this.data.runs.push(run);
 					claimed.push({ ...run });
@@ -880,6 +893,7 @@ export class PorcupineTaskStore {
 				}
 				const task = getTask(this.data, schedule.taskId);
 				if (task.status === "paused" || task.status === "cancelled") continue;
+				if (this.data.runs.some((run) => run.taskId === task.id && run.status === "running")) continue;
 				const run: PorcupineTaskRun = {
 					id: `run-${randomUUID().slice(0, 8)}`,
 					taskId: task.id,
@@ -888,6 +902,7 @@ export class PorcupineTaskStore {
 					createdAt: timestamp,
 					claimedAt: timestamp,
 					startedAt: timestamp,
+					ownerPid: process.pid,
 				};
 				this.data.runs.push(run);
 				schedule.claimedRunId = run.id;
@@ -914,6 +929,7 @@ export class PorcupineTaskStore {
 			createdAt: now,
 			claimedAt: now,
 			startedAt: now,
+			ownerPid: process.pid,
 		};
 		this.data.runs.push(run);
 	}

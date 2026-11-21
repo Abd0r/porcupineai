@@ -34,7 +34,9 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { stripAnsi } from "../utils/ansi.ts";
 import { serveMathAsset } from "./math-assets.ts";
+import { servePdfAsset } from "./pdf-assets.ts";
 import { PORCUPINE_WEB_UI } from "./web-ui.ts";
+import { readWorkbenchArtifact } from "./workbench-artifacts.ts";
 import { validateWorkbenchAttachments, type WorkbenchAttachment } from "./workbench-attachments.ts";
 import type { WorkbenchCommand, WorkbenchCommandResult } from "./workbench-commands.ts";
 import { type ContextFileStore, WorkbenchError } from "./workbench-context-files.ts";
@@ -47,7 +49,7 @@ import type {
 	SessionSurfaces,
 	SurfaceControl,
 } from "./workbench-session-surfaces.ts";
-import type { WorkbenchReplayEvent } from "./workbench-transcript.ts";
+import { serializeWorkbenchTimeline, type WorkbenchReplayEvent } from "./workbench-transcript.ts";
 
 /** Minimal session surface the HTTP API drives. */
 export interface ServeApiSession
@@ -56,6 +58,8 @@ export interface ServeApiSession
 		Partial<SurfaceControl>,
 		Partial<ContextSurfaces> {
 	readonly id: string;
+	/** Files shared in chat are confined to this session's workspace. */
+	readonly artifactRoot?: string;
 	getCommands?(): WorkbenchCommand[];
 	runCommand?(text: string): Promise<WorkbenchCommandResult>;
 	sendUserMessage(text: string, attachments?: WorkbenchAttachment[]): Promise<void>;
@@ -96,10 +100,11 @@ export interface ServeApiOptions {
 	/** Factory used by POST /session to mint a new session by optional id. */
 	createSession?: (id?: string) => ServeApiSession | Promise<ServeApiSession>;
 	/** Discover persisted conversations without starting an agent for each one. */
-	listSessions?: () => Promise<Array<{ id: string; name?: string; project?: string | null }>>;
+	listSessions?: () => Promise<Array<{ id: string; name?: string; project?: string | null; pinned?: boolean }>>;
 	/** Resume only a discovered id; never accept a client-supplied filesystem path. */
 	openSession?: (id: string) => Promise<ServeApiSession>;
 	assignProject?: (id: string, name: string | null) => Promise<void>;
+	setSessionPinned?: (id: string, pinned: boolean) => Promise<void>;
 	deleteSession?: (id: string) => Promise<void>;
 	deleteProject?: (name: string) => Promise<void>;
 	port?: number;
@@ -124,6 +129,14 @@ export interface ServeApiHandle {
 }
 
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
+const HISTORY_PAGE_SIZE = 120;
+
+function fullSessionTimeline(session: ServeApiSession): WorkbenchReplayEvent[] {
+	if (typeof session.getTimeline === "function") return session.getTimeline() ?? [];
+	const transcript = session.getTranscript?.();
+	if (!transcript) return [];
+	return serializeWorkbenchTimeline(transcript.map((message) => ({ role: message.role, content: message.content })));
+}
 const SSE_HEARTBEAT_MS = 15_000;
 const PERMISSION_TIMEOUT_MS = 60_000;
 
@@ -260,7 +273,10 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 		};
 
 		endpoint.unsubscribeConfirm = sessionToRegister.onConfirm((permission, respond) => {
+			let timeout: ReturnType<typeof setTimeout>;
 			const responder: (allow: boolean) => void = (allow) => {
+				if (endpoint.permissionResponders.get(permission.id) !== responder) return;
+				clearTimeout(timeout);
 				endpoint.permissionResponders.delete(permission.id);
 				endpoint.permissionRequests.delete(permission.id);
 				const settled = `data: ${JSON.stringify({ type: "permission_resolved", permissionId: permission.id, allow })}\n\n`;
@@ -279,9 +295,8 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			for (const client of Array.from(endpoint.sseClients)) {
 				writeSse(client, `data: ${serialized}\n\n`, endpoint.sseClients);
 			}
-			setTimeout(() => {
-				if (endpoint.permissionResponders.has(permission.id)) responder(false);
-			}, PERMISSION_TIMEOUT_MS).unref();
+			timeout = setTimeout(() => responder(false), PERMISSION_TIMEOUT_MS);
+			timeout.unref();
 		});
 
 		endpoint.unsubscribeEvents = sessionToRegister.onEvent((event) => {
@@ -380,7 +395,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					"content-length": Buffer.byteLength(PORCUPINE_WEB_UI),
 					"cache-control": "no-store",
 					"content-security-policy":
-						"default-src 'none'; img-src blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+						"default-src 'none'; img-src blob: data:; frame-src blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'self'; font-src 'self' blob: data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
 					"x-content-type-options": "nosniff",
 					"x-frame-options": "DENY",
 					"referrer-policy": "no-referrer",
@@ -390,6 +405,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 			}
 
 			if (method === "GET" && serveMathAsset(path, res)) return;
+			if (method === "GET" && servePdfAsset(path, res)) return;
 			if (!requireAuth(req)) {
 				json(res, 401, { error: "unauthorized" });
 				return;
@@ -402,7 +418,32 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					canCreateSessions: Boolean(createSession),
 					canDeleteSessions: Boolean(options.deleteSession),
 					canAssignProjects: Boolean(options.assignProject),
+					canPinSessions: Boolean(options.setSessionPinned),
 				});
+				return;
+			}
+			const artifactMatch = /^\/session\/([^/]+)\/artifact$/.exec(path);
+			if (artifactMatch) {
+				if (method !== "GET") {
+					res.setHeader("allow", "GET");
+					json(res, 405, { error: "Method not allowed" });
+					return;
+				}
+				const target = allSessions.get(decodeURIComponent(artifactMatch[1]!))?.session;
+				if (!target) throw new WorkbenchError(404, "No such session");
+				if (!target.artifactRoot) throw new WorkbenchError(501, "File sharing is unavailable for this session");
+				const file = await readWorkbenchArtifact(target.artifactRoot, url.searchParams.get("path") || "");
+				res.writeHead(200, {
+					"content-type": file.mime,
+					"content-length": file.bytes.length,
+					"cache-control": "no-store",
+					"x-content-type-options": "nosniff",
+					"content-security-policy": "default-src 'none'; sandbox",
+					"content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.name).replace(/'/g, "%27")}`,
+					"x-porcupine-preview": file.kind,
+					"x-porcupine-name": encodeURIComponent(file.name),
+				});
+				res.end(file.bytes);
 				return;
 			}
 			if (path === "/workbench/context" || path.startsWith("/workbench/context/")) {
@@ -526,6 +567,37 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				return;
 			}
 
+			const pinMatch = /^\/session\/([^/]+)\/pin$/.exec(path);
+			if (pinMatch) {
+				if (method !== "PUT") {
+					res.setHeader("allow", "PUT");
+					json(res, 405, { error: "Method not allowed" });
+					return;
+				}
+				if (!options.setSessionPinned) throw new WorkbenchError(501, "Chat pinning is unavailable");
+				let input: unknown;
+				try {
+					input = JSON.parse(await readBody(req));
+				} catch (error) {
+					if (error instanceof Error && "statusCode" in error) throw error;
+					throw new WorkbenchError(400, "Expected a pinned boolean");
+				}
+				if (
+					!input ||
+					typeof input !== "object" ||
+					Array.isArray(input) ||
+					!("pinned" in input) ||
+					typeof input.pinned !== "boolean" ||
+					Object.keys(input).length !== 1
+				)
+					throw new WorkbenchError(400, "Expected only a pinned boolean");
+				const id = decodeURIComponent(pinMatch[1]!),
+					pinned = input.pinned;
+				// Presentation metadata may be appended while sendUserMessage is awaiting the turn.
+				await options.setSessionPinned(id, pinned);
+				json(res, 200, { ok: true, pinned });
+				return;
+			}
 			const projectMatch = /^\/session\/([^/]+)\/project$/.exec(path);
 			if (method === "PUT" && projectMatch) {
 				if (!options.assignProject) {
@@ -602,12 +674,32 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					json(res, 404, { error: `no such session: ${eventsMatch[1]}` });
 					return;
 				}
+				const pagedHistory = url.searchParams.get("history") === "paged";
 				res.writeHead(200, sseHeaders());
-				writeSse(
-					res,
-					`data: ${JSON.stringify({ type: "server_connected", sessionId: entry.session.id, streaming: entry.session.isStreaming(), canQueueFollowUps: Boolean(entry.session.queueFollowUp), followUp: entry.session.getFollowUps?.() || [], timeline: entry.session.getTimeline?.(), messages: entry.session.getTimeline ? undefined : entry.session.getTranscript?.(), subagents: entry.session.getSubagents?.(), permissions: [...entry.permissionRequests.values()] })}\n\n`,
-					entry.sseClients,
-				);
+				const connectedPayload: Record<string, unknown> = {
+					type: "server_connected",
+					sessionId: entry.session.id,
+					streaming: entry.session.isStreaming(),
+					canQueueFollowUps: Boolean(entry.session.queueFollowUp),
+					followUp: entry.session.getFollowUps?.() || [],
+					subagents: entry.session.getSubagents?.(),
+					permissions: [...entry.permissionRequests.values()],
+				};
+				if (pagedHistory) {
+					if (
+						typeof entry.session.getTimeline === "function" ||
+						typeof entry.session.getTranscript === "function"
+					) {
+						const timeline = fullSessionTimeline(entry.session);
+						const start = Math.max(0, timeline.length - HISTORY_PAGE_SIZE);
+						connectedPayload.timeline = timeline.slice(start);
+						connectedPayload.historyBefore = start;
+					}
+				} else {
+					connectedPayload.timeline = entry.session.getTimeline?.();
+					connectedPayload.messages = entry.session.getTimeline ? undefined : entry.session.getTranscript?.();
+				}
+				writeSse(res, `data: ${JSON.stringify(connectedPayload)}\n\n`, entry.sseClients);
 				entry.sseClients.add(res);
 				if (entry.webAttached++ === 0) entry.session.setClientSurface?.("web");
 				let closed = false;
@@ -619,6 +711,33 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				};
 				req.on("close", onClose);
 				res.on("close", onClose);
+				return;
+			}
+
+			const historyMatch = /^\/session\/([^/]+)\/history$/.exec(path);
+			if (method === "GET" && historyMatch) {
+				const entry = allSessions.get(decodeURIComponent(historyMatch[1]!));
+				if (!entry) {
+					json(res, 404, { error: `no such session: ${historyMatch[1]}` });
+					return;
+				}
+				const timeline = fullSessionTimeline(entry.session);
+				const beforeParam = url.searchParams.get("before");
+				if (beforeParam === null) {
+					json(res, 400, { error: "before cursor is required" });
+					return;
+				}
+				if (!/^-?\d+$/.test(beforeParam)) {
+					json(res, 400, { error: "before cursor must be an integer" });
+					return;
+				}
+				const before = Number(beforeParam);
+				if (!Number.isInteger(before) || before < 0 || before > timeline.length) {
+					json(res, 400, { error: "before cursor is out of range" });
+					return;
+				}
+				const start = Math.max(0, before - HISTORY_PAGE_SIZE);
+				json(res, 200, { timeline: timeline.slice(start, before), historyBefore: start });
 				return;
 			}
 
@@ -822,7 +941,6 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 					json(res, 404, { error: "permission request not found or already answered" });
 					return;
 				}
-				entry.permissionResponders.delete(permissionId);
 				responder(allow);
 				json(res, 200, { ok: true });
 				return;
@@ -884,6 +1002,7 @@ export function createServeApi(options: ServeApiOptions): ServeApiHandle {
 				entry.unsubscribeConfirm();
 				entry.unsubscribeEvents();
 				entry.unsubscribeGoalPlan();
+				for (const respond of [...entry.permissionResponders.values()]) respond(false);
 			}
 			for (const entry of allSessions.values()) {
 				for (const client of entry.sseClients) client.end();

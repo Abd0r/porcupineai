@@ -27,7 +27,7 @@ describe("visualize_3d tool", () => {
 		const invalid = [
 			{ ...scene, title: "   " },
 			{ ...scene, objects: [{ type: "mesh", source: "<script>" }] },
-			{ ...scene, objects: Array.from({ length: 81 }, () => scene.objects[0]) },
+			{ ...scene, objects: Array.from({ length: 2001 }, () => scene.objects[0]) },
 			{ ...scene, objects: [{ type: "sphere", position: [0, 0, 0], radius: 1000, color: "#ffffff" }] },
 			{ ...scene, surprise: "ignored?" },
 		];

@@ -5,13 +5,12 @@ export const WORKBENCH_RAIL = `
 </aside><aside class="work-rail-overlay" id="work-rail-overlay" data-open="true" aria-label="Floating task overview" hidden></aside>`;
 
 export const WORKBENCH_RAIL_STYLES = `
-.main { position: relative; }
-.work-rail-overlay { position: absolute; top: 62px; right: 14px; width: min(320px,calc(100% - 28px)); max-height: min(60dvh,600px); overflow: auto; z-index: 9; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r1); padding: 16px; box-shadow: 0 8px 24px rgb(0 0 0 / 16%); }
+.main { position: relative; --rail-side-width: 0px; }
+.work-rail-overlay { position: absolute; top: 66px; right: calc(var(--rail-side-width) + 12px); width: min(260px,calc(100% - var(--rail-side-width) - 24px)); max-height: min(45dvh,var(--overlay-available-height,calc(100% - 220px))); overflow: auto; overscroll-behavior: contain; z-index: 9; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r1); padding: 12px; box-shadow: 0 8px 24px rgb(0 0 0 / 16%); }
 .work-rail-overlay:not([data-open="true"]) { display: none; }
 .rail-card[data-placement="hidden"] { display: none !important; }
-.main:has(.work-rail:not([hidden])[data-open="true"]) { grid-template-columns: minmax(0,1fr) 240px; }
+.main:has(.work-rail:not([hidden])[data-open="true"]) { grid-template-columns: minmax(0,1fr) 240px; --rail-side-width: 240px; }
 .work-rail:not([data-open="true"]) { display: none; }
-.main:has(.work-rail:not([hidden])[data-open="true"]) .work-rail-overlay { right: 254px; }
 .work-rail { grid-column: 2; grid-row: 2; min-width: 0; overflow: auto; padding: 22px 18px 22px 0; scrollbar-width: thin; }
 .rail-card { padding: 16px 0; border-bottom: 1px solid var(--line-soft); }
 .rail-card:first-child { padding-top: 0; }

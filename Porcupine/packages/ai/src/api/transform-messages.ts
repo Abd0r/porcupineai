@@ -164,11 +164,34 @@ export function transformMessages<TApi extends Api>(
 		return msg;
 	});
 
-	// Second pass: insert synthetic empty tool results for orphaned tool calls
-	// This preserves thinking signatures and satisfies API requirements
+	// Second pass: keep tool calls adjacent to their results.
+	//
+	// Providers require every `tool` message to directly follow the assistant message that carried the
+	// matching `tool_calls`; any other role in between is rejected outright ("Messages with role 'tool'
+	// must be a response to a preceding message with 'tool_calls'"). Only user and assistant messages used
+	// to close an open tool exchange, so a hook, surface or custom message injected while a turn was in
+	// flight could land between an assistant tool call and its result and break the whole request.
+	//
+	// Two halves to the fix. Messages that arrive while a tool exchange is still open are deferred until it
+	// closes, and a tool result whose originating assistant message was dropped (for example because the turn
+	// errored or was aborted) is discarded, since it can never be given a valid parent again.
 	const result: Message[] = [];
 	let pendingToolCalls: ToolCall[] = [];
 	let existingToolResultIds = new Set<string>();
+	let deferred: Message[] = [];
+	// Call ids belonging to assistant turns that were dropped below. Their results can never be given a valid
+	// parent again, so they are the only results that must be discarded; results with no open exchange are
+	// otherwise passed through, because callers do hand over partial windows that begin with one.
+	const droppedCallIds = new Set<string>();
+
+	const releaseDeferred = () => {
+		if (deferred.length > 0) {
+			result.push(...deferred);
+			deferred = [];
+		}
+	};
+
+	// Close the open exchange: synthesize missing results, then let deferred messages through.
 	const insertSyntheticToolResults = () => {
 		if (pendingToolCalls.length > 0) {
 			for (const tc of pendingToolCalls) {
@@ -186,13 +209,17 @@ export function transformMessages<TApi extends Api>(
 			pendingToolCalls = [];
 			existingToolResultIds = new Set();
 		}
+		releaseDeferred();
 	};
+
+	const exchangeIsComplete = () =>
+		pendingToolCalls.length > 0 && pendingToolCalls.every((tc) => existingToolResultIds.has(tc.id));
 
 	for (let i = 0; i < transformed.length; i++) {
 		const msg = transformed[i];
 
 		if (msg.role === "assistant") {
-			// If we have pending orphaned tool calls from a previous assistant, insert synthetic results now
+			// A new assistant turn always closes whatever came before it.
 			insertSyntheticToolResults();
 
 			// Skip errored/aborted assistant messages entirely.
@@ -202,6 +229,9 @@ export function transformMessages<TApi extends Api>(
 			// - The model should retry from the last valid state
 			const assistantMsg = msg as AssistantMessage;
 			if (assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") {
+				for (const block of assistantMsg.content) {
+					if (block.type === "toolCall") droppedCallIds.add(block.id);
+				}
 				continue;
 			}
 
@@ -214,12 +244,20 @@ export function transformMessages<TApi extends Api>(
 
 			result.push(msg);
 		} else if (msg.role === "toolResult") {
+			if (droppedCallIds.has(msg.toolCallId)) {
+				continue;
+			}
 			existingToolResultIds.add(msg.toolCallId);
 			result.push(msg);
-		} else if (msg.role === "user") {
-			// User message interrupts tool flow - insert synthetic results for orphaned calls
+			if (exchangeIsComplete()) {
+				insertSyntheticToolResults();
+			}
+		} else if (exchangeIsComplete()) {
 			insertSyntheticToolResults();
 			result.push(msg);
+		} else if (pendingToolCalls.length > 0) {
+			// Hold anything that would split an open exchange; released when the exchange closes.
+			deferred.push(msg);
 		} else {
 			result.push(msg);
 		}

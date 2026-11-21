@@ -38,6 +38,7 @@ export type WorkbenchReplayEvent =
 					diff?: string;
 					patch?: string;
 					firstChangedLine?: number;
+					stopped?: number;
 				};
 			};
 			isError: boolean;
@@ -137,8 +138,15 @@ export function serializeWorkbenchTimeline(messages: readonly SourceMessage[]): 
 				diff?: string;
 				patch?: string;
 				firstChangedLine?: number;
+				stopped?: number;
 			} = {};
 			if (record(message.details)) {
+				if (
+					message.toolName === "stop_subagent" &&
+					Number.isInteger(message.details.stopped) &&
+					Number(message.details.stopped) >= 0
+				)
+					details.stopped = Number(message.details.stopped);
 				if (message.toolName === "plan" && "plan" in message.details) details.plan = message.details.plan;
 				if (message.details.visualization) details.visualization = message.details.visualization;
 				if (typeof message.details.diff === "string") details.diff = message.details.diff;
@@ -154,7 +162,16 @@ export function serializeWorkbenchTimeline(messages: readonly SourceMessage[]): 
 					content: [{ type: "text", text: content }],
 					...(Object.keys(details).length ? { details } : {}),
 				},
-				isError: Boolean(message.isError),
+				isError: Boolean(
+					message.isError ||
+						(["subagent", "send_to_subagent", "send_message", "check_messages", "stop_subagent"].includes(
+							message.toolName,
+						) &&
+							record(message.details) &&
+							(message.details.started === false ||
+								message.details.ok === false ||
+								message.details.isError === true)),
+				),
 			});
 		} else if (
 			message.role === "custom" &&

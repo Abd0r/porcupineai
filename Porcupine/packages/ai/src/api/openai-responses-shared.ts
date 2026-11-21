@@ -40,6 +40,7 @@ import {
 	resolveGrammarConstrainedSampling,
 	resolveJsonSchemaStrictSampling,
 } from "./constrained-sampling.ts";
+import { normalizeToolParameters } from "./normalize-tool-parameters.ts";
 import { transformMessages } from "./transform-messages.ts";
 
 // =============================================================================
@@ -377,7 +378,7 @@ export function convertResponsesTools(tools: readonly Tool[], options?: ConvertR
 			type: "function",
 			name: tool.name,
 			description: tool.description,
-			parameters: tool.parameters as Record<string, unknown>, // TypeBox already generates JSON Schema
+			parameters: normalizeToolParameters(tool.parameters),
 			...(options?.deferLoading ? { defer_loading: true } : {}),
 		};
 		if (supportsStrictMode) {

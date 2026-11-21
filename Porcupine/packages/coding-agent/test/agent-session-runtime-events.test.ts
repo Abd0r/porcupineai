@@ -125,6 +125,27 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 		expect(original.messages.some((message) => message.role === "assistant")).toBe(false);
 	});
 
+	it("keeps branch policy through a full refresh and fork without carrying it into new chats", async () => {
+		const { runtimeHost } = await createRuntimeHost(() => {});
+		runtimeHost.session.setInteractionMode("ask");
+		runtimeHost.session.setAdaptiveReasoning(true);
+		const originalId = runtimeHost.session.sessionId;
+		await runtimeHost.refresh();
+		expect(runtimeHost.session.sessionId).toBe(originalId);
+		expect(runtimeHost.session.interactionMode).toBe("ask");
+		expect(runtimeHost.session.getReasoningMode()).toBe("adaptive");
+		// Fork at a policy checkpoint: the new file must inherit only that branch.
+		const checkpoint = runtimeHost.session.sessionManager.getLeafId()!;
+		runtimeHost.session.setAutoMode(true);
+		await runtimeHost.fork(checkpoint, { position: "at" });
+		expect(runtimeHost.session.sessionId).not.toBe(originalId);
+		expect(runtimeHost.session.interactionMode).toBe("ask");
+		expect(runtimeHost.session.getReasoningMode()).toBe("adaptive");
+		await runtimeHost.newSession();
+		expect(runtimeHost.session.isAdaptiveReasoningEnabled).toBe(false);
+		expect(runtimeHost.session.interactionMode).toBe(runtimeHost.session.settingsManager.getDefaultInteractionMode());
+	});
+
 	it("emits session_before_switch and session_start for new and resume flows", async () => {
 		const events: RecordedSessionEvent[] = [];
 		const { runtimeHost } = await createRuntimeHost((pi) => {

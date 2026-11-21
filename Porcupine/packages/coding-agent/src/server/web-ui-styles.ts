@@ -33,7 +33,7 @@ SOFTWARE.
   --line-soft: rgb(255 255 255 / 6%);
   --text: #f9fafb;
   --muted: #cfd3d6;
-  --quiet: #81858c;
+  --quiet: #9b9fa6;
   --accent: #7aaaff;
   --accent-ink: #0f1115;
   --danger: #e7abab;

@@ -116,10 +116,10 @@ describe("visualize tool", () => {
 			{ ...chart, script: "anything" },
 			{ ...chart, series: [{ ...chart.series[0], points: [{ x: Infinity, y: 1 }] }] },
 			{ ...chart, series: [{ ...chart.series[0], points: [{ x: 0, y: 1, error: -1 }] }] },
-			{ ...chart, series: [{ ...chart.series[0], points: Array.from({ length: 201 }, () => ({ x: 0, y: 0 })) }] },
+			{ ...chart, series: [{ ...chart.series[0], points: Array.from({ length: 10001 }, () => ({ x: 0, y: 0 })) }] },
 			{ ...diagram, objects: [{ ...diagram.objects[0], from: [21, 0] }] },
 			{ ...diagram, objects: [{ type: "svg", source: "<script>" }] },
-			{ ...diagram, objects: Array.from({ length: 81 }, () => diagram.objects[0]) },
+			{ ...diagram, objects: Array.from({ length: 1001 }, () => diagram.objects[0]) },
 		])
 			await expect(run(input)).rejects.toThrow(/Invalid/);
 	});
@@ -128,5 +128,33 @@ describe("visualize tool", () => {
 		expect(createAllTools(process.cwd()).visualize.name).toBe("visualize");
 		expect(createReadOnlyToolDefinitions(process.cwd()).map((tool) => tool.name)).toContain("visualize");
 		expect(createAllToolDefinitions(process.cwd()).visualize_3d.name).toBe("visualize_3d");
+	});
+});
+
+// A provider rejected the whole request because this schema carried a draft-07 tuple:
+//   Invalid schema for function 'visualize': [{"minimum":-20,...},{...}] is not of types "boolean", "object"
+// The provider-facing schema must therefore never contain the array form of `items`.
+describe("visualize provider schema", () => {
+	const collectItems = (node: unknown, found: unknown[] = []): unknown[] => {
+		if (!node || typeof node !== "object") return found;
+		if (Array.isArray(node)) {
+			for (const entry of node) collectItems(entry, found);
+			return found;
+		}
+		for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+			if (key === "items") found.push(value);
+			collectItems(value, found);
+		}
+		return found;
+	};
+
+	it("contains no positional tuple items once normalised", async () => {
+		const { normalizeToolParameters } = await import("@porcupineai/ai");
+		const definition = createVisualizeToolDefinition();
+		const raw = collectItems(definition.parameters);
+		// the tuple form exists in the source schema, which is exactly why normalisation is required
+		expect(raw.some(Array.isArray)).toBe(true);
+		const normalized = normalizeToolParameters(definition.parameters);
+		expect(collectItems(normalized).some(Array.isArray)).toBe(false);
 	});
 });

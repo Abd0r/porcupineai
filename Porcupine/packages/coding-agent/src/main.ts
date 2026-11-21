@@ -321,7 +321,7 @@ function forkSessionOrExit(sourcePath: string, cwd: string, sessionDir?: string,
 	}
 }
 
-async function createSessionManager(
+export async function createSessionManager(
 	parsed: Args,
 	cwd: string,
 	sessionDir: string | undefined,
@@ -409,6 +409,9 @@ async function createSessionManager(
 				`Warning: No project session found with id '${parsed.sessionId}'; creating a new session with that id.`,
 			),
 		);
+	}
+	if (parsed.gui && !parsed.sessionId && parsed.name === undefined) {
+		return SessionManager.continueRecent(cwd, sessionDir);
 	}
 
 	return SessionManager.create(cwd, sessionDir, { id: parsed.sessionId });

@@ -11,7 +11,7 @@ export function serveMathAsset(path: string, res: ServerResponse): boolean {
 	if (!path.startsWith("/workbench/math/")) return false;
 	const name = path.slice("/workbench/math/".length);
 	const type =
-		name === "katex.min.js"
+		name === "katex.min.js" || name === "mhchem.min.js"
 			? "text/javascript"
 			: name === "katex.min.css"
 				? "text/css"
@@ -31,7 +31,9 @@ export function serveMathAsset(path: string, res: ServerResponse): boolean {
 	if (!body) {
 		const packaged = join(getPackageDir(), isBunBinary ? "math" : "dist/server/math");
 		const directory = existsSync(packaged) ? packaged : dirname(createRequire(import.meta.url).resolve("katex"));
-		body = readFileSync(join(directory, name));
+		body = readFileSync(
+			join(directory, name === "mhchem.min.js" && !existsSync(packaged) ? "contrib/mhchem.min.js" : name),
+		);
 		assets.set(name, body);
 	}
 	res.writeHead(200, {

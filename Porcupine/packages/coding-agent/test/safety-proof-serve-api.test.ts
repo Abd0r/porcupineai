@@ -93,6 +93,7 @@ describe("SAFETY PROOF (FIXED): serve API authentication model", () => {
 		let confirmFn: ((title: string, message: string) => Promise<boolean>) | undefined;
 		const fake = {
 			sessionId: "sess-real",
+			sessionManager: { getCwd: () => process.cwd() },
 			sendUserMessage: async () => {},
 			abort: async () => {},
 			isStreaming: false,

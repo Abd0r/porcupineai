@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 import { serializeWorkbenchTimeline } from "../src/server/workbench-transcript.ts";
 
 describe("workbench timeline replay", () => {
+	it("preserves collaboration failures and a zero-worker stop without exposing arbitrary metadata", () => {
+		const events = serializeWorkbenchTimeline([
+			{
+				role: "toolResult",
+				toolName: "subagent",
+				toolCallId: "spawn",
+				details: { started: false, internal: "private" },
+			},
+			{ role: "toolResult", toolName: "send_to_subagent", toolCallId: "send", details: { ok: false } },
+			{ role: "toolResult", toolName: "stop_subagent", toolCallId: "stop", details: { stopped: 0 } },
+		]);
+		expect(events[0]).toMatchObject({ isError: true });
+		expect(events[1]).toMatchObject({ isError: true });
+		expect(events[2]).toMatchObject({ result: { details: { stopped: 0 } } });
+		expect(JSON.stringify(events)).not.toContain("private");
+	});
 	it("preserves conversation, tool calls, results and sub-agent reports in message order", () => {
 		const timeline = serializeWorkbenchTimeline([
 			{ role: "user", content: "Fix it" },
